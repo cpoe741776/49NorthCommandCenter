@@ -67,7 +67,6 @@ const mockDisregarded = [
   }
 ];
 
-// Navigation items
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'bids', label: 'Bid Operations', icon: FileText },
@@ -81,14 +80,18 @@ const BidCard = ({ bid, onStatusChange }) => {
   const isRespond = bid.recommendation === "Respond";
   
   return (
-    <div className={`border-l-4 ${isRespond ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'} p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow`}>
-      <div 
-        className="flex items-start justify-between cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-      >
+    <div 
+      className={`border-l-4 ${
+        isRespond ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'
+      } p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`px-2 py-1 rounded text-xs font-semibold ${isRespond ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'}`}>
+            <span className={`px-2 py-1 rounded text-xs font-semibold ${
+              isRespond ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
+            }`}>
               {bid.recommendation}
             </span>
             <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
@@ -102,7 +105,7 @@ const BidCard = ({ bid, onStatusChange }) => {
       </div>
       
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3" onClick={(e) => e.stopPropagation()}>
           <div>
             <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
             <p className="text-sm text-gray-700 mt-1">{bid.reasoning}</p>
@@ -149,13 +152,13 @@ const BidCard = ({ bid, onStatusChange }) => {
           <div className="flex gap-2 pt-2">
             <button 
               onClick={() => onStatusChange(bid.id, 'submitted')}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors"
             >
               Mark as Submitted
             </button>
             <button 
               onClick={() => onStatusChange(bid.id, 'disregard')}
-              className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm font-medium"
+              className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm font-medium transition-colors"
             >
               Disregard
             </button>
@@ -178,7 +181,6 @@ const Dashboard = () => {
         <p className="text-gray-600 mt-1">49 North Business Operations Dashboard</p>
       </div>
       
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between">
@@ -222,7 +224,6 @@ const Dashboard = () => {
         </div>
       </div>
       
-      {/* Quick Access */}
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -262,7 +263,7 @@ const BidOperations = () => {
         </div>
         <button 
           onClick={() => setShowArchive(!showArchive)}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+          className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
         >
           <Archive size={18} />
           {showArchive ? 'Hide Archive' : 'View Archive'}
@@ -289,7 +290,6 @@ const BidOperations = () => {
       )}
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Respond Column */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Respond ({respondBids.length})</h2>
@@ -306,7 +306,6 @@ const BidOperations = () => {
           </div>
         </div>
         
-        {/* Gather More Information Column */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Gather More Information ({gatherInfoBids.length})</h2>
@@ -324,7 +323,6 @@ const BidOperations = () => {
         </div>
       </div>
       
-      {/* Proposal Workspace Placeholder */}
       <div className="bg-white p-6 rounded-lg shadow border-2 border-dashed border-gray-300">
         <h2 className="text-xl font-bold text-gray-900 mb-2">Proposal Workspace</h2>
         <p className="text-gray-600">Document library, templates, and proposal writing tools coming soon...</p>
@@ -374,7 +372,7 @@ const App = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className={`bg-[#003049] text-white transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+      <div className={`bg-brand-blue text-white transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-4 flex items-center justify-between border-b border-blue-800">
           {sidebarOpen && (
             <div>
@@ -384,7 +382,7 @@ const App = () => {
           )}
           <button 
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 hover:bg-blue-800 rounded"
+            className="p-2 hover:bg-blue-800 rounded transition-colors"
           >
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -413,19 +411,19 @@ const App = () => {
       
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-8">
+        <div className="max-w-7xl mx-auto p-8 pb-20">
           {renderPage()}
         </div>
         
         {/* News Ticker */}
-        <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-2 px-4 text-sm">
-          <div className="flex items-center gap-8 overflow-hidden">
-            <span className="font-semibold">Latest Updates:</span>
+        <div className="fixed bottom-0 left-0 right-0 bg-brand-blue text-white py-2 px-4 text-sm overflow-hidden">
+          <div className="flex items-center gap-8">
+            <span className="font-semibold whitespace-nowrap">Latest Updates:</span>
             <div className="flex gap-8 animate-marquee">
-              <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
-              <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
-              <span>• Social post scheduled for Oct 3 - Peer Support Awareness</span>
-              <span>• Bid response submitted - State Fire Marshal Trauma Training</span>
+              <span className="whitespace-nowrap">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
+              <span className="whitespace-nowrap">• Webinar "Resilience for First Responders" - 42 registrations</span>
+              <span className="whitespace-nowrap">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
+              <span className="whitespace-nowrap">• Bid response submitted - State Fire Marshal Trauma Training</span>
             </div>
           </div>
         </div>
