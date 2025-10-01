@@ -1,71 +1,6 @@
-import React, { useState } from 'react';
-import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive } from 'lucide-react';
-
-// Mock data for bids
-const mockBids = [
-  {
-    id: 1,
-    recommendation: "Respond",
-    reasoning: "Strong alignment with peer support and mental health training for law enforcement. Keywords: peer support, CISM, mental health training.",
-    emailSummary: "RFP for Mental Health First Aid training program for county sheriff's department",
-    emailDateReceived: "2025-09-15",
-    emailFrom: "procurement@county.gov",
-    keywordsCategory: "Peer Support, Mental Health, Training",
-    keywordsFound: "mental health, peer support, CISM, training program, law enforcement",
-    relevance: "High",
-    emailSubject: "RFP-2025-089: Mental Health Training Services",
-    emailBody: "The County Sheriff's Office seeks qualified vendors to provide comprehensive mental health first aid training...",
-    url: "https://county.gov/bids/rfp-2025-089",
-    dueDate: "2025-10-15",
-    significantSnippet: "Must include peer support training and CISM certification components",
-    emailDomain: "county.gov"
-  },
-  {
-    id: 2,
-    recommendation: "Gather More Information",
-    reasoning: "Mentions wellness and resilience but lacks specifics about training type. May be general HR wellness rather than performance-based resilience.",
-    emailSummary: "Request for wellness program proposals for city employees",
-    emailDateReceived: "2025-09-18",
-    emailFrom: "hr@citymail.org",
-    keywordsCategory: "Wellbeing, Resilience",
-    keywordsFound: "wellness, resilience, employee wellbeing, stress management",
-    relevance: "Medium",
-    emailSubject: "RFQ: Employee Wellness Program Development",
-    emailBody: "The City is seeking proposals for a comprehensive employee wellness program focusing on resilience and stress management...",
-    url: "https://citymail.org/procurement/rfq-wellness",
-    dueDate: "2025-10-20",
-    significantSnippet: "Program should address mental health, physical wellness, and resilience building",
-    emailDomain: "citymail.org"
-  },
-  {
-    id: 3,
-    recommendation: "Respond",
-    reasoning: "Perfect fit: trauma-informed training for EMS and fire personnel. Multiple keyword matches in Mental Health and Training categories.",
-    emailSummary: "Solicitation for trauma-informed care training for first responders",
-    emailDateReceived: "2025-09-10",
-    emailFrom: "contracts@statefire.gov",
-    keywordsCategory: "Mental Health, Training, Peer Support",
-    keywordsFound: "trauma-informed, first responder support, EMS, psychological safety, training delivery",
-    relevance: "High",
-    emailSubject: "ITB-2025-334: Trauma-Informed Care Training",
-    emailBody: "State Fire Marshal's office requests bids for trauma-informed care training curriculum for EMS and fire personnel...",
-    url: "https://statefire.gov/bids/itb-334",
-    dueDate: "2025-10-08",
-    significantSnippet: "Must include psychological first aid and peer support components",
-    emailDomain: "statefire.gov"
-  }
-];
-
-const mockDisregarded = [
-  {
-    id: 101,
-    recommendation: "Disregard",
-    reasoning: "General office supplies procurement - no relevance to resilience training or mental health services.",
-    emailSubject: "RFP: Office Furniture and Supplies",
-    emailDateReceived: "2025-09-12",
-    emailFrom: "purchasing@admin.gov"
-  }
-];
+import React, { useState, useEffect } from 'react';
+import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw } from 'lucide-react';
+import { fetchBids } from './services/bidService';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -137,17 +72,19 @@ const BidCard = ({ bid, onStatusChange }) => {
             <p className="text-sm text-gray-700 italic">"{bid.significantSnippet}"</p>
           </div>
           
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Original Source:</label>
-            <a 
-              href={bid.url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
-            >
-              {bid.url} <ExternalLink size={14} />
-            </a>
-          </div>
+          {bid.url && bid.url !== 'Not provided' && (
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Original Source:</label>
+              <a 
+                href={bid.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                {bid.url} <ExternalLink size={14} />
+              </a>
+            </div>
+          )}
           
           <div className="flex gap-2 pt-2">
             <button 
@@ -170,9 +107,18 @@ const BidCard = ({ bid, onStatusChange }) => {
 };
 
 // Dashboard Component
-const Dashboard = () => {
-  const respondCount = mockBids.filter(b => b.recommendation === "Respond").length;
-  const gatherInfoCount = mockBids.filter(b => b.recommendation === "Gather More Information").length;
+const Dashboard = ({ bids, summary, loading }) => {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-600">Loading bid data...</div>
+      </div>
+    );
+  }
+
+  const respondCount = summary?.respondCount || 0;
+  const gatherInfoCount = summary?.gatherInfoCount || 0;
+  const totalActive = summary?.totalActive || 0;
   
   return (
     <div className="space-y-6">
@@ -186,7 +132,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Active Bids</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{mockBids.length}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{totalActive}</p>
             </div>
             <FileText className="text-blue-600" size={40} />
           </div>
@@ -242,13 +188,26 @@ const Dashboard = () => {
 };
 
 // Bid Operations Component
-const BidOperations = () => {
-  const [bids, setBids] = useState(mockBids);
+const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
   const [showArchive, setShowArchive] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await onRefresh();
+    setIsRefreshing(false);
+  };
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-600">Loading bids...</div>
+      </div>
+    );
+  }
   
   const handleStatusChange = (bidId, status) => {
-    setBids(bids.filter(b => b.id !== bidId));
-    alert(`Bid ${bidId} marked as ${status}`);
+    alert(`Bid ${bidId} marked as ${status}. (Google Sheet update coming in future version)`);
   };
   
   const respondBids = bids.filter(b => b.recommendation === "Respond");
@@ -261,30 +220,47 @@ const BidOperations = () => {
           <h1 className="text-3xl font-bold text-gray-900">Bid Operations</h1>
           <p className="text-gray-600 mt-1">Active RFPs and Proposals</p>
         </div>
-        <button 
-          onClick={() => setShowArchive(!showArchive)}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-        >
-          <Archive size={18} />
-          {showArchive ? 'Hide Archive' : 'View Archive'}
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button 
+            onClick={() => setShowArchive(!showArchive)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+          >
+            <Archive size={18} />
+            {showArchive ? 'Hide Archive' : 'View Archive'}
+          </button>
+        </div>
       </div>
       
       {showArchive && (
         <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Disregarded Bids</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Disregarded Bids ({disregardedBids.length})</h2>
           <div className="space-y-2">
-            {mockDisregarded.map(bid => (
-              <div key={bid.id} className="bg-white p-4 rounded border border-gray-200">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{bid.reasoning}</p>
-                    <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom} • {bid.emailDateReceived}</p>
+            {disregardedBids.length === 0 ? (
+              <p className="text-gray-500 text-sm">No disregarded bids</p>
+            ) : (
+              disregardedBids.slice(0, 10).map(bid => (
+                <div key={bid.id} className="bg-white p-4 rounded border border-gray-200">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
+                      <p className="text-sm text-gray-600 mt-1">{bid.reasoning}</p>
+                      <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom} • {bid.emailDateReceived}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
+            {disregardedBids.length > 10 && (
+              <p className="text-sm text-gray-500 mt-2">Showing 10 of {disregardedBids.length} disregarded bids</p>
+            )}
           </div>
         </div>
       )}
@@ -358,14 +334,50 @@ const SocialMediaOperations = () => (
 const App = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [bids, setBids] = useState([]);
+  const [disregardedBids, setDisregardedBids] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Fetch bids on mount
+  useEffect(() => {
+    loadBids();
+  }, []);
+  
+  const loadBids = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchBids();
+      setBids(data.activeBids || []);
+      setDisregardedBids(data.disregardedBids || []);
+      setSummary(data.summary || {});
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load bids:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   const renderPage = () => {
     switch(currentPage) {
-      case 'dashboard': return <Dashboard />;
-      case 'bids': return <BidOperations />;
-      case 'webinars': return <WebinarOperations />;
-      case 'social': return <SocialMediaOperations />;
-      default: return <Dashboard />;
+      case 'dashboard': 
+        return <Dashboard bids={bids} summary={summary} loading={loading} />;
+      case 'bids': 
+        return <BidOperations 
+          bids={bids} 
+          disregardedBids={disregardedBids} 
+          loading={loading}
+          onRefresh={loadBids}
+        />;
+      case 'webinars': 
+        return <WebinarOperations />;
+      case 'social': 
+        return <SocialMediaOperations />;
+      default: 
+        return <Dashboard bids={bids} summary={summary} loading={loading} />;
     }
   };
   
@@ -412,6 +424,11 @@ const App = () => {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-8 pb-20">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+              Error loading data: {error}
+            </div>
+          )}
           {renderPage()}
         </div>
         
@@ -420,10 +437,10 @@ const App = () => {
           <div className="flex items-center gap-8">
             <span className="font-semibold whitespace-nowrap">Latest Updates:</span>
             <div className="flex gap-8 animate-marquee">
-              <span className="whitespace-nowrap">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
-              <span className="whitespace-nowrap">• Webinar "Resilience for First Responders" - 42 registrations</span>
-              <span className="whitespace-nowrap">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
-              <span className="whitespace-nowrap">• Bid response submitted - State Fire Marshal Trauma Training</span>
+              <span className="whitespace-nowrap">• {summary?.totalActive || 0} active bids being tracked</span>
+              <span className="whitespace-nowrap">• {summary?.respondCount || 0} high-priority opportunities</span>
+              <span className="whitespace-nowrap">• {summary?.totalDisregarded || 0} irrelevant bids filtered by AI</span>
+              <span className="whitespace-nowrap">• System updating every 4 hours automatically</span>
             </div>
           </div>
         </div>
