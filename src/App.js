@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw } from 'lucide-react';
+import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
+import { useAuth } from './components/Auth';
+import LoginPage from './components/LoginPage';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -332,6 +334,7 @@ const SocialMediaOperations = () => (
 
 // Main App Component
 const App = () => {
+  const { user, loading: authLoading, login, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [bids, setBids] = useState([]);
@@ -342,8 +345,10 @@ const App = () => {
   
   // Fetch bids on mount
   useEffect(() => {
-    loadBids();
-  }, []);
+    if (user) {
+      loadBids();
+    }
+  }, [user]);
   
   const loadBids = async () => {
     try {
@@ -360,6 +365,20 @@ const App = () => {
       setLoading(false);
     }
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <LoginPage onLogin={login} />;
+  }
   
   const renderPage = () => {
     switch(currentPage) {
@@ -419,6 +438,17 @@ const App = () => {
             );
           })}
         </nav>
+
+        {/* Logout Button */}
+        <div className="p-4 border-t border-blue-800 absolute bottom-0 left-0 right-0">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
+          >
+            <LogOut size={20} />
+            {sidebarOpen && <span>Sign Out</span>}
+          </button>
+        </div>
       </div>
       
       {/* Main Content */}
