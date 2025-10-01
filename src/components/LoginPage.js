@@ -27,7 +27,7 @@ const LoginPage = ({ onLogin }) => {
           </button>
           
           <p className="text-xs text-center text-gray-500 mt-4">
-            Access is restricted to authorized personnel only
+            Access is restricted to invited users only
           </p>
         </div>
       </div>
