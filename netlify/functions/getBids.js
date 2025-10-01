@@ -18,7 +18,14 @@ exports.handler = async (event, context) => {
 
   try {
     // Get service account credentials from environment variable
-    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    // First try base64 encoded version, fallback to direct JSON
+    let credentials;
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
+      const decoded = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8');
+      credentials = JSON.parse(decoded);
+    } else {
+      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    }
 
     // Authenticate with Google Sheets
     const auth = new google.auth.GoogleAuth({
