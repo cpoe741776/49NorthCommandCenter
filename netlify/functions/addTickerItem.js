@@ -47,7 +47,9 @@ exports.handler = async (event, context) => {
 
     // Authenticate with Google Sheets API
     const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY),
+      credentials: JSON.parse(
+  Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
+),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
