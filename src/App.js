@@ -224,17 +224,26 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
 };
 
 // Bid Operations Component
-const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
+const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefresh }) => {
   const [showArchive, setShowArchive] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [respondPage, setRespondPage] = useState(1);
+  const [gatherInfoPage, setGatherInfoPage] = useState(1);
+  const [submittedPage, setSubmittedPage] = useState(1);
+  const [archivePage, setArchivePage] = useState(1);
+  
+  const ITEMS_PER_PAGE = 10;
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await onRefresh();
     setIsRefreshing(false);
     setSelectedBids([]);
+    setRespondPage(1);
+    setGatherInfoPage(1);
+    setSubmittedPage(1);
   };
   
   if (loading) {
@@ -327,6 +336,16 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
   const respondBids = bids.filter(b => b.recommendation === "Respond");
   const gatherInfoBids = bids.filter(b => b.recommendation === "Gather More Information");
   
+  const paginatedRespondBids = respondBids.slice(0, respondPage * ITEMS_PER_PAGE);
+  const paginatedGatherInfoBids = gatherInfoBids.slice(0, gatherInfoPage * ITEMS_PER_PAGE);
+  const paginatedSubmittedBids = submittedBids.slice(0, submittedPage * ITEMS_PER_PAGE);
+  const paginatedArchiveBids = disregardedBids.slice(0, archivePage * ITEMS_PER_PAGE);
+  
+  const hasMoreRespond = paginatedRespondBids.length < respondBids.length;
+  const hasMoreGatherInfo = paginatedGatherInfoBids.length < gatherInfoBids.length;
+  const hasMoreSubmitted = paginatedSubmittedBids.length < submittedBids.length;
+  const hasMoreArchive = paginatedArchiveBids.length < disregardedBids.length;
+  
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -344,7 +363,10 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
             Refresh
           </button>
           <button 
-            onClick={() => setShowArchive(!showArchive)}
+            onClick={() => {
+              setShowArchive(!showArchive);
+              setArchivePage(1);
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
           >
             <Archive size={18} />
@@ -390,26 +412,33 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
             {disregardedBids.length === 0 ? (
               <p className="text-gray-500 text-sm">No disregarded bids</p>
             ) : (
-              disregardedBids.slice(0, 10).map(bid => (
-                <div key={bid.id} className="bg-white p-4 rounded border border-gray-200">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-                      <p className="text-sm text-gray-600 mt-1">{bid.reasoning}</p>
-                      <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom} • {bid.emailDateReceived}</p>
+              <>
+                {paginatedArchiveBids.map(bid => (
+                  <div key={bid.id} className="bg-white p-4 rounded border border-gray-200">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
+                        <p className="text-sm text-gray-600 mt-1">{bid.reasoning}</p>
+                        <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom} • {bid.emailDateReceived}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
-            )}
-            {disregardedBids.length > 10 && (
-              <p className="text-sm text-gray-500 mt-2">Showing 10 of {disregardedBids.length} disregarded bids</p>
+                ))}
+                {hasMoreArchive && (
+                  <button
+                    onClick={() => setArchivePage(prev => prev + 1)}
+                    className="w-full mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
+                  >
+                    Load More ({paginatedArchiveBids.length} of {disregardedBids.length} shown)
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
       )}
       
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Respond ({respondBids.length})</h2>
@@ -427,15 +456,25 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
             {respondBids.length === 0 ? (
               <p className="text-gray-500 text-sm">No high-priority bids at this time</p>
             ) : (
-              respondBids.map(bid => (
-                <BidCard 
-                  key={bid.id} 
-                  bid={bid} 
-                  onStatusChange={handleStatusChange}
-                  isSelected={selectedBids.includes(bid.id)}
-                  onToggleSelect={handleToggleSelect}
-                />
-              ))
+              <>
+                {paginatedRespondBids.map(bid => (
+                  <BidCard 
+                    key={bid.id} 
+                    bid={bid} 
+                    onStatusChange={handleStatusChange}
+                    isSelected={selectedBids.includes(bid.id)}
+                    onToggleSelect={handleToggleSelect}
+                  />
+                ))}
+                {hasMoreRespond && (
+                  <button
+                    onClick={() => setRespondPage(prev => prev + 1)}
+                    className="w-full mt-4 px-4 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-medium transition-colors"
+                  >
+                    Load More ({paginatedRespondBids.length} of {respondBids.length} shown)
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -457,15 +496,68 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
             {gatherInfoBids.length === 0 ? (
               <p className="text-gray-500 text-sm">No bids need additional information</p>
             ) : (
-              gatherInfoBids.map(bid => (
-                <BidCard 
-                  key={bid.id} 
-                  bid={bid} 
-                  onStatusChange={handleStatusChange}
-                  isSelected={selectedBids.includes(bid.id)}
-                  onToggleSelect={handleToggleSelect}
-                />
-              ))
+              <>
+                {paginatedGatherInfoBids.map(bid => (
+                  <BidCard 
+                    key={bid.id} 
+                    bid={bid} 
+                    onStatusChange={handleStatusChange}
+                    isSelected={selectedBids.includes(bid.id)}
+                    onToggleSelect={handleToggleSelect}
+                  />
+                ))}
+                {hasMoreGatherInfo && (
+                  <button
+                    onClick={() => setGatherInfoPage(prev => prev + 1)}
+                    className="w-full mt-4 px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 text-sm font-medium transition-colors"
+                  >
+                    Load More ({paginatedGatherInfoBids.length} of {gatherInfoBids.length} shown)
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">Submitted ({submittedBids.length})</h2>
+            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+          </div>
+          <div className="space-y-3">
+            {submittedBids.length === 0 ? (
+              <p className="text-gray-500 text-sm">No submitted bids yet</p>
+            ) : (
+              <>
+                {paginatedSubmittedBids.map(bid => (
+                  <div 
+                    key={bid.id}
+                    className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-lg shadow-sm"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-600 text-white">
+                            Submitted
+                          </span>
+                          <span className="text-xs text-gray-500">{bid.submissionDate}</span>
+                        </div>
+                        <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
+                        <p className="text-sm text-gray-600 mt-1">{bid.emailSummary}</p>
+                        <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {hasMoreSubmitted && (
+                  <button
+                    onClick={() => setSubmittedPage(prev => prev + 1)}
+                    className="w-full mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium transition-colors"
+                  >
+                    Load More ({paginatedSubmittedBids.length} of {submittedBids.length} shown)
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -509,6 +601,7 @@ const App = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [bids, setBids] = useState([]);
   const [disregardedBids, setDisregardedBids] = useState([]);
+  const [submittedBids, setSubmittedBids] = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -560,6 +653,7 @@ const App = () => {
       const data = await fetchBids();
       setBids(data.activeBids || []);
       setDisregardedBids(data.disregardedBids || []);
+      setSubmittedBids(data.submittedBids || []);
       setSummary(data.summary || {});
       
       const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
@@ -662,7 +756,8 @@ const App = () => {
       case 'bids': 
         return <BidOperations 
           bids={bids} 
-          disregardedBids={disregardedBids} 
+          disregardedBids={disregardedBids}
+          submittedBids={submittedBids}
           loading={loading}
           onRefresh={loadBids}
         />;
