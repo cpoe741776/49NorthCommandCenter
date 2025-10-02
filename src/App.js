@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
 import { fetchTickerItems, generateTickerItemsFromBids, addTickerItem } from './services/tickerService';
@@ -378,6 +378,9 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [tickerItems, setTickerItems] = useState([]);
+
+  // ===== TICKER ONLY CHANGE: add a ref to the scroller =====
+  const tickerRef = useRef(null);
   
   // Add CSS animation on mount
   useEffect(() => {
@@ -391,8 +394,15 @@ const App = () => {
           100% { transform: translateX(-50%); }
         }
         .ticker-animate {
-          animation: tickerScroll 40s linear infinite;
+          /* ===== TICKER ONLY CHANGE: use CSS var for duration ===== */
+          animation: tickerScroll var(--ticker-duration, 40s) linear infinite;
           will-change: transform;
+        }
+        /* Optional: pause on hover */
+        .ticker-animate:hover { animation-play-state: paused; }
+        /* Optional: respect reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+          .ticker-animate { animation: none; transform: none; }
         }
       `;
       document.head.appendChild(style);
@@ -456,6 +466,24 @@ const App = () => {
       loadTickerFeed();
     }
   }, [user, loadBids, loadTickerFeed]);
+
+  // ===== TICKER ONLY CHANGE: dynamically set duration based on content width =====
+  useEffect(() => {
+    if (!tickerRef.current) return;
+
+    // Choose your desired pixels-per-second speed
+    const SPEED_PX_PER_SEC = 120;
+
+    const el = tickerRef.current;
+    const width = el.scrollWidth;
+    if (!width) return;
+
+    // 0% -> -50% means distance is half the element width
+    const distancePx = width * 0.5;
+    const durationSec = Math.max(10, distancePx / SPEED_PX_PER_SEC);
+
+    el.style.setProperty('--ticker-duration', `${durationSec}s`);
+  }, [tickerItems]);
 
   // Show loading while checking auth
   if (authLoading) {
@@ -553,14 +581,17 @@ const App = () => {
           {renderPage()}
         </div>
         
-       {/* News Ticker */}
+        {/* News Ticker */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-3 text-sm overflow-hidden z-50 shadow-lg">
           <div className="flex items-center">
             <div className="bg-[#003049] px-4 font-semibold shrink-0 relative z-10">
               Latest Updates:
             </div>
             <div className="flex-1 overflow-hidden">
-              <div className="ticker-animate inline-flex whitespace-nowrap">
+              <div
+                ref={tickerRef} /* ===== TICKER ONLY CHANGE: attach ref ===== */
+                className="ticker-animate inline-flex whitespace-nowrap"
+              >
                 {tickerItems.length > 0 ? (
                   <>
                     {/* Render items twice for seamless loop */}
