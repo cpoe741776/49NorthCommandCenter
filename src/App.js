@@ -463,14 +463,16 @@ const App = () => {
         </div>
         
         {/* News Ticker */}
-        <div className="fixed bottom-0 left-0 right-0 bg-brand-blue text-white py-2 px-4 text-sm overflow-hidden">
-          <div className="flex items-center gap-8">
-            <span className="font-semibold whitespace-nowrap">Latest Updates:</span>
-            <div className="flex gap-8 animate-marquee">
-              <span className="whitespace-nowrap">• {summary?.totalActive || 0} active bids being tracked</span>
-              <span className="whitespace-nowrap">• {summary?.respondCount || 0} high-priority opportunities</span>
-              <span className="whitespace-nowrap">• {summary?.totalDisregarded || 0} irrelevant bids filtered by AI</span>
-              <span className="whitespace-nowrap">• System updating every 4 hours automatically</span>
+        <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-2 text-sm overflow-hidden">
+          <div className="flex items-center h-full">
+            <span className="font-semibold bg-[#003049] px-4 z-10 shrink-0">Latest Updates:</span>
+            <div className="flex gap-8 animate-scroll whitespace-nowrap">
+              <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
+              <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
+              <span>• Social post scheduled for Oct 3 - Peer Support Awareness</span>
+              <span>• Bid response submitted - State Fire Marshal Trauma Training</span>
+              <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
+              <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
             </div>
           </div>
         </div>
