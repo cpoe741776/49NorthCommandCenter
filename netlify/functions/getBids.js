@@ -45,7 +45,7 @@ exports.handler = async (event, context) => {
 
     // Transform rows into bid objects
     const activeBids = activeBidsRows.map((row, index) => ({
-      id: index + 1,
+      id: index + 2,
       recommendation: row[0] || '',
       reasoning: row[1] || '',
       emailSummary: row[2] || '',
