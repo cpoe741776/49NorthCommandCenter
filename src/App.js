@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
 import { fetchTickerItems, generateTickerItemsFromBids, addTickerItem } from './services/tickerService';
@@ -225,27 +225,25 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
   }
   
   const handleStatusChange = async (bidId, status) => {
-  try {
-    const response = await fetch('/.netlify/functions/updateBidStatus', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bidId, status }),
-    });
+    try {
+      const response = await fetch('/.netlify/functions/updateBidStatus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bidId, status }),
+      });
 
-    if (!response.ok) {
-      throw new Error('Failed to update bid status');
+      if (!response.ok) {
+        throw new Error('Failed to update bid status');
+      }
+
+      const result = await response.json();
+      alert(`Success! ${result.message}`);
+      await onRefresh();
+    } catch (err) {
+      console.error('Error updating bid status:', err);
+      alert(`Error: Failed to update bid status`);
     }
-
-    const result = await response.json();
-    alert(`Success! ${result.message}`);
-    
-    // Refresh bids to show updated data
-    await onRefresh();
-  } catch (err) {
-    console.error('Error updating bid status:', err);
-    alert(`Error: Failed to update bid status`);
-  }
-};
+  };
   
   const respondBids = bids.filter(b => b.recommendation === "Respond");
   const gatherInfoBids = bids.filter(b => b.recommendation === "Gather More Information");
@@ -379,10 +377,10 @@ const App = () => {
   const [error, setError] = useState(null);
   const [tickerItems, setTickerItems] = useState([]);
 
-  // ===== TICKER ONLY CHANGE: add a ref to the scroller =====
+  // ===== TICKER: ref for measuring width =====
   const tickerRef = useRef(null);
-  
-  // Add CSS animation on mount
+
+  // ===== TICKER: injected styles with CSS var duration =====
   useEffect(() => {
     const styleId = 'ticker-animation-styles';
     if (!document.getElementById(styleId)) {
@@ -394,13 +392,10 @@ const App = () => {
           100% { transform: translateX(-50%); }
         }
         .ticker-animate {
-          /* ===== TICKER ONLY CHANGE: use CSS var for duration ===== */
           animation: tickerScroll var(--ticker-duration, 40s) linear infinite;
           will-change: transform;
         }
-        /* Optional: pause on hover */
         .ticker-animate:hover { animation-play-state: paused; }
-        /* Optional: respect reduced motion */
         @media (prefers-reduced-motion: reduce) {
           .ticker-animate { animation: none; transform: none; }
         }
@@ -409,7 +404,7 @@ const App = () => {
     }
   }, []);
   
-  // Define loadTickerFeed first (no dependencies)
+  // Load ticker feed
   const loadTickerFeed = useCallback(async () => {
     try {
       const items = await fetchTickerItems();
@@ -424,7 +419,7 @@ const App = () => {
     }
   }, []);
   
-  // Define loadBids second (depends on loadTickerFeed)
+  // Load bids + push auto ticker items
   const loadBids = useCallback(async () => {
     try {
       setLoading(true);
@@ -434,11 +429,9 @@ const App = () => {
       setDisregardedBids(data.disregardedBids || []);
       setSummary(data.summary || {});
       
-      // Generate auto ticker items from bids
       const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
       console.log('Auto-generated ticker items:', autoTickerItems);
       
-      // Write them to the Google Sheet
       for (const item of autoTickerItems) {
         try {
           await addTickerItem(item);
@@ -448,9 +441,7 @@ const App = () => {
         }
       }
       
-      // Reload ticker feed to include new items
       await loadTickerFeed();
-      
     } catch (err) {
       setError(err.message);
       console.error('Failed to load bids:', err);
@@ -459,7 +450,7 @@ const App = () => {
     }
   }, [loadTickerFeed]);
 
-  // Fetch bids and ticker on mount
+  // Mount effects
   useEffect(() => {
     if (user) {
       loadBids();
@@ -467,25 +458,66 @@ const App = () => {
     }
   }, [user, loadBids, loadTickerFeed]);
 
-  // ===== TICKER ONLY CHANGE: dynamically set duration based on content width =====
-  useEffect(() => {
-    if (!tickerRef.current) return;
+  // ===== TICKER: dedupe + alternate for display =====
+  const displayItems = useMemo(() => {
+    const normalized = (tickerItems || [])
+      .map(i => ({
+        ...i,
+        message: (i?.message || '').trim(),
+        priority: (i?.priority || 'low').toLowerCase()
+      }))
+      .filter(i => i.message.length > 0);
 
-    // Choose your desired pixels-per-second speed
-    const SPEED_PX_PER_SEC = 120;
+    // De-dup by exact message
+    const map = new Map();
+    for (const i of normalized) {
+      if (!map.has(i.message)) map.set(i.message, i);
+    }
+    const unique = Array.from(map.values());
+    if (unique.length === 0) return unique;
 
-    const el = tickerRef.current;
-    const width = el.scrollWidth;
-    if (!width) return;
+    // Bucket by priority
+    const hi = unique.filter(i => i.priority === 'high');
+    const mid = unique.filter(i => i.priority === 'medium');
+    const low = unique.filter(i => i.priority !== 'high' && i.priority !== 'medium');
 
-    // 0% -> -50% means distance is half the element width
-    const distancePx = width * 0.5;
-    const durationSec = Math.max(10, distancePx / SPEED_PX_PER_SEC);
-
-    el.style.setProperty('--ticker-duration', `${durationSec}s`);
+    // Round-robin: high -> medium -> low (repeat)
+    const out = [];
+    const queues = [hi, mid, low];
+    let added = true;
+    while (added) {
+      added = false;
+      for (const q of queues) {
+        if (q.length) {
+          const next = q.shift();
+          if (!out.length || out[out.length - 1].message !== next.message) {
+            out.push(next);
+            added = true;
+          }
+        }
+      }
+    }
+    return out;
   }, [tickerItems]);
 
-  // Show loading while checking auth
+  // ===== TICKER: dynamic duration by width (consistent px/sec) =====
+  useEffect(() => {
+    if (!tickerRef.current) return;
+    const SPEED_PX_PER_SEC = 120; // tweak to taste (90–160 typical)
+    const el = tickerRef.current;
+
+    // Use a rAF tick to ensure layout is settled
+    const id = requestAnimationFrame(() => {
+      const width = el.scrollWidth || 0;
+      if (!width) return;
+      const distancePx = width * 0.5; // 0% -> -50%
+      const durationSec = Math.max(10, distancePx / SPEED_PX_PER_SEC);
+      el.style.setProperty('--ticker-duration', `${durationSec}s`);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [displayItems]);
+
+  // Auth gating
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -494,7 +526,6 @@ const App = () => {
     );
   }
 
-  // Show login if not authenticated
   if (!user) {
     return <LoginPage onLogin={login} />;
   }
@@ -589,18 +620,18 @@ const App = () => {
             </div>
             <div className="flex-1 overflow-hidden">
               <div
-                ref={tickerRef} /* ===== TICKER ONLY CHANGE: attach ref ===== */
+                ref={tickerRef}
                 className="ticker-animate inline-flex whitespace-nowrap"
               >
-                {tickerItems.length > 0 ? (
+                {displayItems.length > 0 ? (
                   <>
-                    {/* Render items twice for seamless loop */}
-                    {tickerItems.map((item, index) => (
+                    {/* Render once + one duplicate block for seamless looping (no extra spam) */}
+                    {displayItems.map((item, index) => (
                       <span key={`ticker-1-${index}`} className="inline-block px-8">
                         {item.message}
                       </span>
                     ))}
-                    {tickerItems.map((item, index) => (
+                    {displayItems.map((item, index) => (
                       <span key={`ticker-2-${index}`} className="inline-block px-8">
                         {item.message}
                       </span>
