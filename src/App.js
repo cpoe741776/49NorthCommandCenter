@@ -464,15 +464,17 @@ const App = () => {
         
         {/* News Ticker */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-2 text-sm overflow-hidden">
-          <div className="flex items-center h-full">
-            <span className="font-semibold bg-[#003049] px-4 z-10 shrink-0">Latest Updates:</span>
-            <div className="flex gap-8 animate-scroll whitespace-nowrap">
+          <div className="flex items-center h-full relative">
+            <span className="font-semibold bg-[#003049] px-4 z-10 absolute left-0">Latest Updates:</span>
+            <div className="flex gap-8 whitespace-nowrap pl-40" style={{animation: 'scroll 45s linear infinite'}}>
               <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
               <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
               <span>• Social post scheduled for Oct 3 - Peer Support Awareness</span>
               <span>• Bid response submitted - State Fire Marshal Trauma Training</span>
               <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
               <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
+              <span>• Social post scheduled for Oct 3 - Peer Support Awareness</span>
+              <span>• Bid response submitted - State Fire Marshal Trauma Training</span>
             </div>
           </div>
         </div>
