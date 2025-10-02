@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
 import { fetchTickerItems, generateTickerItemsFromBids, addTickerItem } from './services/tickerService';
@@ -379,63 +379,64 @@ const App = () => {
       document.head.appendChild(style);
     }
   }, []);
- 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-useEffect(() => {
-  if (user) {
-    loadBids();
-    loadTickerFeed();
-  }
-}, [user]);
   
-  const loadBids = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    const data = await fetchBids();
-    setBids(data.activeBids || []);
-    setDisregardedBids(data.disregardedBids || []);
-    setSummary(data.summary || {});
-    
-    // Generate auto ticker items from bids
-    const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
-    console.log('Auto-generated ticker items:', autoTickerItems);
-    
-    // Write them to the Google Sheet
-    for (const item of autoTickerItems) {
-      try {
-        await addTickerItem(item);
-        console.log('Added ticker item:', item.message);
-      } catch (err) {
-        console.error('Failed to add ticker item:', err);
-      }
-    }
-    
-    // Reload ticker feed to include new items
-    await loadTickerFeed();
-    
-  } catch (err) {
-    setError(err.message);
-    console.error('Failed to load bids:', err);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  const loadTickerFeed = async () => {
+  // Define loadTickerFeed first (no dependencies)
+  const loadTickerFeed = useCallback(async () => {
     try {
       const items = await fetchTickerItems();
       setTickerItems(items);
       console.log('Loaded ticker items:', items);
     } catch (err) {
       console.error('Failed to load ticker feed:', err);
-      // Use fallback items if fetch fails
       setTickerItems([
         { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
         { message: '📊 Loading latest updates...', priority: 'medium' }
       ]);
     }
-  };
+  }, []);
+  
+  // Define loadBids second (depends on loadTickerFeed)
+  const loadBids = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchBids();
+      setBids(data.activeBids || []);
+      setDisregardedBids(data.disregardedBids || []);
+      setSummary(data.summary || {});
+      
+      // Generate auto ticker items from bids
+      const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
+      console.log('Auto-generated ticker items:', autoTickerItems);
+      
+      // Write them to the Google Sheet
+      for (const item of autoTickerItems) {
+        try {
+          await addTickerItem(item);
+          console.log('Added ticker item:', item.message);
+        } catch (err) {
+          console.error('Failed to add ticker item:', err);
+        }
+      }
+      
+      // Reload ticker feed to include new items
+      await loadTickerFeed();
+      
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load bids:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadTickerFeed]);
+
+  // Fetch bids and ticker on mount
+  useEffect(() => {
+    if (user) {
+      loadBids();
+      loadTickerFeed();
+    }
+  }, [user, loadBids, loadTickerFeed]);
 
   // Show loading while checking auth
   if (authLoading) {
@@ -454,7 +455,7 @@ useEffect(() => {
   const renderPage = () => {
     switch(currentPage) {
       case 'dashboard': 
-  return <Dashboard bids={bids} summary={summary} loading={loading} onNavigate={setCurrentPage} />;
+        return <Dashboard bids={bids} summary={summary} loading={loading} onNavigate={setCurrentPage} />;
       case 'bids': 
         return <BidOperations 
           bids={bids} 
