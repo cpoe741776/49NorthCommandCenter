@@ -464,17 +464,19 @@ const App = () => {
         
         {/* News Ticker */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-2 text-sm overflow-hidden">
-          <div className="flex items-center h-full">
-            <span className="font-semibold bg-[#003049] px-4 z-10 absolute left-0">Latest Updates:</span>
-            <div className="ticker-animate flex gap-8 whitespace-nowrap ml-40">
-              <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
-              <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
-              <span>• Social post scheduled for Oct 3 - Peer Support Awareness</span>
-              <span>• Bid response submitted - State Fire Marshal Trauma Training</span>
-              <span>• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
-              <span>• Webinar "Resilience for First Responders" - 42 registrations</span>
-              <span>• Social post scheduled for Oct 3 - Peer Support Awareness</span>
-              <span>• Bid response submitted - State Fire Marshal Trauma Training</span>
+          <div className="flex items-center">
+            <span className="font-semibold bg-[#003049] px-4 z-10 shrink-0">Latest Updates:</span>
+            <div className="flex-1 overflow-hidden relative">
+              <div className="ticker-content whitespace-nowrap">
+                <span className="inline-block px-8">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
+                <span className="inline-block px-8">• Webinar "Resilience for First Responders" - 42 registrations</span>
+                <span className="inline-block px-8">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
+                <span className="inline-block px-8">• Bid response submitted - State Fire Marshal Trauma Training</span>
+                <span className="inline-block px-8">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
+                <span className="inline-block px-8">• Webinar "Resilience for First Responders" - 42 registrations</span>
+                <span className="inline-block px-8">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
+                <span className="inline-block px-8">• Bid response submitted - State Fire Marshal Trauma Training</span>
+              </div>
             </div>
           </div>
         </div>
