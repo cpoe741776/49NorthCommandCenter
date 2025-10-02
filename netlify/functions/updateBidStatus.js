@@ -43,6 +43,31 @@ exports.handler = async (event, context) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // If status is 'respond', just update the recommendation column
+    if (status === 'respond') {
+      const rowIndex = parseInt(bidId);
+      const range = `Active_Bids!A${rowIndex}`;
+      
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: range,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [['Respond']],
+        },
+      });
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify({ 
+          success: true, 
+          message: 'Bid moved to Respond column' 
+        }),
+      };
+      }
+
+    // For 'submitted' or 'disregard', move the row to the appropriate tab
     // Get all active bids
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
@@ -98,7 +123,7 @@ exports.handler = async (event, context) => {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Invalid status. Use "submitted" or "disregard"' }),
+        body: JSON.stringify({ error: 'Invalid status. Use "submitted", "disregard", or "respond"' }),
       };
     }
 

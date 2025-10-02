@@ -13,7 +13,7 @@ const navItems = [
 ];
 
 // BidCard Component
-const BidCard = ({ bid, onStatusChange }) => {
+const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
   const [expanded, setExpanded] = useState(false);
   const isRespond = bid.recommendation === "Respond";
   
@@ -21,21 +21,31 @@ const BidCard = ({ bid, onStatusChange }) => {
     <div 
       className={`border-l-4 ${
         isRespond ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'
-      } p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
-      onClick={() => setExpanded(!expanded)}
+      } ${isSelected ? 'ring-2 ring-blue-500' : ''} p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              isRespond ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
-            }`}>
-              {bid.recommendation}
-            </span>
-            <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
+      <div className="flex items-start justify-between" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-start gap-3 flex-1">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onToggleSelect(bid.id);
+            }}
+            className="mt-1 h-4 w-4 text-blue-600 rounded"
+          />
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                isRespond ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
+              }`}>
+                {bid.recommendation}
+              </span>
+              <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
+            </div>
+            <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
+            <p className="text-sm text-gray-600 mt-1">{bid.emailSummary}</p>
           </div>
-          <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-          <p className="text-sm text-gray-600 mt-1">{bid.emailSummary}</p>
         </div>
         <button className="ml-4 text-gray-400 hover:text-gray-600">
           {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
@@ -43,7 +53,7 @@ const BidCard = ({ bid, onStatusChange }) => {
       </div>
       
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 ml-7" onClick={(e) => e.stopPropagation()}>
           <div>
             <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
             <p className="text-sm text-gray-700 mt-1">{bid.reasoning}</p>
@@ -90,6 +100,14 @@ const BidCard = ({ bid, onStatusChange }) => {
           )}
           
           <div className="flex gap-2 pt-2">
+            {!isRespond && (
+              <button 
+                onClick={() => onStatusChange(bid.id, 'respond')}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors"
+              >
+                Move to Respond
+              </button>
+            )}
             <button 
               onClick={() => onStatusChange(bid.id, 'submitted')}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors"
@@ -209,11 +227,14 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
 const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
   const [showArchive, setShowArchive] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedBids, setSelectedBids] = useState([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await onRefresh();
     setIsRefreshing(false);
+    setSelectedBids([]);
   };
   
   if (loading) {
@@ -245,6 +266,64 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
     }
   };
   
+  const handleToggleSelect = (bidId) => {
+    setSelectedBids(prev => 
+      prev.includes(bidId) 
+        ? prev.filter(id => id !== bidId)
+        : [...prev, bidId]
+    );
+  };
+  
+  const handleSelectAll = (bidList) => {
+    const bidIds = bidList.map(b => b.id);
+    setSelectedBids(prev => {
+      const allSelected = bidIds.every(id => prev.includes(id));
+      if (allSelected) {
+        return prev.filter(id => !bidIds.includes(id));
+      } else {
+        return [...new Set([...prev, ...bidIds])];
+      }
+    });
+  };
+  
+  const handleBulkAction = async (status) => {
+    if (selectedBids.length === 0) {
+      alert('Please select at least one bid');
+      return;
+    }
+    
+    const confirmed = window.confirm(`Are you sure you want to mark ${selectedBids.length} bid(s) as ${status}?`);
+    if (!confirmed) return;
+    
+    setIsBulkProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const bidId of selectedBids) {
+      try {
+        const response = await fetch('/.netlify/functions/updateBidStatus', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bidId, status }),
+        });
+        
+        if (response.ok) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (err) {
+        errorCount++;
+        console.error(`Error updating bid ${bidId}:`, err);
+      }
+    }
+    
+    setIsBulkProcessing(false);
+    alert(`Bulk action complete!\nSuccess: ${successCount}\nErrors: ${errorCount}`);
+    setSelectedBids([]);
+    await onRefresh();
+  };
+  
   const respondBids = bids.filter(b => b.recommendation === "Respond");
   const gatherInfoBids = bids.filter(b => b.recommendation === "Gather More Information");
   
@@ -273,6 +352,36 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
           </button>
         </div>
       </div>
+      
+      {selectedBids.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+          <span className="text-sm font-semibold text-blue-900">
+            {selectedBids.length} bid{selectedBids.length > 1 ? 's' : ''} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleBulkAction('submitted')}
+              disabled={isBulkProcessing}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              Mark as Submitted
+            </button>
+            <button
+              onClick={() => handleBulkAction('disregard')}
+              disabled={isBulkProcessing}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              Disregard Selected
+            </button>
+            <button
+              onClick={() => setSelectedBids([])}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
+            >
+              Clear Selection
+            </button>
+          </div>
+        </div>
+      )}
       
       {showArchive && (
         <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
@@ -304,14 +413,28 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Respond ({respondBids.length})</h2>
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleSelectAll(respondBids)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {respondBids.every(b => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
+              </button>
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            </div>
           </div>
           <div className="space-y-3">
             {respondBids.length === 0 ? (
               <p className="text-gray-500 text-sm">No high-priority bids at this time</p>
             ) : (
               respondBids.map(bid => (
-                <BidCard key={bid.id} bid={bid} onStatusChange={handleStatusChange} />
+                <BidCard 
+                  key={bid.id} 
+                  bid={bid} 
+                  onStatusChange={handleStatusChange}
+                  isSelected={selectedBids.includes(bid.id)}
+                  onToggleSelect={handleToggleSelect}
+                />
               ))
             )}
           </div>
@@ -320,14 +443,28 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Gather More Information ({gatherInfoBids.length})</h2>
-            <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleSelectAll(gatherInfoBids)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {gatherInfoBids.every(b => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
+              </button>
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+            </div>
           </div>
           <div className="space-y-3">
             {gatherInfoBids.length === 0 ? (
               <p className="text-gray-500 text-sm">No bids need additional information</p>
             ) : (
               gatherInfoBids.map(bid => (
-                <BidCard key={bid.id} bid={bid} onStatusChange={handleStatusChange} />
+                <BidCard 
+                  key={bid.id} 
+                  bid={bid} 
+                  onStatusChange={handleStatusChange}
+                  isSelected={selectedBids.includes(bid.id)}
+                  onToggleSelect={handleToggleSelect}
+                />
               ))
             )}
           </div>
@@ -377,10 +514,8 @@ const App = () => {
   const [error, setError] = useState(null);
   const [tickerItems, setTickerItems] = useState([]);
 
-  // ===== TICKER: ref for measuring width =====
   const tickerRef = useRef(null);
 
-  // ===== TICKER: injected styles with CSS var duration =====
   useEffect(() => {
     const styleId = 'ticker-animation-styles';
     if (!document.getElementById(styleId)) {
@@ -404,7 +539,6 @@ const App = () => {
     }
   }, []);
   
-  // Load ticker feed
   const loadTickerFeed = useCallback(async () => {
     try {
       const items = await fetchTickerItems();
@@ -419,7 +553,6 @@ const App = () => {
     }
   }, []);
   
-  // Load bids + push auto ticker items
   const loadBids = useCallback(async () => {
     try {
       setLoading(true);
@@ -450,7 +583,6 @@ const App = () => {
     }
   }, [loadTickerFeed]);
 
-  // Mount effects
   useEffect(() => {
     if (user) {
       loadBids();
@@ -458,7 +590,6 @@ const App = () => {
     }
   }, [user, loadBids, loadTickerFeed]);
 
-  // ===== TICKER: dedupe + alternate for display =====
   const displayItems = useMemo(() => {
     const normalized = (tickerItems || [])
       .map(i => ({
@@ -468,7 +599,6 @@ const App = () => {
       }))
       .filter(i => i.message.length > 0);
 
-    // De-dup by exact message
     const map = new Map();
     for (const i of normalized) {
       if (!map.has(i.message)) map.set(i.message, i);
@@ -476,12 +606,10 @@ const App = () => {
     const unique = Array.from(map.values());
     if (unique.length === 0) return unique;
 
-    // Bucket by priority
     const hi = unique.filter(i => i.priority === 'high');
     const mid = unique.filter(i => i.priority === 'medium');
     const low = unique.filter(i => i.priority !== 'high' && i.priority !== 'medium');
 
-    // Round-robin: high -> medium -> low (repeat)
     const out = [];
     const queues = [hi, mid, low];
     let added = true;
@@ -500,24 +628,21 @@ const App = () => {
     return out;
   }, [tickerItems]);
 
-  // ===== TICKER: dynamic duration by width (consistent px/sec) =====
   useEffect(() => {
     if (!tickerRef.current) return;
-    const SPEED_PX_PER_SEC = 120; // tweak to taste (90–160 typical)
+    const SPEED_PX_PER_SEC = 120;
     const el = tickerRef.current;
 
-    // Use a rAF tick to ensure layout is settled
     const id = requestAnimationFrame(() => {
       const width = el.scrollWidth || 0;
       if (!width) return;
-      const distancePx = width * 0.5; // 0% -> -50%
+      const distancePx = width * 0.5;
       const durationSec = Math.max(10, distancePx / SPEED_PX_PER_SEC);
       el.style.setProperty('--ticker-duration', `${durationSec}s`);
     });
     return () => cancelAnimationFrame(id);
   }, [displayItems]);
 
-  // Auth gating
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -552,7 +677,6 @@ const App = () => {
   
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
       <div className={`bg-brand-blue text-white transition-all duration-300 relative ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-4 flex items-center justify-between border-b border-blue-800">
           {sidebarOpen && (
@@ -589,7 +713,6 @@ const App = () => {
           })}
         </nav>
 
-        {/* Logout Button - Fixed at bottom with padding for ticker */}
         <div className="absolute bottom-12 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
           <button
             onClick={logout}
@@ -601,7 +724,6 @@ const App = () => {
         </div>
       </div>
       
-      {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-8 pb-20">
           {error && (
@@ -612,7 +734,6 @@ const App = () => {
           {renderPage()}
         </div>
         
-        {/* News Ticker */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-3 text-sm overflow-hidden z-50 shadow-lg">
           <div className="flex items-center">
             <div className="bg-[#003049] px-4 font-semibold shrink-0 relative z-10">
@@ -625,7 +746,6 @@ const App = () => {
               >
                 {displayItems.length > 0 ? (
                   <>
-                    {/* Render once + one duplicate block for seamless looping (no extra spam) */}
                     {displayItems.map((item, index) => (
                       <span key={`ticker-1-${index}`} className="inline-block px-8">
                         {item.message}
