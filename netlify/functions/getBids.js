@@ -1,7 +1,7 @@
 // netlify/functions/getBids.js
 const { google } = require('googleapis');
 
-const SHEET_ID = '1o-kW7fBqQVG15xXvvenkO3nRmSfxpCp6vY-qybpRp9w';
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
 exports.handler = async (event, context) => {
   // Enable CORS
