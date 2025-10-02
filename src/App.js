@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
+import { fetchTickerItems, generateTickerItemsFromBids } from './services/tickerService';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
@@ -342,6 +343,7 @@ const App = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [tickerItems, setTickerItems] = useState([]);
   
   // Add CSS animation on mount
   useEffect(() => {
@@ -363,10 +365,11 @@ const App = () => {
     }
   }, []);
   
-  // Fetch bids on mount
+  // Fetch bids and ticker on mount
   useEffect(() => {
     if (user) {
       loadBids();
+      loadTickerFeed();
     }
   }, [user]);
   
@@ -378,11 +381,30 @@ const App = () => {
       setBids(data.activeBids || []);
       setDisregardedBids(data.disregardedBids || []);
       setSummary(data.summary || {});
+      
+      // Generate auto ticker items from bids (for now just log them)
+      const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
+      console.log('Auto-generated ticker items:', autoTickerItems);
     } catch (err) {
       setError(err.message);
       console.error('Failed to load bids:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTickerFeed = async () => {
+    try {
+      const items = await fetchTickerItems();
+      setTickerItems(items);
+      console.log('Loaded ticker items:', items);
+    } catch (err) {
+      console.error('Failed to load ticker feed:', err);
+      // Use fallback items if fetch fails
+      setTickerItems([
+        { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
+        { message: '📊 Loading latest updates...', priority: 'medium' }
+      ]);
     }
   };
 
@@ -490,14 +512,26 @@ const App = () => {
             </div>
             <div className="flex-1 overflow-hidden">
               <div className="ticker-animate inline-flex whitespace-nowrap">
-                <span className="inline-block px-8">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
-                <span className="inline-block px-8">• Webinar "Resilience for First Responders" - 42 registrations</span>
-                <span className="inline-block px-8">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
-                <span className="inline-block px-8">• Bid response submitted - State Fire Marshal Trauma Training</span>
-                <span className="inline-block px-8">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
-                <span className="inline-block px-8">• Webinar "Resilience for First Responders" - 42 registrations</span>
-                <span className="inline-block px-8">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
-                <span className="inline-block px-8">• Bid response submitted - State Fire Marshal Trauma Training</span>
+                {tickerItems.length > 0 ? (
+                  <>
+                    {/* Render items twice for seamless loop */}
+                    {tickerItems.map((item, index) => (
+                      <span key={`ticker-1-${index}`} className="inline-block px-8">
+                        {item.message}
+                      </span>
+                    ))}
+                    {tickerItems.map((item, index) => (
+                      <span key={`ticker-2-${index}`} className="inline-block px-8">
+                        {item.message}
+                      </span>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <span className="inline-block px-8">• Loading latest updates...</span>
+                    <span className="inline-block px-8">• Loading latest updates...</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
