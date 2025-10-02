@@ -461,7 +461,7 @@ const App = () => {
           </button>
         </div>
         
-        <nav className="p-4 space-y-2 pb-24">
+        <nav className="p-4 space-y-2 pb-32">
           {navItems.map(item => {
             const Icon = item.icon;
             return (
@@ -481,8 +481,8 @@ const App = () => {
           })}
         </nav>
 
-        {/* Logout Button - Fixed at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
+        {/* Logout Button - Fixed at bottom with padding for ticker */}
+        <div className="absolute bottom-12 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
