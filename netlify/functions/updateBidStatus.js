@@ -2,7 +2,6 @@
 const { google } = require('googleapis');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const BIDS_TAB = 'BidsCacheParsed';
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -44,22 +43,22 @@ exports.handler = async (event, context) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Get all bids to find the row
+    // Get all active bids
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: `${BIDS_TAB}!A:Z`,
+      range: 'Active_Bids!A:T',
     });
 
     const rows = response.data.values;
-    if (!rows || rows.length === 0) {
+    if (!rows || rows.length <= 1) {
       return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ error: 'No bids found' }),
+        body: JSON.stringify({ error: 'No active bids found' }),
       };
     }
 
-    // Find the bid row (bidId is the row number)
+    // Find the bid row by ID (bidId is the row number in the sheet)
     const rowIndex = parseInt(bidId);
     if (rowIndex < 2 || rowIndex > rows.length) {
       return {
@@ -69,19 +68,65 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Find the status column (usually column R or S)
-    // Assuming 'status' is in column R (18th column, index 17)
-    const statusColumn = 'R'; // Adjust if your status column is different
-    const range = `${BIDS_TAB}!${statusColumn}${rowIndex}`;
+    const bidRow = rows[rowIndex - 1]; // Array is 0-indexed
+    const today = new Date().toISOString().split('T')[0];
 
-    // Update the status
-    await sheets.spreadsheets.values.update({
+    // Determine target tab and prepare row data
+    let targetTab, targetRow;
+    
+    if (status === 'disregard') {
+      targetTab = 'Disregarded';
+      // Disregarded columns: Recommendation | Reasoning | Email Subject | Email Date Received | Email From | Email Domain | Date Added | Source Email ID
+      targetRow = [
+        bidRow[0],  // Recommendation
+        bidRow[1],  // Reasoning
+        bidRow[8],  // Email Subject
+        bidRow[3],  // Email Date Received
+        bidRow[4],  // Email From
+        bidRow[13], // Email Domain
+        bidRow[18], // Date Added
+        bidRow[19]  // Source Email ID
+      ];
+    } else if (status === 'submitted') {
+      targetTab = 'Submitted';
+      // Submitted columns: All Active_Bids columns + Submission Date
+      targetRow = [
+        ...bidRow,  // All columns from Active_Bids
+        today       // Submission Date
+      ];
+    } else {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Invalid status. Use "submitted" or "disregard"' }),
+      };
+    }
+
+    // Append to target tab
+    await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: range,
+      range: `${targetTab}!A:Z`,
       valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[status]],
+        values: [targetRow],
       },
+    });
+
+    // Delete from Active_Bids
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      resource: {
+        requests: [{
+          deleteDimension: {
+            range: {
+              sheetId: await getSheetId(sheets, SHEET_ID, 'Active_Bids'),
+              dimension: 'ROWS',
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex
+            }
+          }
+        }]
+      }
     });
 
     return {
@@ -89,7 +134,7 @@ exports.handler = async (event, context) => {
       headers,
       body: JSON.stringify({ 
         success: true, 
-        message: `Bid ${bidId} marked as ${status}` 
+        message: `Bid moved to ${targetTab}` 
       }),
     };
   } catch (error) {
@@ -97,7 +142,17 @@ exports.handler = async (event, context) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to update bid status' }),
+      body: JSON.stringify({ error: 'Failed to update bid status', details: error.message }),
     };
   }
 };
+
+// Helper function to get sheet ID by name
+async function getSheetId(sheets, spreadsheetId, sheetName) {
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId: spreadsheetId,
+  });
+  
+  const sheet = metadata.data.sheets.find(s => s.properties.title === sheetName);
+  return sheet ? sheet.properties.sheetId : null;
+}
