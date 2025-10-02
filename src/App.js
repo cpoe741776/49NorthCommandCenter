@@ -110,7 +110,7 @@ const BidCard = ({ bid, onStatusChange }) => {
 };
 
 // Dashboard Component
-const Dashboard = ({ bids, summary, loading }) => {
+const Dashboard = ({ bids, summary, loading, onNavigate }) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -131,7 +131,10 @@ const Dashboard = ({ bids, summary, loading }) => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div 
+          onClick={() => onNavigate('bids')}
+          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Active Bids</p>
@@ -146,7 +149,10 @@ const Dashboard = ({ bids, summary, loading }) => {
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div 
+          onClick={() => onNavigate('webinars')}
+          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Upcoming Webinars</p>
@@ -159,7 +165,10 @@ const Dashboard = ({ bids, summary, loading }) => {
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div 
+          onClick={() => onNavigate('social')}
+          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Social Posts Scheduled</p>
@@ -176,11 +185,17 @@ const Dashboard = ({ bids, summary, loading }) => {
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
+          <div 
+            onClick={() => onNavigate('bids')}
+            className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors"
+          >
             <h3 className="font-semibold text-gray-900">Review High-Priority Bids</h3>
             <p className="text-sm text-gray-600 mt-1">{respondCount} bids marked as "Respond" awaiting review</p>
           </div>
-          <div className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
+          <div 
+            onClick={() => onNavigate('webinars')}
+            className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors"
+          >
             <h3 className="font-semibold text-gray-900">Check Webinar Registrations</h3>
             <p className="text-sm text-gray-600 mt-1">3 webinars with registration deadlines this week</p>
           </div>
