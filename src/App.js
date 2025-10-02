@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
-import { fetchTickerItems, generateTickerItemsFromBids } from './services/tickerService';
+import { fetchTickerItems, generateTickerItemsFromBids, addTickerItem } from './services/tickerService';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
@@ -379,34 +379,48 @@ const App = () => {
       document.head.appendChild(style);
     }
   }, []);
-  
-  // Fetch bids and ticker on mount
-  useEffect(() => {
-    if (user) {
-      loadBids();
-      loadTickerFeed();
-    }
-  }, [user]);
+ 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+useEffect(() => {
+  if (user) {
+    loadBids();
+    loadTickerFeed();
+  }
+}, [user]);
   
   const loadBids = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchBids();
-      setBids(data.activeBids || []);
-      setDisregardedBids(data.disregardedBids || []);
-      setSummary(data.summary || {});
-      
-      // Generate auto ticker items from bids (for now just log them)
-      const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
-      console.log('Auto-generated ticker items:', autoTickerItems);
-    } catch (err) {
-      setError(err.message);
-      console.error('Failed to load bids:', err);
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    setError(null);
+    const data = await fetchBids();
+    setBids(data.activeBids || []);
+    setDisregardedBids(data.disregardedBids || []);
+    setSummary(data.summary || {});
+    
+    // Generate auto ticker items from bids
+    const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
+    console.log('Auto-generated ticker items:', autoTickerItems);
+    
+    // Write them to the Google Sheet
+    for (const item of autoTickerItems) {
+      try {
+        await addTickerItem(item);
+        console.log('Added ticker item:', item.message);
+      } catch (err) {
+        console.error('Failed to add ticker item:', err);
+      }
     }
-  };
+    
+    // Reload ticker feed to include new items
+    await loadTickerFeed();
+    
+  } catch (err) {
+    setError(err.message);
+    console.error('Failed to load bids:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const loadTickerFeed = async () => {
     try {
