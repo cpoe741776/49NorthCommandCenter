@@ -440,7 +440,7 @@ const App = () => {
   const renderPage = () => {
     switch(currentPage) {
       case 'dashboard': 
-        return <Dashboard bids={bids} summary={summary} loading={loading} />;
+  return <Dashboard bids={bids} summary={summary} loading={loading} onNavigate={setCurrentPage} />;
       case 'bids': 
         return <BidOperations 
           bids={bids} 
