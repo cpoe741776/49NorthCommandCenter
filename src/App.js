@@ -453,7 +453,7 @@ const App = () => {
       case 'social': 
         return <SocialMediaOperations />;
       default: 
-        return <Dashboard bids={bids} summary={summary} loading={loading} />;
+        return <Dashboard bids={bids} summary={summary} loading={loading} onNavigate={setCurrentPage} />;
     }
   };
   
