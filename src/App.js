@@ -343,6 +343,26 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  // Add CSS animation on mount
+  useEffect(() => {
+    const styleId = 'ticker-animation-styles';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = `
+        @keyframes tickerScroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .ticker-animate {
+          animation: tickerScroll 40s linear infinite;
+          will-change: transform;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+  }, []);
+  
   // Fetch bids on mount
   useEffect(() => {
     if (user) {
@@ -403,7 +423,7 @@ const App = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className={`bg-brand-blue text-white transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+      <div className={`bg-brand-blue text-white transition-all duration-300 relative ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-4 flex items-center justify-between border-b border-blue-800">
           {sidebarOpen && (
             <div>
@@ -419,7 +439,7 @@ const App = () => {
           </button>
         </div>
         
-        <nav className="p-4 space-y-2">
+        <nav className="p-4 space-y-2 pb-24">
           {navItems.map(item => {
             const Icon = item.icon;
             return (
@@ -439,8 +459,8 @@ const App = () => {
           })}
         </nav>
 
-        {/* Logout Button */}
-        <div className="p-4 border-t border-blue-800 absolute bottom-0 left-0 right-0">
+        {/* Logout Button - Fixed at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
@@ -463,11 +483,13 @@ const App = () => {
         </div>
         
        {/* News Ticker */}
-        <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-2 text-sm overflow-hidden">
+        <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-3 text-sm overflow-hidden z-50 shadow-lg">
           <div className="flex items-center">
-            <span className="font-semibold bg-[#003049] px-4 z-10 shrink-0">Latest Updates:</span>
-            <div className="flex-1 overflow-hidden relative">
-              <div className="ticker-content whitespace-nowrap">
+            <div className="bg-[#003049] px-4 font-semibold shrink-0 relative z-10">
+              Latest Updates:
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <div className="ticker-animate inline-flex whitespace-nowrap">
                 <span className="inline-block px-8">• New RFP from County Sheriff - Mental Health Training (Due Oct 15)</span>
                 <span className="inline-block px-8">• Webinar "Resilience for First Responders" - 42 registrations</span>
                 <span className="inline-block px-8">• Social post scheduled for Oct 3 - Peer Support Awareness</span>
