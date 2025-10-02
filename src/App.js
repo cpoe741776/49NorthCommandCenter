@@ -224,9 +224,28 @@ const BidOperations = ({ bids, disregardedBids, loading, onRefresh }) => {
     );
   }
   
-  const handleStatusChange = (bidId, status) => {
-    alert(`Bid ${bidId} marked as ${status}. (Google Sheet update coming in future version)`);
-  };
+  const handleStatusChange = async (bidId, status) => {
+  try {
+    const response = await fetch('/.netlify/functions/updateBidStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bidId, status }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update bid status');
+    }
+
+    const result = await response.json();
+    alert(`Success! ${result.message}`);
+    
+    // Refresh bids to show updated data
+    await onRefresh();
+  } catch (err) {
+    console.error('Error updating bid status:', err);
+    alert(`Error: Failed to update bid status`);
+  }
+};
   
   const respondBids = bids.filter(b => b.recommendation === "Respond");
   const gatherInfoBids = bids.filter(b => b.recommendation === "Gather More Information");
