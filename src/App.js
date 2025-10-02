@@ -462,7 +462,7 @@ const App = () => {
           {renderPage()}
         </div>
         
-        {/* News Ticker */}
+       {/* News Ticker */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-2 text-sm overflow-hidden">
           <div className="flex items-center">
             <span className="font-semibold bg-[#003049] px-4 z-10 shrink-0">Latest Updates:</span>
