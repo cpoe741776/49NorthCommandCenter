@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
-import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, addTickerItem } from './services/tickerService';
+import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems} from './services/tickerService';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
@@ -684,21 +684,22 @@ const App = () => {
     setSubmittedBids(data.submittedBids || []);
     setSummary(data.summary || {});
     
-    // Generate ticker items from active bids
+    // Generate current state ticker items (not cumulative)
     const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
-    
-    // Generate ticker items from submitted bids
     const submittedTickerItems = generateSubmittedBidItems(data.submittedBids || []);
     
-    // Combine all auto-generated items
-    const allAutoItems = [...autoTickerItems, ...submittedTickerItems];
-    
-    for (const item of allAutoItems) {
-      try {
-        await addTickerItem(item);
-      } catch (err) {
-        console.error('Failed to add ticker item:', err);
-      }
+    // Clear old auto-generated items and add fresh ones
+    // This requires a new Netlify function to replace (not append) auto-generated items
+    try {
+      await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [...autoTickerItems, ...submittedTickerItems]
+        })
+      });
+    } catch (err) {
+      console.error('Failed to refresh ticker items:', err);
     }
     
     await loadTickerFeed();
