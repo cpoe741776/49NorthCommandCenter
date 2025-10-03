@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut } from 'lucide-react';
 import { fetchBids } from './services/bidService';
-import { fetchTickerItems, generateTickerItemsFromBids, addTickerItem } from './services/tickerService';
+import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, addTickerItem } from './services/tickerService';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
@@ -259,25 +259,60 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
   }
   
   const handleStatusChange = async (bidId, status) => {
-    try {
-      const response = await fetch('/.netlify/functions/updateBidStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bidId, status }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update bid status');
+  try {
+    let dueDateToSend = null;
+    
+    // If marking as submitted, ensure there's a due date
+    if (status === 'submitted') {
+      // Find the bid being submitted
+      const allBids = [...bids, ...submittedBids];
+      const bid = allBids.find(b => b.id === bidId);
+      
+      if (!bid) {
+        alert('Error: Could not find bid');
+        return;
       }
-
-      const result = await response.json();
-      alert(`Success! ${result.message}`);
-      await onRefresh();
-    } catch (err) {
-      console.error('Error updating bid status:', err);
-      alert(`Error: Failed to update bid status`);
+      
+      // Check if due date exists and is valid
+      if (!bid.dueDate || bid.dueDate === 'Not specified' || bid.dueDate.trim() === '') {
+        const dueDate = prompt(
+          'This bid does not have a due date.\n\n' +
+          'When is the submission deadline?\n' +
+          '(Format: YYYY-MM-DD or December 31, 2025)'
+        );
+        
+        if (!dueDate || dueDate.trim() === '') {
+          alert('Due date is required to mark as submitted');
+          return;
+        }
+        
+        dueDateToSend = dueDate.trim();
+      }
     }
-  };
+    
+    // Make the API call
+    const response = await fetch('/.netlify/functions/updateBidStatus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        bidId, 
+        status,
+        ...(dueDateToSend && { dueDate: dueDateToSend })
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update bid status');
+    }
+
+    const result = await response.json();
+    alert(`Success! ${result.message}`);
+    await onRefresh();
+  } catch (err) {
+    console.error('Error updating bid status:', err);
+    alert(`Error: Failed to update bid status`);
+  }
+};
   
   const handleToggleSelect = (bidId) => {
     setSelectedBids(prev => 
@@ -640,35 +675,40 @@ const App = () => {
   }, []);
   
   const loadBids = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await fetchBids();
-      setBids(data.activeBids || []);
-      setDisregardedBids(data.disregardedBids || []);
-      setSubmittedBids(data.submittedBids || []);
-      setSummary(data.summary || {});
-      
-      const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
-      console.log('Auto-generated ticker items:', autoTickerItems);
-      
-      for (const item of autoTickerItems) {
-        try {
-          await addTickerItem(item);
-          console.log('Added ticker item:', item.message);
-        } catch (err) {
-          console.error('Failed to add ticker item:', err);
-        }
+  try {
+    setLoading(true);
+    setError(null);
+    const data = await fetchBids();
+    setBids(data.activeBids || []);
+    setDisregardedBids(data.disregardedBids || []);
+    setSubmittedBids(data.submittedBids || []);
+    setSummary(data.summary || {});
+    
+    // Generate ticker items from active bids
+    const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
+    
+    // Generate ticker items from submitted bids
+    const submittedTickerItems = generateSubmittedBidItems(data.submittedBids || []);
+    
+    // Combine all auto-generated items
+    const allAutoItems = [...autoTickerItems, ...submittedTickerItems];
+    
+    for (const item of allAutoItems) {
+      try {
+        await addTickerItem(item);
+      } catch (err) {
+        console.error('Failed to add ticker item:', err);
       }
-      
-      await loadTickerFeed();
-    } catch (err) {
-      setError(err.message);
-      console.error('Failed to load bids:', err);
-    } finally {
-      setLoading(false);
     }
-  }, [loadTickerFeed]);
+    
+    await loadTickerFeed();
+  } catch (err) {
+    setError(err.message);
+    console.error('Failed to load bids:', err);
+  } finally {
+    setLoading(false);
+  }
+}, [loadTickerFeed]);
 
   useEffect(() => {
     if (user) {

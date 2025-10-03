@@ -23,7 +23,7 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { bidId, status } = JSON.parse(event.body);
+    const { bidId, status, dueDate } = JSON.parse(event.body);
 
     if (!bidId || !status) {
       return {
@@ -65,10 +65,9 @@ exports.handler = async (event, context) => {
           message: 'Bid moved to Respond column' 
         }),
       };
-      }
+    }
 
     // For 'submitted' or 'disregard', move the row to the appropriate tab
-    // Get all active bids
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Active_Bids!A:T',
@@ -83,7 +82,6 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Find the bid row by ID (bidId is the row number in the sheet)
     const rowIndex = parseInt(bidId);
     if (rowIndex < 2 || rowIndex > rows.length) {
       return {
@@ -93,15 +91,32 @@ exports.handler = async (event, context) => {
       };
     }
 
-    const bidRow = rows[rowIndex - 1]; // Array is 0-indexed
+    const bidRow = rows[rowIndex - 1];
     const today = new Date().toISOString().split('T')[0];
 
-    // Determine target tab and prepare row data
+    // If dueDate is provided and status is submitted, update column L (index 11) before moving
+    if (status === 'submitted' && dueDate) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `Active_Bids!L${rowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        resource: {
+          values: [[dueDate]],
+        },
+      });
+      
+      // Refresh the row data after updating
+      const updatedResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `Active_Bids!A${rowIndex}:T${rowIndex}`,
+      });
+      bidRow.splice(0, bidRow.length, ...updatedResponse.data.values[0]);
+    }
+
     let targetTab, targetRow;
     
     if (status === 'disregard') {
       targetTab = 'Disregarded';
-      // Disregarded columns: Recommendation | Reasoning | Email Subject | Email Date Received | Email From | Email Domain | Date Added | Source Email ID
       targetRow = [
         bidRow[0],  // Recommendation
         bidRow[1],  // Reasoning
@@ -114,10 +129,9 @@ exports.handler = async (event, context) => {
       ];
     } else if (status === 'submitted') {
       targetTab = 'Submitted';
-      // Submitted columns: All Active_Bids columns + Submission Date
       targetRow = [
-        ...bidRow,  // All columns from Active_Bids
-        today       // Submission Date
+        ...bidRow,
+        today
       ];
     } else {
       return {
@@ -172,7 +186,6 @@ exports.handler = async (event, context) => {
   }
 };
 
-// Helper function to get sheet ID by name
 async function getSheetId(sheets, spreadsheetId, sheetName) {
   const metadata = await sheets.spreadsheets.get({
     spreadsheetId: spreadsheetId,
