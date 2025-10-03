@@ -59,10 +59,10 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
             <p className="text-sm text-gray-700 mt-1">{bid.reasoning}</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-semibold text-gray-600">From:</label>
-              <p className="text-sm text-gray-700">{bid.emailFrom}</p>
+              <p className="text-sm text-gray-700 break-words">{bid.emailFrom}</p>
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-600">Due Date:</label>
@@ -72,17 +72,17 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
           
           <div>
             <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
-            <p className="text-sm text-gray-700">{bid.keywordsFound}</p>
+            <p className="text-sm text-gray-700 break-words">{bid.keywordsFound}</p>
           </div>
           
           <div>
             <label className="text-xs font-semibold text-gray-600">Categories:</label>
-            <p className="text-sm text-gray-700">{bid.keywordsCategory}</p>
+            <p className="text-sm text-gray-700 break-words">{bid.keywordsCategory}</p>
           </div>
           
           <div>
             <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
-            <p className="text-sm text-gray-700 italic">"{bid.significantSnippet}"</p>
+            <p className="text-sm text-gray-700 italic break-words">"{bid.significantSnippet}"</p>
           </div>
           
           {bid.url && bid.url !== 'Not provided' && (
@@ -92,25 +92,25 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
                 href={bid.url} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all"
               >
-                {bid.url} <ExternalLink size={14} />
+                {bid.url} <ExternalLink size={14} className="flex-shrink-0" />
               </a>
             </div>
           )}
           
-            <div className="flex flex-col sm:flex-row gap-2 pt-2 mt-2 border-t border-gray-200">
+          <div className="flex flex-col sm:flex-row gap-2 pt-2 mt-2 border-t border-gray-200">
             {!isRespond && (
               <button 
                 onClick={() => onStatusChange(bid.id, 'respond')}
-                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors"
+                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors whitespace-nowrap"
               >
                 Move to Respond
               </button>
             )}
             <button 
               onClick={() => onStatusChange(bid.id, 'submitted')}
-              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors"
+              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors whitespace-nowrap"
             >
               Mark as Submitted
             </button>
