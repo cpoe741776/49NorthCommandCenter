@@ -19,8 +19,10 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
   
   return (
     <div 
-      className={`border-l-4 ${
-        isRespond ? 'border-green-500 bg-green-50' : 'border-yellow-500 bg-yellow-50'
+     className={`border-l-4 ${
+  isRespond ? 'border-green-500 bg-green-50' : 
+  bid.recommendation === 'Submitted' ? 'border-blue-500 bg-blue-50' : 
+  'border-yellow-500 bg-yellow-50'
       } ${isSelected ? 'ring-2 ring-blue-500' : ''} p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
     >
       <div className="flex items-start justify-between" onClick={() => setExpanded(!expanded)}>
@@ -37,7 +39,9 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                isRespond ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'
+  isRespond ? 'bg-green-600 text-white' : 
+  bid.recommendation === 'Submitted' ? 'bg-blue-600 text-white' : 
+  'bg-yellow-600 text-white'
               }`}>
                 {bid.recommendation}
               </span>
@@ -530,25 +534,14 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
             ) : (
               <>
                 {paginatedSubmittedBids.map(bid => (
-                  <div 
-                    key={bid.id}
-                    className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-lg shadow-sm"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-600 text-white">
-                            Submitted
-                          </span>
-                          <span className="text-xs text-gray-500">{bid.submissionDate}</span>
-                        </div>
-                        <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{bid.emailSummary}</p>
-                        <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+  <BidCard 
+    key={bid.id} 
+    bid={{...bid, recommendation: 'Submitted'}}
+    onStatusChange={handleStatusChange}
+    isSelected={selectedBids.includes(bid.id)}
+    onToggleSelect={handleToggleSelect}
+  />
+))}
                 {hasMoreSubmitted && (
                   <button
                     onClick={() => setSubmittedPage(prev => prev + 1)}
