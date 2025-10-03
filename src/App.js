@@ -99,24 +99,24 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
             </div>
           )}
           
-          <div className="flex flex-col sm:flex-row gap-2 pt-2 mt-2 border-t border-gray-200">
+          <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-gray-200">
             {!isRespond && (
               <button 
                 onClick={() => onStatusChange(bid.id, 'respond')}
-                className="w-full sm:w-auto px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors whitespace-nowrap"
+                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium transition-colors"
               >
                 Move to Respond
               </button>
             )}
             <button 
               onClick={() => onStatusChange(bid.id, 'submitted')}
-              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors whitespace-nowrap"
+              className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium transition-colors"
             >
               Mark as Submitted
             </button>
             <button 
               onClick={() => onStatusChange(bid.id, 'disregard')}
-              className="w-full sm:w-auto px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 text-sm font-medium transition-colors"
+              className="px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 text-xs font-medium transition-colors"
             >
               Disregard
             </button>
