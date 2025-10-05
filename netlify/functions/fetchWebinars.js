@@ -14,13 +14,13 @@ exports.handler = async () => {
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.WEBINAR_SHEET_ID;
 
-    // Fetch webinars
+    // Fetch webinars - now reading A through L to get all columns
     const webinarResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Webinars!A2:K',
+      range: 'Webinars!A2:L',
     });
 
-    // Fetch surveys - now reading columns A-L to get all the data
+    // Fetch surveys
     const surveyResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Survey_Responses!A2:L',
@@ -29,17 +29,21 @@ exports.handler = async () => {
     const webinarRows = webinarResponse.data.values || [];
     const surveyRows = surveyResponse.data.values || [];
 
+    // Map to your actual column order:
+    // A: Webinar ID, B: Title, C: Date, D: Time, E: Platform Link
+    // F: Registration Form URL, G: Status, H: Capacity, I: Registration Count
+    // J: Attendance Count, K: Survey Link, L: Created Date
     const webinars = webinarRows.map((row, index) => ({
       id: row[0] || `webinar-${index}`,
       title: row[1] || '',
       date: row[2] || '',
       time: row[3] || '',
-      status: row[4] || 'Upcoming',
-      registrationCount: parseInt(row[5]) || 0,
-      attendanceCount: parseInt(row[6]) || 0,
+      platformLink: row[4] || '',
+      registrationFormUrl: row[5] || '',
+      status: row[6] || 'Upcoming',
       capacity: parseInt(row[7]) || 100,
-      platformLink: row[8] || '',
-      registrationFormUrl: row[9] || '',
+      registrationCount: parseInt(row[8]) || 0,
+      attendanceCount: parseInt(row[9]) || 0,
       surveyLink: row[10] || '',
     }));
 
