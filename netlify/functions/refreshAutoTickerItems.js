@@ -8,8 +8,13 @@ exports.handler = async (event) => {
   try {
     const { items } = JSON.parse(event.body);
 
+    // Decode Base64 key
+    const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
+      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
+      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+
     const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY),
+      credentials: serviceAccountKey,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
@@ -27,7 +32,7 @@ exports.handler = async (event) => {
     // Find and delete auto-generated rows
     const updates = [];
     rows.forEach((row, index) => {
-      if (row[3] === 'auto') { // source column
+      if (row[3] === 'auto') {
         updates.push({
           range: `Ticker!A${index + 2}:D${index + 2}`,
           values: [['', '', '', '']],

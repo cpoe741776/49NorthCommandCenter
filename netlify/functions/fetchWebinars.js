@@ -2,8 +2,13 @@ const { google } = require('googleapis');
 
 exports.handler = async () => {
   try {
+    // Decode Base64 key
+    const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
+      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
+      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+
     const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY),
+      credentials: serviceAccountKey,
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
     });
 
