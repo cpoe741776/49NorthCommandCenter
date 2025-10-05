@@ -19,7 +19,7 @@ exports.handler = async (event) => {
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.TICKER_SHEET_ID;
+    const spreadsheetId = process.env.TICKER_SHEET_ID || process.env.GOOGLE_SHEET_ID;
 
     // Get all ticker items
     const response = await sheets.spreadsheets.values.get({
