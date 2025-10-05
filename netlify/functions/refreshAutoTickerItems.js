@@ -1,3 +1,4 @@
+// netlify/functions/refreshAutoTickerItems.js
 const { google } = require('googleapis');
 
 exports.handler = async (event) => {
@@ -6,73 +7,82 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { items } = JSON.parse(event.body);
+    const { items = [] } = JSON.parse(event.body || '{}');
 
-    // Decode Base64 key
-    const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
+    // Service account
+    const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
       ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
       : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
 
     const auth = new google.auth.GoogleAuth({
-      credentials: serviceAccountKey,
+      credentials,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
-    const spreadsheetId = process.env.TICKER_SHEET_ID || process.env.GOOGLE_SHEET_ID;
 
-    // Get all ticker items
-    const response = await sheets.spreadsheets.values.get({
+    // Use one env var consistently for the sheet ID
+    const spreadsheetId = process.env.GOOGLE_SHEET_ID;
+    if (!spreadsheetId) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'GOOGLE_SHEET_ID not set' }) };
+    }
+
+    // Keep tab name consistent across all functions
+    const TICKER_TAB = process.env.TICKER_TAB || 'TickerFeed';
+
+    // 1) Mark existing auto rows inactive
+    const getResp = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Ticker!A2:D',
+      range: `${TICKER_TAB}!A2:F`,
     });
 
-    const rows = response.data.values || [];
-    
-    // Find and delete auto-generated rows
+    const rows = getResp.data.values || [];
     const updates = [];
-    rows.forEach((row, index) => {
-      if (row[3] === 'auto') {
+    rows.forEach((row, idx) => {
+      const source = row[3];         // D = source
+      const active = row[4];         // E = active
+      if (source === 'auto' && (active === 'TRUE' || active === true || active === '' || active == null)) {
+        // set active = FALSE
         updates.push({
-          range: `Ticker!A${index + 2}:D${index + 2}`,
-          values: [['', '', '', '']],
+          range: `${TICKER_TAB}!E${idx + 2}`,
+          values: [['FALSE']],
         });
       }
     });
 
-    if (updates.length > 0) {
+    if (updates.length) {
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId,
-        resource: { data: updates, valueInputOption: 'RAW' },
+        resource: { data: updates, valueInputOption: 'USER_ENTERED' },
       });
     }
 
-    // Add new auto-generated items
-    if (items.length > 0) {
-      const newRows = items.map(item => [
-        new Date().toISOString(),
-        item.message,
-        item.priority,
-        'auto'
+    // 2) Append new auto items (A:F), active=TRUE, expiresOn=now+7 days
+    if (items.length) {
+      const now = new Date();
+      const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+      const defaultExpiry = addDays(now, 7).toISOString();
+
+      const values = items.map(item => [
+        item.timestamp || now.toISOString(),     // A timestamp
+        item.message,                            // B message
+        item.priority || 'medium',               // C priority
+        'auto',                                  // D source
+        'TRUE',                                  // E active
+        item.expiresOn || defaultExpiry,         // F expiresOn
       ]);
 
       await sheets.spreadsheets.values.append({
         spreadsheetId,
-        range: 'Ticker!A2:D',
-        valueInputOption: 'RAW',
-        resource: { values: newRows },
+        range: `${TICKER_TAB}!A:F`,
+        valueInputOption: 'USER_ENTERED',
+        resource: { values },
       });
     }
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ success: true }),
-    };
+    return { statusCode: 200, body: JSON.stringify({ success: true, appended: items.length }) };
   } catch (error) {
     console.error('Error refreshing ticker items:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
 };
