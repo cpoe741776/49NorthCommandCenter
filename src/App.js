@@ -372,8 +372,12 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
     await onRefresh();
   };
   
-  const respondBids = bids.filter(b => b.recommendation === "Respond");
-  const gatherInfoBids = bids.filter(b => b.recommendation === "Gather More Information");
+  const respondBids = bids
+  .filter(b => b.recommendation === "Respond")
+  .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived)); // Oldest first
+  const gatherInfoBids = bids
+  .filter(b => b.recommendation === "Gather More Information")
+  .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived)); // Oldest first
   
   const paginatedRespondBids = respondBids.slice(0, respondPage * ITEMS_PER_PAGE);
   const paginatedGatherInfoBids = gatherInfoBids.slice(0, gatherInfoPage * ITEMS_PER_PAGE);
