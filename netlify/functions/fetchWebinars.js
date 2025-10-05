@@ -20,10 +20,10 @@ exports.handler = async () => {
       range: 'Webinars!A2:K',
     });
 
-    // Fetch surveys from Survey_Responses tab
+    // Fetch surveys - now reading columns A-L to get all the data
     const surveyResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Survey_Responses!A2:D',
+      range: 'Survey_Responses!A2:L',
     });
 
     const webinarRows = webinarResponse.data.values || [];
@@ -44,10 +44,17 @@ exports.handler = async () => {
     }));
 
     const surveys = surveyRows.map(row => ({
-      webinarId: row[0] || '',
-      submittedAt: row[1] || '',
-      rating: parseInt(row[2]) || 0,
-      feedback: row[3] || '',
+      timestamp: row[0] || '',
+      email: row[1] || '',
+      webinarId: row[2] || '',
+      relevance: row[3] || '',
+      rhonda: row[4] || '',
+      chris: row[5] || '',
+      guest: row[6] || '',
+      sharing: row[7] || '',
+      attending: row[8] || '',
+      contactRequest: row[9] || '',
+      comments: row[10] || '',
     }));
 
     const completedWebinars = webinars.filter(w => w.status === 'Completed');
