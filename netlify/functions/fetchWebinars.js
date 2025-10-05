@@ -2,7 +2,6 @@ const { google } = require('googleapis');
 
 exports.handler = async () => {
   try {
-    // Decode Base64 key
     const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
       ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
       : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
@@ -21,10 +20,10 @@ exports.handler = async () => {
       range: 'Webinars!A2:K',
     });
 
-    // Fetch surveys
+    // Fetch surveys from Survey_Responses tab
     const surveyResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Surveys!A2:D',
+      range: 'Survey_Responses!A2:D',
     });
 
     const webinarRows = webinarResponse.data.values || [];
