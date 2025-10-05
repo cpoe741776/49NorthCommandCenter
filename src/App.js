@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight, ExternalLink, Archive, RefreshCw, LogOut, TrendingUp, Users, Calendar, MessageSquare } from 'lucide-react';
+import {
+  Menu, X, FileText, Video, Share2, LayoutDashboard, ChevronDown, ChevronRight,
+  ExternalLink, Archive, RefreshCw, LogOut, TrendingUp, Users, Calendar, MessageSquare
+} from 'lucide-react';
 import { fetchBids } from './services/bidService';
-import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems} from './services/tickerService';
+import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems } from './services/tickerService';
 import { fetchWebinars } from './services/webinarService';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
@@ -13,24 +16,25 @@ const navItems = [
   { id: 'social', label: 'Social Media', icon: Share2 }
 ];
 
-// BidCard Component
+/* ----------------------- BidCard ----------------------- */
 const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
   const [expanded, setExpanded] = useState(false);
   const isRespond = bid.recommendation === "Respond";
-  
+
   return (
-    <div 
-     className={`border-l-4 ${
-  isRespond ? 'border-green-500 bg-green-50' : 
-  bid.recommendation === 'Submitted' ? 'border-blue-500 bg-blue-50' : 
-  'border-yellow-500 bg-yellow-50'
-      } ${isSelected ? 'ring-2 ring-blue-500' : ''} p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
+    <div
+      className={`border-l-4 ${
+        isRespond ? 'border-green-500 bg-green-50' :
+        bid.recommendation === 'Submitted' ? 'border-blue-500 bg-blue-50' :
+        'border-yellow-500 bg-yellow-50'
+      } ${isSelected ? 'ring-2 ring-blue-500' : ''} p-4 rounded-lg mb-3 shadow-sm hover:shadow-md transition-shadow`}
     >
-      <div className="flex items-start justify-between" onClick={() => setExpanded(!expanded)}>
+      <div className="flex items-start justify-between" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-start gap-3 flex-1">
           <input
             type="checkbox"
             checked={isSelected}
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => {
               e.stopPropagation();
               onToggleSelect(bid.id);
@@ -40,9 +44,9 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <span className={`px-2 py-1 rounded text-xs font-semibold ${
-  isRespond ? 'bg-green-600 text-white' : 
-  bid.recommendation === 'Submitted' ? 'bg-blue-600 text-white' : 
-  'bg-yellow-600 text-white'
+                isRespond ? 'bg-green-600 text-white' :
+                bid.recommendation === 'Submitted' ? 'bg-blue-600 text-white' :
+                'bg-yellow-600 text-white'
               }`}>
                 {bid.recommendation}
               </span>
@@ -52,123 +56,131 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
             <p className="text-sm text-gray-600 mt-1">{bid.emailSummary}</p>
           </div>
         </div>
-        <button className="ml-4 text-gray-400 hover:text-gray-600">
+        <button
+          className="ml-4 text-gray-400 hover:text-gray-600"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(v => !v);
+          }}
+          aria-label={expanded ? 'Collapse' : 'Expand'}
+        >
           {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
         </button>
       </div>
-      
+
       {expanded && (
-  <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 ml-7" onClick={(e) => e.stopPropagation()}>
-    <div>
-      <label className="text-xs font-semibold text-gray-600">Email Summary:</label>
-      <p className="text-sm text-gray-700 mt-1">{bid.emailSummary}</p>
-    </div>
-    
-    <div>
-      <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
-      <p className="text-sm text-gray-700 mt-1">{bid.reasoning}</p>
-    </div>
-    
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div>
-        <label className="text-xs font-semibold text-gray-600">Relevance:</label>
-        <p className="text-sm text-gray-700">
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-            bid.relevance === 'High' ? 'bg-green-100 text-green-800' :
-            bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-gray-100 text-gray-800'
-          }`}>
-            {bid.relevance || 'Unknown'}
-          </span>
-        </p>
-      </div>
-      <div>
-        <label className="text-xs font-semibold text-gray-600">Bid System:</label>
-        <p className="text-sm text-gray-700">{bid.bidSystem || 'Unknown'}</p>
-      </div>
-      <div>
-        <label className="text-xs font-semibold text-gray-600">Due Date:</label>
-        <p className="text-sm text-gray-700">{bid.dueDate}</p>
-      </div>
-    </div>
-    
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <div>
-        <label className="text-xs font-semibold text-gray-600">From:</label>
-        <p className="text-sm text-gray-700 break-words">{bid.emailFrom}</p>
-      </div>
-      <div>
-        <label className="text-xs font-semibold text-gray-600">Entity/Agency:</label>
-        <p className="text-sm text-gray-700 break-words">{bid.entity || 'Unknown'}</p>
-      </div>
-    </div>
-    
-    <div>
-      <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
-      <p className="text-sm text-gray-700 break-words">{bid.keywordsFound}</p>
-    </div>
-    
-    <div>
-      <label className="text-xs font-semibold text-gray-600">Categories:</label>
-      <p className="text-sm text-gray-700 break-words">{bid.keywordsCategory}</p>
-    </div>
-    
-    <div>
-      <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
-      <p className="text-sm text-gray-700 italic break-words">"{bid.significantSnippet}"</p>
-    </div>
-    
-    {bid.url && bid.url !== 'Not provided' && (
-      <div>
-        <label className="text-xs font-semibold text-gray-600">Original Source:</label>
-        <a href={bid.url} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all"
-        >
-          {bid.url} <ExternalLink size={14} className="flex-shrink-0" />
-        </a>
-      </div>
-    )}
-    
-    <details className="border border-gray-200 rounded-lg">
-      <summary className="cursor-pointer px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600">
-        Full Email Body
-      </summary>
-      <div className="p-3 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
-        {bid.emailBody || 'No email body available'}
-      </div>
-    </details>
-    
-    <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-gray-200">
-      {!isRespond && (
-        <button 
-          onClick={() => onStatusChange(bid.id, 'respond')}
-          className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium transition-colors"
-        >
-          Move to Respond
-        </button>
+        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 ml-7" onClick={(e) => e.stopPropagation()}>
+          <div>
+            <label className="text-xs font-semibold text-gray-600">Email Summary:</label>
+            <p className="text-sm text-gray-700 mt-1">{bid.emailSummary}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
+            <p className="text-sm text-gray-700 mt-1">{bid.reasoning}</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Relevance:</label>
+              <p className="text-sm text-gray-700">
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  bid.relevance === 'High' ? 'bg-green-100 text-green-800' :
+                  bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>
+                  {bid.relevance || 'Unknown'}
+                </span>
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Bid System:</label>
+              <p className="text-sm text-gray-700">{bid.bidSystem || 'Unknown'}</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Due Date:</label>
+              <p className="text-sm text-gray-700">{bid.dueDate}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-semibold text-gray-600">From:</label>
+              <p className="text-sm text-gray-700 break-words">{bid.emailFrom}</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Entity/Agency:</label>
+              <p className="text-sm text-gray-700 break-words">{bid.entity || 'Unknown'}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
+            <p className="text-sm text-gray-700 break-words">{bid.keywordsFound}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600">Categories:</label>
+            <p className="text-sm text-gray-700 break-words">{bid.keywordsCategory}</p>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
+            <p className="text-sm text-gray-700 italic break-words">"{bid.significantSnippet}"</p>
+          </div>
+
+          {bid.url && bid.url !== 'Not provided' && (
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Original Source:</label>
+              <a
+                href={bid.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all"
+              >
+                {bid.url} <ExternalLink size={14} className="flex-shrink-0" />
+              </a>
+            </div>
+          )}
+
+          <details className="border border-gray-200 rounded-lg">
+            <summary className="cursor-pointer px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600">
+              Full Email Body
+            </summary>
+            <div className="p-3 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+              {bid.emailBody || 'No email body available'}
+            </div>
+          </details>
+
+          <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-gray-200">
+            {!isRespond && (
+              <button
+                onClick={() => onStatusChange(bid.id, 'respond')}
+                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium transition-colors"
+              >
+                Move to Respond
+              </button>
+            )}
+            <button
+              onClick={() => onStatusChange(bid.id, 'submitted')}
+              className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium transition-colors"
+            >
+              Mark as Submitted
+            </button>
+            <button
+              onClick={() => onStatusChange(bid.id, 'disregard')}
+              className="px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 text-xs font-medium transition-colors"
+            >
+              Disregard
+            </button>
+          </div>
+        </div>
       )}
-      <button 
-        onClick={() => onStatusChange(bid.id, 'submitted')}
-        className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium transition-colors"
-      >
-        Mark as Submitted
-      </button>
-      <button 
-        onClick={() => onStatusChange(bid.id, 'disregard')}
-        className="px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 text-xs font-medium transition-colors"
-      >
-        Disregard
-      </button>
-    </div>
-  </div>
-)}
     </div>
   );
 };
 
-// Dashboard Component
+/* ----------------------- Dashboard ----------------------- */
 const Dashboard = ({ bids, summary, loading, onNavigate }) => {
   if (loading) {
     return (
@@ -178,19 +190,19 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
     );
   }
 
-  const respondCount = summary?.respondCount || 0;
-  const gatherInfoCount = summary?.gatherInfoCount || 0;
-  const totalActive = summary?.totalActive || 0;
-  
+  const respondCount = summary?.respondCount ?? 0;
+  const gatherInfoCount = summary?.gatherInfoCount ?? 0;
+  const totalActive = summary?.totalActive ?? 0;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Command Center</h1>
         <p className="text-gray-600 mt-1">49 North Business Operations Dashboard</p>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div 
+        <div
           onClick={() => onNavigate('bids')}
           className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
         >
@@ -207,8 +219,8 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
             <span className="text-yellow-600 font-semibold">{gatherInfoCount} Need Info</span>
           </div>
         </div>
-        
-        <div 
+
+        <div
           onClick={() => onNavigate('webinars')}
           className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
         >
@@ -219,12 +231,10 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
             </div>
             <Video className="text-blue-600" size={40} />
           </div>
-          <div className="mt-4 text-sm text-gray-600">
-            Next: Oct 30, 2025
-          </div>
+          <div className="mt-4 text-sm text-gray-600">Next: Oct 30, 2025</div>
         </div>
-        
-        <div 
+
+        <div
           onClick={() => onNavigate('social')}
           className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
         >
@@ -235,23 +245,21 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
             </div>
             <Share2 className="text-blue-600" size={40} />
           </div>
-          <div className="mt-4 text-sm text-gray-600">
-            This week: 4 posts
-          </div>
+          <div className="mt-4 text-sm text-gray-600">This week: 4 posts</div>
         </div>
       </div>
-      
+
       <div className="bg-white p-6 rounded-lg shadow">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div 
+          <div
             onClick={() => onNavigate('bids')}
             className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors"
           >
             <h3 className="font-semibold text-gray-900">Review High-Priority Bids</h3>
             <p className="text-sm text-gray-600 mt-1">{respondCount} bids marked as "Respond" awaiting review</p>
           </div>
-          <div 
+          <div
             onClick={() => onNavigate('webinars')}
             className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors"
           >
@@ -264,8 +272,9 @@ const Dashboard = ({ bids, summary, loading, onNavigate }) => {
   );
 };
 
-// Bid Operations Component
+/* ----------------------- Bid Operations ----------------------- */
 const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefresh }) => {
+  // State
   const [showArchive, setShowArchive] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
@@ -274,10 +283,10 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
   const [gatherInfoPage, setGatherInfoPage] = useState(1);
   const [submittedPage, setSubmittedPage] = useState(1);
   const [archivePage, setArchivePage] = useState(1);
-  
   const ITEMS_PER_PAGE = 10;
-  
-  const handleRefresh = async () => {
+
+  // Callbacks (top-level)
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     await onRefresh();
     setIsRefreshing(false);
@@ -285,101 +294,78 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
     setRespondPage(1);
     setGatherInfoPage(1);
     setSubmittedPage(1);
-  };
-  
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading bids...</div>
-      </div>
-    );
-  }
-  
-  const handleStatusChange = async (bidId, status) => {
-  try {
-    let dueDateToSend = null;
-    
-    if (status === 'submitted') {
-      const allBids = [...bids, ...submittedBids];
-      const bid = allBids.find(b => b.id === bidId);
-      
-      if (!bid) {
-        alert('Error: Could not find bid');
-        return;
-      }
-      
-      if (!bid.dueDate || bid.dueDate === 'Not specified' || bid.dueDate.trim() === '') {
-        const dueDate = prompt(
-          'This bid does not have a due date.\n\n' +
-          'When is the submission deadline?\n' +
-          '(Format: YYYY-MM-DD or December 31, 2025)'
-        );
-        
-        if (!dueDate || dueDate.trim() === '') {
-          alert('Due date is required to mark as submitted');
+  }, [onRefresh]);
+
+  const handleStatusChange = useCallback(async (bidId, status) => {
+    try {
+      let dueDateToSend = null;
+
+      if (status === 'submitted') {
+        const allBids = [...bids, ...submittedBids];
+        const bid = allBids.find((b) => b.id === bidId);
+
+        if (!bid) {
+          alert('Error: Could not find bid');
           return;
         }
-        
-        dueDateToSend = dueDate.trim();
-      }
-    }
-    
-    const response = await fetch('/.netlify/functions/updateBidStatus', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        bidId, 
-        status,
-        ...(dueDateToSend && { dueDate: dueDateToSend })
-      }),
-    });
 
-    if (!response.ok) {
-      throw new Error('Failed to update bid status');
-    }
+        if (!bid.dueDate || bid.dueDate === 'Not specified' || bid.dueDate.trim() === '') {
+          const dueDate = prompt(
+            'This bid does not have a due date.\n\n' +
+              'When is the submission deadline?\n' +
+              '(Format: YYYY-MM-DD or December 31, 2025)'
+          );
 
-    const result = await response.json();
-    alert(`Success! ${result.message}`);
-    await onRefresh();
-  } catch (err) {
-    console.error('Error updating bid status:', err);
-    alert(`Error: Failed to update bid status`);
-  }
-};
-  
-  const handleToggleSelect = (bidId) => {
-    setSelectedBids(prev => 
-      prev.includes(bidId) 
-        ? prev.filter(id => id !== bidId)
-        : [...prev, bidId]
-    );
-  };
-  
-  const handleSelectAll = (bidList) => {
-    const bidIds = bidList.map(b => b.id);
-    setSelectedBids(prev => {
-      const allSelected = bidIds.every(id => prev.includes(id));
-      if (allSelected) {
-        return prev.filter(id => !bidIds.includes(id));
-      } else {
-        return [...new Set([...prev, ...bidIds])];
+          if (!dueDate || dueDate.trim() === '') {
+            alert('Due date is required to mark as submitted');
+            return;
+          }
+          dueDateToSend = dueDate.trim();
+        }
       }
+
+      const response = await fetch('/.netlify/functions/updateBidStatus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bidId, status, ...(dueDateToSend && { dueDate: dueDateToSend }) }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update bid status');
+
+      const result = await response.json();
+      alert(`Success! ${result.message}`);
+      await onRefresh();
+    } catch (err) {
+      console.error('Error updating bid status:', err);
+      alert('Error: Failed to update bid status');
+    }
+  }, [bids, submittedBids, onRefresh]);
+
+  const handleToggleSelect = useCallback((bidId) => {
+    setSelectedBids((prev) => (prev.includes(bidId) ? prev.filter((id) => id !== bidId) : [...prev, bidId]));
+  }, []);
+
+  const handleSelectAll = useCallback((bidList) => {
+    const bidIds = bidList.map((b) => b.id);
+    setSelectedBids((prev) => {
+      const allSelected = bidIds.every((id) => prev.includes(id));
+      return allSelected ? prev.filter((id) => !bidIds.includes(id)) : [...new Set([...prev, ...bidIds])];
     });
-  };
-  
-  const handleBulkAction = async (status) => {
+  }, []);
+
+  const handleBulkAction = useCallback(async (status) => {
     if (selectedBids.length === 0) {
       alert('Please select at least one bid');
       return;
     }
-    
+
     const confirmed = window.confirm(`Are you sure you want to mark ${selectedBids.length} bid(s) as ${status}?`);
     if (!confirmed) return;
-    
+
     setIsBulkProcessing(true);
     let successCount = 0;
     let errorCount = 0;
-    
+
     for (const bidId of selectedBids) {
       try {
         const response = await fetch('/.netlify/functions/updateBidStatus', {
@@ -387,41 +373,56 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bidId, status }),
         });
-        
-        if (response.ok) {
-          successCount++;
-        } else {
-          errorCount++;
-        }
+        if (response.ok) successCount++;
+        else errorCount++;
       } catch (err) {
         errorCount++;
-        console.error(`Error updating bid ${bidId}:`, err);
       }
     }
-    
+
     setIsBulkProcessing(false);
     alert(`Bulk action complete!\nSuccess: ${successCount}\nErrors: ${errorCount}`);
     setSelectedBids([]);
     await onRefresh();
-  };
-  
-  const respondBids = bids
-  .filter(b => b.recommendation === "Respond")
-  .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived));
-  const gatherInfoBids = bids
-  .filter(b => b.recommendation === "Gather More Information")
-  .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived));
-  
+  }, [selectedBids, onRefresh]);
+
+  // Memos (top-level)
+  const respondBids = useMemo(
+    () =>
+      bids
+        .filter((b) => b.recommendation === 'Respond')
+        .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived)),
+    [bids]
+  );
+
+  const gatherInfoBids = useMemo(
+    () =>
+      bids
+        .filter((b) => b.recommendation === 'Gather More Information')
+        .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived)),
+    [bids]
+  );
+
+  // Early return AFTER hooks
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-600">Loading bids...</div>
+      </div>
+    );
+  }
+
+  // Pagination slices (pure)
   const paginatedRespondBids = respondBids.slice(0, respondPage * ITEMS_PER_PAGE);
   const paginatedGatherInfoBids = gatherInfoBids.slice(0, gatherInfoPage * ITEMS_PER_PAGE);
   const paginatedSubmittedBids = submittedBids.slice(0, submittedPage * ITEMS_PER_PAGE);
   const paginatedArchiveBids = disregardedBids.slice(0, archivePage * ITEMS_PER_PAGE);
-  
+
   const hasMoreRespond = paginatedRespondBids.length < respondBids.length;
   const hasMoreGatherInfo = paginatedGatherInfoBids.length < gatherInfoBids.length;
   const hasMoreSubmitted = paginatedSubmittedBids.length < submittedBids.length;
   const hasMoreArchive = paginatedArchiveBids.length < disregardedBids.length;
-  
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -430,7 +431,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           <p className="text-gray-600 mt-1">Active RFPs and Proposals</p>
         </div>
         <div className="flex gap-2">
-          <button 
+          <button
             onClick={handleRefresh}
             disabled={isRefreshing}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
@@ -438,9 +439,9 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
             <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
             Refresh
           </button>
-          <button 
+          <button
             onClick={() => {
-              setShowArchive(!showArchive);
+              setShowArchive(v => !v);
               setArchivePage(1);
             }}
             className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
@@ -450,7 +451,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </button>
         </div>
       </div>
-      
+
       {selectedBids.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
           <span className="text-sm font-semibold text-blue-900">
@@ -480,7 +481,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </div>
         </div>
       )}
-      
+
       {showArchive && (
         <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Disregarded Bids ({disregardedBids.length})</h2>
@@ -489,7 +490,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
               <p className="text-gray-500 text-sm">No disregarded bids</p>
             ) : (
               <>
-                {paginatedArchiveBids.map(bid => (
+                {paginatedArchiveBids.map((bid) => (
                   <div key={bid.id} className="bg-white p-4 rounded border border-gray-200">
                     <div className="flex items-start justify-between">
                       <div>
@@ -502,7 +503,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 ))}
                 {hasMoreArchive && (
                   <button
-                    onClick={() => setArchivePage(prev => prev + 1)}
+                    onClick={() => setArchivePage(p => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedArchiveBids.length} of {disregardedBids.length} shown)
@@ -513,7 +514,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </div>
         </div>
       )}
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
@@ -523,7 +524,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 onClick={() => handleSelectAll(respondBids)}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
               >
-                {respondBids.every(b => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
+                {respondBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
               </button>
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
             </div>
@@ -533,10 +534,10 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
               <p className="text-gray-500 text-sm">No high-priority bids at this time</p>
             ) : (
               <>
-                {paginatedRespondBids.map(bid => (
-                  <BidCard 
-                    key={bid.id} 
-                    bid={bid} 
+                {paginatedRespondBids.map((bid) => (
+                  <BidCard
+                    key={bid.id}
+                    bid={bid}
                     onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
@@ -544,7 +545,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 ))}
                 {hasMoreRespond && (
                   <button
-                    onClick={() => setRespondPage(prev => prev + 1)}
+                    onClick={() => setRespondPage(p => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedRespondBids.length} of {respondBids.length} shown)
@@ -554,7 +555,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
             )}
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Gather More Information ({gatherInfoBids.length})</h2>
@@ -563,7 +564,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 onClick={() => handleSelectAll(gatherInfoBids)}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
               >
-                {gatherInfoBids.every(b => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
+                {gatherInfoBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
               </button>
               <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
             </div>
@@ -573,10 +574,10 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
               <p className="text-gray-500 text-sm">No bids need additional information</p>
             ) : (
               <>
-                {paginatedGatherInfoBids.map(bid => (
-                  <BidCard 
-                    key={bid.id} 
-                    bid={bid} 
+                {paginatedGatherInfoBids.map((bid) => (
+                  <BidCard
+                    key={bid.id}
+                    bid={bid}
                     onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
@@ -584,7 +585,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 ))}
                 {hasMoreGatherInfo && (
                   <button
-                    onClick={() => setGatherInfoPage(prev => prev + 1)}
+                    onClick={() => setGatherInfoPage(p => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedGatherInfoBids.length} of {gatherInfoBids.length} shown)
@@ -594,7 +595,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
             )}
           </div>
         </div>
-        
+
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Submitted ({submittedBids.length})</h2>
@@ -605,18 +606,18 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
               <p className="text-gray-500 text-sm">No submitted bids yet</p>
             ) : (
               <>
-                {paginatedSubmittedBids.map(bid => (
-  <BidCard 
-    key={bid.id} 
-    bid={{...bid, recommendation: 'Submitted'}}
-    onStatusChange={handleStatusChange}
-    isSelected={selectedBids.includes(bid.id)}
-    onToggleSelect={handleToggleSelect}
-  />
-))}
+                {paginatedSubmittedBids.map((bid) => (
+                  <BidCard
+                    key={bid.id}
+                    bid={{ ...bid, recommendation: 'Submitted' }}
+                    onStatusChange={handleStatusChange}
+                    isSelected={selectedBids.includes(bid.id)}
+                    onToggleSelect={handleToggleSelect}
+                  />
+                ))}
                 {hasMoreSubmitted && (
                   <button
-                    onClick={() => setSubmittedPage(prev => prev + 1)}
+                    onClick={() => setSubmittedPage(p => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedSubmittedBids.length} of {submittedBids.length} shown)
@@ -627,7 +628,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </div>
         </div>
       </div>
-      
+
       <div className="bg-white p-6 rounded-lg shadow border-2 border-dashed border-gray-300">
         <h2 className="text-xl font-bold text-gray-900 mb-2">Proposal Workspace</h2>
         <p className="text-gray-600">Document library, templates, and proposal writing tools coming soon...</p>
@@ -636,19 +637,17 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
   );
 };
 
-// Webinar Operations Component
+/* ----------------------- Webinar Operations ----------------------- */
 const WebinarOperations = () => {
+  // State
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedWebinar, setSelectedWebinar] = useState(null);
   const [view, setView] = useState('overview');
 
-  useEffect(() => {
-    loadWebinarData();
-  }, []);
-
-  const loadWebinarData = async () => {
+  // Callbacks & Effects (top-level)
+  const loadWebinarData = useCallback(async () => {
     try {
       setLoading(true);
       const webinarData = await fetchWebinars();
@@ -659,8 +658,47 @@ const WebinarOperations = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  useEffect(() => {
+    loadWebinarData();
+  }, [loadWebinarData]);
+
+  // Derived data (top-level memos)
+  // Derived data (top-level memos)
+// before:
+// const webinars = data?.webinars ?? [];
+// const surveys = data?.surveys ?? [];
+// const summary = data?.summary ?? { ... };
+
+const webinars = useMemo(() => data?.webinars ?? [], [data]);
+const surveys  = useMemo(() => data?.surveys ?? [],  [data]);
+const summary  = useMemo(() => ({
+  totalWebinars: 0,
+  completedCount: 0,
+  upcomingCount: 0,
+  totalAttendance: 0,
+  avgAttendance: 0,
+  totalSurveys: 0,
+  surveyResponseRate: 0,
+  totalRegistrations: 0,
+  ...(data?.summary ?? {})
+}), [data]);
+
+const upcomingWebinars = useMemo(
+  () => webinars.filter(w => w.status === 'Upcoming'),
+  [webinars]
+);
+
+const completedWebinars = useMemo(
+  () => webinars
+    .filter(w => w.status === 'Completed')
+    .sort((a, b) => new Date(b.date) - new Date(a.date)),
+  [webinars]
+);
+
+
+  // Early returns AFTER hooks
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -679,11 +717,6 @@ const WebinarOperations = () => {
       </div>
     );
   }
-
-  const { webinars, surveys, summary } = data;
-  const upcomingWebinars = webinars.filter(w => w.status === 'Upcoming');
-  const completedWebinars = webinars.filter(w => w.status === 'Completed')
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   return (
     <div className="space-y-6">
@@ -709,9 +742,7 @@ const WebinarOperations = () => {
             key={v}
             onClick={() => setView(v)}
             className={`px-4 py-2 font-medium transition-colors ${
-              view === v
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
+              view === v ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -745,9 +776,7 @@ const WebinarOperations = () => {
                 </div>
                 <Users className="text-blue-600" size={40} />
               </div>
-              <div className="mt-4 text-sm text-gray-600">
-                Avg: {summary.avgAttendance} per webinar
-              </div>
+              <div className="mt-4 text-sm text-gray-600">Avg: {summary.avgAttendance} per webinar</div>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
@@ -758,9 +787,7 @@ const WebinarOperations = () => {
                 </div>
                 <MessageSquare className="text-blue-600" size={40} />
               </div>
-              <div className="mt-4 text-sm text-gray-600">
-                {summary.surveyResponseRate}% response rate
-              </div>
+              <div className="mt-4 text-sm text-gray-600">{summary.surveyResponseRate}% response rate</div>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
@@ -771,9 +798,7 @@ const WebinarOperations = () => {
                 </div>
                 <TrendingUp className="text-blue-600" size={40} />
               </div>
-              <div className="mt-4 text-sm text-gray-600">
-                Across all series
-              </div>
+              <div className="mt-4 text-sm text-gray-600">Across all series</div>
             </div>
           </div>
 
@@ -794,8 +819,9 @@ const WebinarOperations = () => {
                           <span>👥 {webinar.registrationCount} registered</span>
                         </div>
                       </div>
-                      
-                        <a href={webinar.platformLink}
+
+                      <a
+                        href={webinar.platformLink}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors"
@@ -813,8 +839,8 @@ const WebinarOperations = () => {
             <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Webinars</h2>
             <div className="space-y-3">
               {completedWebinars.slice(0, 5).map(webinar => (
-                <div 
-                  key={`${webinar.id}-${webinar.date}`} 
+                <div
+                  key={`${webinar.id}-${webinar.date}`}
                   className="border border-gray-200 rounded-lg p-4 hover:border-blue-600 transition-colors cursor-pointer"
                   onClick={() => setSelectedWebinar(webinar)}
                 >
@@ -861,16 +887,17 @@ const WebinarOperations = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    
-                      <a href={webinar.platformLink}
+                    <a
+                      href={webinar.platformLink}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors text-center"
                     >
                       Join Webinar
                     </a>
-                    
-                      <a href={webinar.registrationFormUrl}
+
+                    <a
+                      href={webinar.registrationFormUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
@@ -891,12 +918,12 @@ const WebinarOperations = () => {
           <div className="space-y-3">
             {completedWebinars.map(webinar => {
               const webinarSurveys = surveys.filter(s => s.webinarId === webinar.id);
-              const showRate = webinar.attendanceCount > 0 
+              const showRate = webinar.attendanceCount > 0
                 ? Math.round((webinarSurveys.length / webinar.attendanceCount) * 100)
                 : 0;
-              
+
               return (
-                <div 
+                <div
                   key={`${webinar.id}-${webinar.date}`}
                   className="border border-gray-200 rounded-lg p-4 hover:border-blue-600 transition-colors cursor-pointer"
                   onClick={() => setSelectedWebinar(webinar)}
@@ -928,7 +955,7 @@ const WebinarOperations = () => {
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">Attendance Rate</h3>
                 <p className="text-3xl font-bold text-gray-900">
-                  {summary.totalRegistrations > 0 
+                  {summary.totalRegistrations > 0
                     ? Math.round((summary.totalAttendance / summary.totalRegistrations) * 100)
                     : 0}%
                 </p>
@@ -936,13 +963,13 @@ const WebinarOperations = () => {
                   {summary.totalAttendance} of {summary.totalRegistrations} registered
                 </p>
               </div>
-              
+
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">Avg Attendance</h3>
                 <p className="text-3xl font-bold text-gray-900">{summary.avgAttendance}</p>
                 <p className="text-sm text-gray-600 mt-1">participants per webinar</p>
               </div>
-              
+
               <div className="border border-gray-200 rounded-lg p-4">
                 <h3 className="text-sm font-semibold text-gray-600 mb-2">Survey Response</h3>
                 <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
@@ -980,20 +1007,28 @@ const WebinarOperations = () => {
 
       {selectedWebinar && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 flex items-start justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{selectedWebinar.title}</h2>
-                <p className="text-gray-600 mt-1">{new Date(selectedWebinar.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} • {selectedWebinar.time}</p>
+                <p className="text-gray-600 mt-1">
+                  {new Date(selectedWebinar.date).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })} • {selectedWebinar.time}
+                </p>
               </div>
               <button
                 onClick={() => setSelectedWebinar(null)}
                 className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
               >
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div className="border border-gray-200 rounded-lg p-4">
@@ -1003,38 +1038,97 @@ const WebinarOperations = () => {
                 <div className="border border-gray-200 rounded-lg p-4">
                   <p className="text-sm text-gray-600">Attended</p>
                   <p className="text-2xl font-bold text-gray-900">{selectedWebinar.attendanceCount}</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {selectedWebinar.registrationCount > 0
+                      ? Math.round((selectedWebinar.attendanceCount / selectedWebinar.registrationCount) * 100)
+                      : 0}% attendance rate
+                  </p>
                 </div>
               </div>
 
-              {selectedWebinar.status === 'Completed' && (
-                <>
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">Survey Responses</h3>
-                    <p className="text-gray-600">
-                      {surveys.filter(s => s.webinarId === selectedWebinar.id).length} responses collected
-                    </p>
-                  </div>
+              {selectedWebinar.status === 'Completed' && (() => {
+                const webinarSurveys = surveys.filter(s => s.webinarId === selectedWebinar.id);
+                const responseRate = selectedWebinar.attendanceCount > 0
+                  ? Math.round((webinarSurveys.length / selectedWebinar.attendanceCount) * 100)
+                  : 0;
 
-                  <div className="flex gap-2">
-                    
-                      <a href={selectedWebinar.surveyLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-center font-medium transition-colors"
-                    >
-                      View Survey
-                    </a>
-                    
-                      <a href={selectedWebinar.platformLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-medium transition-colors"
-                    >
-                      Recording
-                    </a>
-                  </div>
-                </>
-              )}
+                const relevanceCounts = {};
+                webinarSurveys.forEach(s => {
+                  const rel = s.relevance || 'Not specified';
+                  relevanceCounts[rel] = (relevanceCounts[rel] || 0) + 1;
+                });
+
+                const calculateAvg = (field) => {
+                  const ratings = webinarSurveys
+                    .map(s => {
+                      const val = s[field];
+                      const match = String(val).match(/(\d+)/);
+                      return match ? parseInt(match[1], 10) : null;
+                    })
+                    .filter(r => r !== null && r >= 1 && r <= 5);
+                  return ratings.length > 0
+                    ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1)
+                    : 'N/A';
+                };
+
+                const rhondaAvg = calculateAvg('rhonda');
+                const chrisAvg = calculateAvg('chris');
+                const guestAvg = calculateAvg('guest');
+
+                return (
+                  <>
+                    <div className="border border-gray-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">Survey Analytics</h3>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <p className="text-sm text-gray-600">Survey Responses</p>
+                          <p className="text-xl font-bold text-gray-900">{webinarSurveys.length}</p>
+                          <p className="text-sm text-gray-600">{responseRate}% response rate</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-600">Presenter Ratings (avg)</p>
+                          <div className="text-sm mt-1 space-y-1">
+                            <p><span className="font-semibold">Rhonda:</span> {rhondaAvg}/5</p>
+                            <p><span className="font-semibold">Chris:</span> {chrisAvg}/5</p>
+                            <p><span className="font-semibold">Guest:</span> {guestAvg}/5</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-semibold text-gray-600 mb-2">Relevance to Organizations:</p>
+                        <div className="space-y-1">
+                          {Object.entries(relevanceCounts).map(([key, count]) => (
+                            <div key={key} className="flex items-center justify-between text-sm">
+                              <span className="text-gray-700">{key}</span>
+                              <span className="font-semibold text-gray-900">
+                                {count} ({Math.round((count / webinarSurveys.length) * 100)}%)
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {webinarSurveys.some(s => s.comments && s.comments.trim()) && (
+                      <div className="border border-gray-200 rounded-lg p-4">
+                        <h3 className="font-semibold text-gray-900 mb-3">Recent Comments</h3>
+                        <div className="space-y-3 max-h-60 overflow-y-auto">
+                          {webinarSurveys
+                            .filter(s => s.comments && s.comments.trim())
+                            .slice(0, 5)
+                            .map((survey, idx) => (
+                              <div key={idx} className="border-l-2 border-blue-200 pl-3 py-1">
+                                <p className="text-sm text-gray-700 italic">"{survey.comments}"</p>
+                                <p className="text-xs text-gray-500 mt-1">{survey.timestamp}</p>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1043,6 +1137,7 @@ const WebinarOperations = () => {
   );
 };
 
+/* ----------------------- Social Placeholder ----------------------- */
 const SocialMediaOperations = () => (
   <div className="space-y-6">
     <h1 className="text-3xl font-bold text-gray-900">Social Media Operations</h1>
@@ -1054,7 +1149,9 @@ const SocialMediaOperations = () => (
   </div>
 );
 
+/* ----------------------- App ----------------------- */
 const App = () => {
+  // Auth & core state
   const { user, loading: authLoading, login, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -1068,29 +1165,23 @@ const App = () => {
 
   const tickerRef = useRef(null);
 
+  // Inject ticker styles once
   useEffect(() => {
     const styleId = 'ticker-animation-styles';
     if (!document.getElementById(styleId)) {
       const style = document.createElement('style');
       style.id = styleId;
       style.textContent = `
-        @keyframes tickerScroll {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .ticker-animate {
-          animation: tickerScroll var(--ticker-duration, 40s) linear infinite;
-          will-change: transform;
-        }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .ticker-animate { animation: tickerScroll var(--ticker-duration, 40s) linear infinite; will-change: transform; }
         .ticker-animate:hover { animation-play-state: paused; }
-        @media (prefers-reduced-motion: reduce) {
-          .ticker-animate { animation: none; transform: none; }
-        }
+        @media (prefers-reduced-motion: reduce) { .ticker-animate { animation: none; transform: none; } }
       `;
       document.head.appendChild(style);
     }
   }, []);
-  
+
+  // Data loaders
   const loadTickerFeed = useCallback(async () => {
     try {
       const items = await fetchTickerItems();
@@ -1103,41 +1194,40 @@ const App = () => {
       ]);
     }
   }, []);
-  
-  const loadBids = useCallback(async () => {
-  try {
-    setLoading(true);
-    setError(null);
-    const data = await fetchBids();
-    setBids(data.activeBids || []);
-    setDisregardedBids(data.disregardedBids || []);
-    setSubmittedBids(data.submittedBids || []);
-    setSummary(data.summary || {});
-    
-    const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
-    const submittedTickerItems = generateSubmittedBidItems(data.submittedBids || []);
-    
-    try {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items: [...autoTickerItems, ...submittedTickerItems]
-        })
-      });
-    } catch (err) {
-      console.error('Failed to refresh ticker items:', err);
-    }
-    
-    await loadTickerFeed();
-  } catch (err) {
-    setError(err.message);
-    console.error('Failed to load bids:', err);
-  } finally {
-    setLoading(false);
-  }
-}, [loadTickerFeed]);
 
+  const loadBids = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchBids();
+      setBids(data.activeBids || []);
+      setDisregardedBids(data.disregardedBids || []);
+      setSubmittedBids(data.submittedBids || []);
+      setSummary(data.summary || {});
+
+      const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
+      const submittedTickerItems = generateSubmittedBidItems(data.submittedBids || []);
+
+      try {
+        await fetch('/.netlify/functions/refreshAutoTickerItems', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: [...autoTickerItems, ...submittedTickerItems] })
+        });
+      } catch (err) {
+        console.error('Failed to refresh ticker items:', err);
+      }
+
+      await loadTickerFeed();
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to load bids:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadTickerFeed]);
+
+  // Initial loads (top-level effect)
   useEffect(() => {
     if (user) {
       loadBids();
@@ -1145,12 +1235,14 @@ const App = () => {
     }
   }, [user, loadBids, loadTickerFeed]);
 
+  // Ticker items normalization/deduping (memo)
   const displayItems = useMemo(() => {
     const normalized = (tickerItems || [])
       .map(i => ({
         ...i,
         message: (i?.message || '').trim(),
-        priority: (i?.priority || 'low').toLowerCase()
+        priority: (i?.priority || 'low').toLowerCase(),
+        target: i?.target || i?.route || null
       }))
       .filter(i => i.message.length > 0);
 
@@ -1183,6 +1275,7 @@ const App = () => {
     return out;
   }, [tickerItems]);
 
+  // Auto duration for ticker animation (effect)
   useEffect(() => {
     if (!tickerRef.current) return;
     const SPEED_PX_PER_SEC = 120;
@@ -1198,6 +1291,28 @@ const App = () => {
     return () => cancelAnimationFrame(id);
   }, [displayItems]);
 
+  // Ticker navigation (callbacks)
+  const navigateFromTicker = useCallback((item) => {
+    const explicit = (item?.target || '').toLowerCase();
+    if (explicit === 'bids' || explicit === 'webinars' || explicit === 'social' || explicit === 'dashboard') {
+      setCurrentPage(explicit);
+      return;
+    }
+    const msg = (item?.message || '').toLowerCase();
+    if (/webinar|zoom|event|session/.test(msg)) setCurrentPage('webinars');
+    else if (/social|post|linkedin|facebook|\bx\b|twitter/.test(msg)) setCurrentPage('social');
+    else if (/bid|rfp|tender|proposal|submission/.test(msg)) setCurrentPage('bids');
+    else setCurrentPage('dashboard');
+  }, []);
+
+  const onTickerKeyDown = useCallback((e, item) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      navigateFromTicker(item);
+    }
+  }, [navigateFromTicker]);
+
+  // Early auth returns AFTER hooks are declared
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -1209,30 +1324,33 @@ const App = () => {
   if (!user) {
     return <LoginPage onLogin={login} />;
   }
-  
+
   const renderPage = () => {
-    switch(currentPage) {
-      case 'dashboard': 
+    switch (currentPage) {
+      case 'dashboard':
         return <Dashboard bids={bids} summary={summary} loading={loading} onNavigate={setCurrentPage} />;
-      case 'bids': 
-        return <BidOperations 
-          bids={bids} 
-          disregardedBids={disregardedBids}
-          submittedBids={submittedBids}
-          loading={loading}
-          onRefresh={loadBids}
-        />;
-      case 'webinars': 
+      case 'bids':
+        return (
+          <BidOperations
+            bids={bids}
+            disregardedBids={disregardedBids}
+            submittedBids={submittedBids}
+            loading={loading}
+            onRefresh={loadBids}
+          />
+        );
+      case 'webinars':
         return <WebinarOperations />;
-      case 'social': 
+      case 'social':
         return <SocialMediaOperations />;
-      default: 
+      default:
         return <Dashboard bids={bids} summary={summary} loading={loading} onNavigate={setCurrentPage} />;
     }
   };
-  
+
   return (
     <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
       <div className={`bg-brand-blue text-white transition-all duration-300 relative ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-4 flex items-center justify-between border-b border-blue-800">
           {sidebarOpen && (
@@ -1241,26 +1359,27 @@ const App = () => {
               <p className="text-xs text-blue-200">Command Center</p>
             </div>
           )}
-          <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+          <button
+            onClick={() => setSidebarOpen(v => !v)}
             className="p-2 hover:bg-blue-800 rounded transition-colors"
+            aria-label="Toggle sidebar"
           >
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-        
+
         <nav className="p-4 space-y-2 pb-32">
           {navItems.map(item => {
             const Icon = item.icon;
+            const active = currentPage === item.id;
             return (
               <button
                 key={item.id}
                 onClick={() => setCurrentPage(item.id)}
                 className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
-                  currentPage === item.id 
-                    ? 'bg-blue-700 text-white' 
-                    : 'text-blue-100 hover:bg-blue-800'
+                  active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
                 }`}
+                aria-current={active ? 'page' : undefined}
               >
                 <Icon size={20} />
                 {sidebarOpen && <span>{item.label}</span>}
@@ -1279,7 +1398,8 @@ const App = () => {
           </button>
         </div>
       </div>
-      
+
+      {/* Main */}
       <div className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-8 pb-20">
           {error && (
@@ -1289,26 +1409,40 @@ const App = () => {
           )}
           {renderPage()}
         </div>
-        
+
+        {/* Ticker */}
         <div className="fixed bottom-0 left-0 right-0 bg-[#003049] text-white py-3 text-sm overflow-hidden z-50 shadow-lg">
           <div className="flex items-center">
             <div className="bg-[#003049] px-4 font-semibold shrink-0 relative z-10">
               Latest Updates:
             </div>
             <div className="flex-1 overflow-hidden">
-              <div
-                ref={tickerRef}
-                className="ticker-animate inline-flex whitespace-nowrap"
-              >
+              <div ref={tickerRef} className="ticker-animate inline-flex whitespace-nowrap">
                 {displayItems.length > 0 ? (
                   <>
                     {displayItems.map((item, index) => (
-                      <span key={`ticker-1-${index}`} className="inline-block px-8">
+                      <span
+                        key={`ticker-1-${index}`}
+                        className="inline-block px-8 underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 rounded"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigateFromTicker(item)}
+                        onKeyDown={(e) => onTickerKeyDown(e, item)}
+                        title="Open related section"
+                      >
                         {item.message}
                       </span>
                     ))}
                     {displayItems.map((item, index) => (
-                      <span key={`ticker-2-${index}`} className="inline-block px-8">
+                      <span
+                        key={`ticker-2-${index}`}
+                        className="inline-block px-8 underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 rounded"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigateFromTicker(item)}
+                        onKeyDown={(e) => onTickerKeyDown(e, item)}
+                        title="Open related section"
+                      >
                         {item.message}
                       </span>
                     ))}
