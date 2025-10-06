@@ -75,19 +75,29 @@ const WebinarOperations = () => {
     [filteredWebinars]
   );
 
-  // Survey analytics calculations
   const surveyAnalytics = useMemo(() => {
-    if (surveys.length === 0) return null;
+  if (surveys.length === 0) return null;
 
-    // Extract numeric ratings
-    const extractRating = (value) => {
-      const match = String(value).match(/(\d+)/);
-      return match ? parseInt(match[1], 10) : null;
-    };
+  // Extract numeric ratings from emoji-based responses
+  const extractRating = (value) => {
+    const val = String(value).toLowerCase();
+    
+    // Map emoji responses to numeric ratings
+    if (val.includes('🌟') || val.includes('awesome')) return 5;
+    if (val.includes('🟢') || val.includes('strong')) return 4;
+    if (val.includes('🟡') || val.includes('neutral')) return 3;
+    if (val.includes('🟠') || val.includes('weak')) return 2;
+    if (val.includes('🔴') || val.includes('poor')) return 1;
+    if (val.includes('⚪') || val.includes('absent')) return null; // Don't count absent
+    
+    // Fallback: try to extract numeric value
+    const match = val.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+  };
 
-    const rhondaRatings = surveys.map(s => extractRating(s.rhonda)).filter(r => r !== null && r >= 1 && r <= 5);
-    const chrisRatings = surveys.map(s => extractRating(s.chris)).filter(r => r !== null && r >= 1 && r <= 5);
-    const guestRatings = surveys.map(s => extractRating(s.guest)).filter(r => r !== null && r >= 1 && r <= 5);
+  const rhondaRatings = surveys.map(s => extractRating(s.rhonda)).filter(r => r !== null && r >= 1 && r <= 5);
+  const chrisRatings = surveys.map(s => extractRating(s.chris)).filter(r => r !== null && r >= 1 && r <= 5);
+  const guestRatings = surveys.map(s => extractRating(s.guest)).filter(r => r !== null && r >= 1 && r <= 5);
 
     const avgRating = (ratings) => ratings.length > 0 
       ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(2)
