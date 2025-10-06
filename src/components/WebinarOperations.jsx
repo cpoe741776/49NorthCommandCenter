@@ -2,12 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, ChevronRight, MessageSquare, RefreshCw, TrendingUp, Users, X } from 'lucide-react';
 import { fetchWebinars } from '../services/webinarService';
 
+// Stable primitive at module scope (no hook deps needed)
+const DATA_QUALITY_CUTOFF_TS = Date.parse('2025-10-01');
+
 const WebinarOperations = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedWebinar, setSelectedWebinar] = useState(null);
   const [view, setView] = useState('overview');
+  const [filterLegacyData, setFilterLegacyData] = useState(true);
 
   const loadWebinarData = useCallback(async () => {
     try {
@@ -16,7 +20,7 @@ const WebinarOperations = () => {
       setData(webinarData);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || 'Unknown error');
     } finally {
       setLoading(false);
     }
@@ -26,14 +30,18 @@ const WebinarOperations = () => {
     loadWebinarData();
   }, [loadWebinarData]);
 
+  // Base derivations
   const webinars = useMemo(() => data?.webinars ?? [], [data]);
   const surveys  = useMemo(() => data?.surveys ?? [],  [data]);
-  const summary  = useMemo(() => ({
-    totalWebinars: 0, completedCount: 0, upcomingCount: 0,
-    totalAttendance: 0, avgAttendance: 0, totalSurveys: 0,
-    surveyResponseRate: 0, totalRegistrations: 0,
-    ...(data?.summary ?? {})
-  }), [data]);
+  const summary  = useMemo(
+    () => ({
+      totalWebinars: 0, completedCount: 0, upcomingCount: 0,
+      totalAttendance: 0, avgAttendance: 0, totalSurveys: 0,
+      surveyResponseRate: 0, totalRegistrations: 0,
+      ...(data?.summary ?? {})
+    }),
+    [data]
+  );
 
   const upcomingWebinars = useMemo(
     () => webinars.filter(w => w.status === 'Upcoming'),
@@ -41,9 +49,21 @@ const WebinarOperations = () => {
   );
 
   const completedWebinars = useMemo(
-    () => webinars.filter(w => w.status === 'Completed').sort((a, b) => new Date(b.date) - new Date(a.date)),
+    () =>
+      webinars
+        .filter(w => w.status === 'Completed')
+        .sort((a, b) => new Date(b.date) - new Date(a.date)),
     [webinars]
   );
+
+  // Filtered list for analytics (accurate data only when toggle is on)
+  const filteredCompletedWebinars = useMemo(() => {
+    let list = completedWebinars;
+    if (filterLegacyData) {
+      list = list.filter(w => new Date(w.date).getTime() >= DATA_QUALITY_CUTOFF_TS);
+    }
+    return list;
+  }, [completedWebinars, filterLegacyData]);
 
   if (loading) {
     return (
@@ -66,6 +86,7 @@ const WebinarOperations = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Webinar Operations</h1>
@@ -82,6 +103,7 @@ const WebinarOperations = () => {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex gap-2 border-b border-gray-200">
         {['overview', 'upcoming', 'past', 'analytics'].map(v => (
           <button
@@ -96,6 +118,7 @@ const WebinarOperations = () => {
         ))}
       </div>
 
+      {/* OVERVIEW */}
       {view === 'overview' && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -148,6 +171,21 @@ const WebinarOperations = () => {
             </div>
           </div>
 
+          {/* Data quality note (inside Overview) */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="text-amber-600 mt-0.5">ℹ️</div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-amber-900">Data Quality Note</h3>
+                <p className="text-sm text-amber-800 mt-1">
+                  Registration data for webinars before October 2025 may be incomplete due to legacy recurring series setup.
+                  Analytics for webinars from October 2025 onward are fully accurate.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Upcoming */}
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Webinars</h2>
             {upcomingWebinars.length === 0 ? (
@@ -180,6 +218,7 @@ const WebinarOperations = () => {
             )}
           </div>
 
+          {/* Recent */}
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Webinars</h2>
             <div className="space-y-3">
@@ -207,6 +246,7 @@ const WebinarOperations = () => {
         </>
       )}
 
+      {/* UPCOMING TAB */}
       {view === 'upcoming' && (
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Webinars ({upcomingWebinars.length})</h2>
@@ -256,6 +296,7 @@ const WebinarOperations = () => {
         </div>
       )}
 
+      {/* PAST TAB */}
       {view === 'past' && (
         <div className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Past Webinars ({completedWebinars.length})</h2>
@@ -291,64 +332,83 @@ const WebinarOperations = () => {
         </div>
       )}
 
+      {/* ANALYTICS TAB */}
       {view === 'analytics' && (
         <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Performance Metrics</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-gray-600 mb-2">Attendance Rate</h3>
-                <p className="text-3xl font-bold text-gray-900">
-                  {summary.totalRegistrations > 0
-                    ? Math.round((summary.totalAttendance / summary.totalRegistrations) * 100)
-                    : 0}%
-                </p>
-                <p className="text-sm text-gray-600 mt-1">
-                  {summary.totalAttendance} of {summary.totalRegistrations} registered
-                </p>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-gray-600 mb-2">Avg Attendance</h3>
-                <p className="text-3xl font-bold text-gray-900">{summary.avgAttendance}</p>
-                <p className="text-sm text-gray-600 mt-1">participants per webinar</p>
-              </div>
-
-              <div className="border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-gray-600 mb-2">Survey Response</h3>
-                <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
-                <p className="text-sm text-gray-600 mt-1">{summary.totalSurveys} responses collected</p>
-              </div>
-            </div>
+          {/* Filter toggle */}
+          <div className="bg-white p-4 rounded-lg shadow">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filterLegacyData}
+                onChange={(e) => setFilterLegacyData(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Show only webinars from October 2025 onward (accurate data)
+              </span>
+            </label>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Top Performing Webinars</h2>
-            <div className="space-y-3">
-              {completedWebinars
-                .filter(w => w.attendanceCount > 0)
-                .sort((a, b) => b.attendanceCount - a.attendanceCount)
-                .slice(0, 10)
-                .map((webinar, index) => (
-                  <div key={`${webinar.id}-${webinar.date}`} className="flex items-center gap-4 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-bold">
-                      {index + 1}
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Performance Metrics</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-600 mb-2">Attendance Rate</h3>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {summary.totalRegistrations > 0
+                      ? Math.round((summary.totalAttendance / summary.totalRegistrations) * 100)
+                      : 0}%
+                  </p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {summary.totalAttendance} of {summary.totalRegistrations} registered
+                  </p>
+                </div>
+
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-600 mb-2">Avg Attendance</h3>
+                  <p className="text-3xl font-bold text-gray-900">{summary.avgAttendance}</p>
+                  <p className="text-sm text-gray-600 mt-1">participants per webinar</p>
+                </div>
+
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h3 className="text-sm font-semibold text-gray-600 mb-2">Survey Response</h3>
+                  <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
+                  <p className="text-sm text-gray-600 mt-1">{summary.totalSurveys} responses collected</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Top Performing Webinars</h2>
+              <div className="space-y-3">
+                {filteredCompletedWebinars
+                  .filter(w => w.attendanceCount > 0)
+                  .sort((a, b) => b.attendanceCount - a.attendanceCount)
+                  .slice(0, 10)
+                  .map((webinar, index) => (
+                    <div key={`${webinar.id}-${webinar.date}`} className="flex items-center gap-4 border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-bold">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">{webinar.title}</h3>
+                        <p className="text-sm text-gray-600">{new Date(webinar.date).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-gray-900">{webinar.attendanceCount}</p>
+                        <p className="text-sm text-gray-600">attendees</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{webinar.title}</h3>
-                      <p className="text-sm text-gray-600">{new Date(webinar.date).toLocaleDateString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">{webinar.attendanceCount}</p>
-                      <p className="text-sm text-gray-600">attendees</p>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+              </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* MODAL */}
       {selectedWebinar && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
