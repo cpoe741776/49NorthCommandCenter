@@ -434,157 +434,168 @@ const WebinarOperations = () => {
         </div>
       )}
 
-      {view === 'surveys' && surveyAnalytics && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Total Responses</p>
-                <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.totalResponses}</p>
-              </div>
-              <div className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Response Rate</p>
-                <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
-              </div>
-              <div className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Contact Requests</p>
-                <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.contactRequests}</p>
-                <p className="text-xs text-gray-600 mt-1">
-                  {surveyAnalytics.totalResponses > 0 
-                    ? Math.round((surveyAnalytics.contactRequests / surveyAnalytics.totalResponses) * 100)
-                    : 0}% of respondents
-                </p>
-              </div>
-              <div className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm text-gray-600">With Comments</p>
-                <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.commentsCount}</p>
-                <p className="text-xs text-gray-600 mt-1">
-                  {surveyAnalytics.totalResponses > 0 
-                    ? Math.round((surveyAnalytics.commentsCount / surveyAnalytics.totalResponses) * 100)
-                    : 0}% provided feedback
-                </p>
-              </div>
-            </div>
+      {view === 'surveys' && (
+  surveys.length === 0 ? (
+    <div className="bg-white p-6 rounded-lg shadow">
+      <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
+      <p className="text-gray-500">
+        {showLegacyData 
+          ? "No survey data available" 
+          : "No survey responses for webinars after October 2025. Enable 'Include legacy data' to view historical responses."}
+      </p>
+    </div>
+  ) : surveyAnalytics && (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600">Total Responses</p>
+            <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.totalResponses}</p>
           </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Presenter Ratings</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {['rhonda', 'chris', 'guest'].map(presenter => {
-                const presenterData = surveyAnalytics[presenter];
-                const presenterName = presenter.charAt(0).toUpperCase() + presenter.slice(1);
-                
-                return (
-                  <div key={presenter} className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-3">{presenterName}</h3>
-                    <div className="flex items-baseline gap-2 mb-4">
-                      <span className="text-4xl font-bold text-gray-900">{presenterData.avg}</span>
-                      <span className="text-gray-600">/5.0</span>
-                    </div>
-                    <p className="text-sm text-gray-600 mb-3">{presenterData.count} ratings</p>
-                    <div className="space-y-2">
-                      {presenterData.distribution.reverse().map(({ rating, count }) => (
-                        <div key={rating} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-8">{rating} ★</span>
-                          <div className="flex-1 bg-gray-200 rounded-full h-2">
-                            <div 
-                              className="bg-blue-600 h-2 rounded-full transition-all"
-                              style={{ 
-                                width: `${presenterData.count > 0 ? (count / presenterData.count) * 100 : 0}%` 
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600 w-8 text-right">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600">Response Rate</p>
+            <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Relevance to Organizations</h2>
-              <div className="space-y-3">
-                {Object.entries(surveyAnalytics.relevance)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([response, count]) => (
-                    <div key={response} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">{response}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-green-600 h-2 rounded-full"
-                            style={{ width: `${(count / surveyAnalytics.totalResponses) * 100}%` }}
-                          />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-900 w-16 text-right">
-                          {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Future Engagement</h2>
-              
-              <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Share with Others</h3>
-              <div className="space-y-2 mb-6">
-                {Object.entries(surveyAnalytics.sharing)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([response, count]) => (
-                    <div key={response} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700">{response}</span>
-                      <span className="font-semibold text-gray-900">
-                        {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
-                      </span>
-                    </div>
-                  ))}
-              </div>
-
-              <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Attend Future Sessions</h3>
-              <div className="space-y-2">
-                {Object.entries(surveyAnalytics.attending)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([response, count]) => (
-                    <div key={response} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-700">{response}</span>
-                      <span className="font-semibold text-gray-900">
-                        {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600">Contact Requests</p>
+            <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.contactRequests}</p>
+            <p className="text-xs text-gray-600 mt-1">
+              {surveyAnalytics.totalResponses > 0 
+                ? Math.round((surveyAnalytics.contactRequests / surveyAnalytics.totalResponses) * 100)
+                : 0}% of respondents
+            </p>
           </div>
-
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Comments</h2>
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {surveys
-                .filter(s => s.comments && s.comments.trim())
-                .slice(0, 20)
-                .map((survey, idx) => {
-                  const webinar = filteredWebinars.find(w => w.id === survey.webinarId);
-                  return (
-                    <div key={idx} className="border-l-4 border-blue-200 pl-4 py-2">
-                      <p className="text-sm text-gray-700 italic">"{survey.comments}"</p>
-                      <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                        <span>{survey.timestamp}</span>
-                        {webinar && <span>{webinar.title} - {new Date(webinar.date).toLocaleDateString()}</span>}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
+          <div className="border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600">With Comments</p>
+            <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.commentsCount}</p>
+            <p className="text-xs text-gray-600 mt-1">
+              {surveyAnalytics.totalResponses > 0 
+                ? Math.round((surveyAnalytics.commentsCount / surveyAnalytics.totalResponses) * 100)
+                : 0}% provided feedback
+            </p>
           </div>
         </div>
-      )}
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Presenter Ratings</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {['rhonda', 'chris', 'guest'].map(presenter => {
+            const presenterData = surveyAnalytics[presenter];
+            const presenterName = presenter.charAt(0).toUpperCase() + presenter.slice(1);
+            
+            return (
+              <div key={presenter} className="border border-gray-200 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 mb-3">{presenterName}</h3>
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className="text-4xl font-bold text-gray-900">{presenterData.avg}</span>
+                  <span className="text-gray-600">/5.0</span>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">{presenterData.count} ratings</p>
+                <div className="space-y-2">
+                  {presenterData.distribution.reverse().map(({ rating, count }) => (
+                    <div key={rating} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600 w-8">{rating} ★</span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all"
+                          style={{ 
+                            width: `${presenterData.count > 0 ? (count / presenterData.count) * 100 : 0}%` 
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs text-gray-600 w-8 text-right">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Relevance to Organizations</h2>
+          <div className="space-y-3">
+            {Object.entries(surveyAnalytics.relevance)
+              .sort((a, b) => b[1] - a[1])
+              .map(([response, count]) => (
+                <div key={response} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700">{response}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full"
+                        style={{ width: `${(count / surveyAnalytics.totalResponses) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-gray-900 w-16 text-right">
+                      {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                    </span>
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">Future Engagement</h2>
+          
+          <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Share with Others</h3>
+          <div className="space-y-2 mb-6">
+            {Object.entries(surveyAnalytics.sharing)
+              .sort((a, b) => b[1] - a[1])
+              .map(([response, count]) => (
+                <div key={response} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">{response}</span>
+                  <span className="font-semibold text-gray-900">
+                    {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                  </span>
+                </div>
+              ))}
+          </div>
+
+          <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Attend Future Sessions</h3>
+          <div className="space-y-2">
+            {Object.entries(surveyAnalytics.attending)
+              .sort((a, b) => b[1] - a[1])
+              .map(([response, count]) => (
+                <div key={response} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">{response}</span>
+                  <span className="font-semibold text-gray-900">
+                    {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Comments</h2>
+        <div className="space-y-4 max-h-96 overflow-y-auto">
+          {surveys
+            .filter(s => s.comments && s.comments.trim())
+            .slice(0, 20)
+            .map((survey, idx) => {
+              const webinar = filteredWebinars.find(w => w.id === survey.webinarId);
+              return (
+                <div key={idx} className="border-l-4 border-blue-200 pl-4 py-2">
+                  <p className="text-sm text-gray-700 italic">"{survey.comments}"</p>
+                  <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                    <span>{survey.timestamp}</span>
+                    {webinar && <span>{webinar.title} - {new Date(webinar.date).toLocaleDateString()}</span>}
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    </div>
+  )
+)}
 
       {view === 'analytics' && (
         <div className="space-y-6">
