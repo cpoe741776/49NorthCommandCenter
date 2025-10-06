@@ -31,13 +31,19 @@ const WebinarOperations = () => {
   }, [loadWebinarData]);
 
   const webinars = useMemo(() => data?.webinars ?? [], [data]);
-  const surveys  = useMemo(() => data?.surveys ?? [],  [data]);
+  const allSurveys = useMemo(() => data?.surveys ?? [], [data]);
 
   // Filter webinars based on toggle
   const filteredWebinars = useMemo(() => {
     if (showLegacyData) return webinars;
     return webinars.filter(w => new Date(w.date) >= DATA_QUALITY_CUTOFF);
   }, [webinars, showLegacyData]);
+
+  // Filter surveys to only those matching visible webinars
+  const surveys = useMemo(() => {
+    const visibleWebinarIds = new Set(filteredWebinars.map(w => w.id));
+    return allSurveys.filter(s => visibleWebinarIds.has(s.webinarId));
+  }, [allSurveys, filteredWebinars]);
 
   const summary = useMemo(() => {
     const completed = filteredWebinars.filter(w => w.status === 'Completed');
@@ -52,12 +58,9 @@ const WebinarOperations = () => {
       avgAttendance: completed.length > 0
         ? Math.round(completed.reduce((sum, w) => sum + w.attendanceCount, 0) / completed.length)
         : 0,
-      totalSurveys: surveys.filter(s => 
-        filteredWebinars.some(w => w.id === s.webinarId)
-      ).length,
+      totalSurveys: surveys.length,
       surveyResponseRate: completed.reduce((sum, w) => sum + w.attendanceCount, 0) > 0
-        ? Math.round((surveys.filter(s => filteredWebinars.some(w => w.id === s.webinarId)).length / 
-            completed.reduce((sum, w) => sum + w.attendanceCount, 0)) * 100)
+        ? Math.round((surveys.length / completed.reduce((sum, w) => sum + w.attendanceCount, 0)) * 100)
         : 0,
     };
   }, [filteredWebinars, surveys]);
@@ -71,6 +74,87 @@ const WebinarOperations = () => {
     () => filteredWebinars.filter(w => w.status === 'Completed').sort((a, b) => new Date(b.date) - new Date(a.date)),
     [filteredWebinars]
   );
+
+  // Survey analytics calculations
+  const surveyAnalytics = useMemo(() => {
+    if (surveys.length === 0) return null;
+
+    // Extract numeric ratings
+    const extractRating = (value) => {
+      const match = String(value).match(/(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    };
+
+    const rhondaRatings = surveys.map(s => extractRating(s.rhonda)).filter(r => r !== null && r >= 1 && r <= 5);
+    const chrisRatings = surveys.map(s => extractRating(s.chris)).filter(r => r !== null && r >= 1 && r <= 5);
+    const guestRatings = surveys.map(s => extractRating(s.guest)).filter(r => r !== null && r >= 1 && r <= 5);
+
+    const avgRating = (ratings) => ratings.length > 0 
+      ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(2)
+      : 'N/A';
+
+    // Relevance distribution
+    const relevanceCounts = {};
+    surveys.forEach(s => {
+      const rel = s.relevance || 'Not specified';
+      relevanceCounts[rel] = (relevanceCounts[rel] || 0) + 1;
+    });
+
+    // Sharing responses
+    const sharingCounts = {};
+    surveys.forEach(s => {
+      const sharing = s.sharing || 'Not specified';
+      sharingCounts[sharing] = (sharingCounts[sharing] || 0) + 1;
+    });
+
+    // Attending responses
+    const attendingCounts = {};
+    surveys.forEach(s => {
+      const attending = s.attending || 'Not specified';
+      attendingCounts[attending] = (attendingCounts[attending] || 0) + 1;
+    });
+
+    // Contact requests
+    const contactRequests = surveys.filter(s => 
+      s.contactRequest && String(s.contactRequest).toLowerCase().includes('yes')
+    ).length;
+
+    // Comments with content
+    const commentsCount = surveys.filter(s => s.comments && s.comments.trim()).length;
+
+    return {
+      totalResponses: surveys.length,
+      rhonda: {
+        avg: avgRating(rhondaRatings),
+        count: rhondaRatings.length,
+        distribution: [1, 2, 3, 4, 5].map(rating => ({
+          rating,
+          count: rhondaRatings.filter(r => r === rating).length
+        }))
+      },
+      chris: {
+        avg: avgRating(chrisRatings),
+        count: chrisRatings.length,
+        distribution: [1, 2, 3, 4, 5].map(rating => ({
+          rating,
+          count: chrisRatings.filter(r => r === rating).length
+        }))
+      },
+      guest: {
+        avg: avgRating(guestRatings),
+        count: guestRatings.length,
+        distribution: [1, 2, 3, 4, 5].map(rating => ({
+          rating,
+          count: guestRatings.filter(r => r === rating).length
+        }))
+      },
+      relevance: relevanceCounts,
+      sharing: sharingCounts,
+      attending: attendingCounts,
+      contactRequests,
+      commentsCount
+    };
+  }, [surveys]);
 
   if (loading) {
     return (
@@ -110,7 +194,7 @@ const WebinarOperations = () => {
       </div>
 
       <div className="flex gap-2 border-b border-gray-200">
-        {['overview', 'upcoming', 'past', 'analytics'].map(v => (
+        {['overview', 'upcoming', 'past', 'surveys', 'analytics'].map(v => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -123,8 +207,8 @@ const WebinarOperations = () => {
         ))}
       </div>
 
-      {/* Data Filter Toggle - Show on overview, past, and analytics */}
-      {(view === 'overview' || view === 'past' || view === 'analytics') && (
+      {/* Data Filter Toggle - Show on overview, past, surveys, and analytics */}
+      {(view === 'overview' || view === 'past' || view === 'surveys' || view === 'analytics') && (
         <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
           <label className="flex items-center gap-3 cursor-pointer">
             <input 
@@ -340,6 +424,158 @@ const WebinarOperations = () => {
         </div>
       )}
 
+      {view === 'surveys' && surveyAnalytics && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-600">Total Responses</p>
+                <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.totalResponses}</p>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-600">Response Rate</p>
+                <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-600">Contact Requests</p>
+                <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.contactRequests}</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {surveyAnalytics.totalResponses > 0 
+                    ? Math.round((surveyAnalytics.contactRequests / surveyAnalytics.totalResponses) * 100)
+                    : 0}% of respondents
+                </p>
+              </div>
+              <div className="border border-gray-200 rounded-lg p-4">
+                <p className="text-sm text-gray-600">With Comments</p>
+                <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.commentsCount}</p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {surveyAnalytics.totalResponses > 0 
+                    ? Math.round((surveyAnalytics.commentsCount / surveyAnalytics.totalResponses) * 100)
+                    : 0}% provided feedback
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Presenter Ratings</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {['rhonda', 'chris', 'guest'].map(presenter => {
+                const presenterData = surveyAnalytics[presenter];
+                const presenterName = presenter.charAt(0).toUpperCase() + presenter.slice(1);
+                
+                return (
+                  <div key={presenter} className="border border-gray-200 rounded-lg p-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">{presenterName}</h3>
+                    <div className="flex items-baseline gap-2 mb-4">
+                      <span className="text-4xl font-bold text-gray-900">{presenterData.avg}</span>
+                      <span className="text-gray-600">/5.0</span>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3">{presenterData.count} ratings</p>
+                    <div className="space-y-2">
+                      {presenterData.distribution.reverse().map(({ rating, count }) => (
+                        <div key={rating} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-8">{rating} ★</span>
+                          <div className="flex-1 bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all"
+                              style={{ 
+                                width: `${presenterData.count > 0 ? (count / presenterData.count) * 100 : 0}%` 
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-600 w-8 text-right">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Relevance to Organizations</h2>
+              <div className="space-y-3">
+                {Object.entries(surveyAnalytics.relevance)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([response, count]) => (
+                    <div key={response} className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{response}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-green-600 h-2 rounded-full"
+                            style={{ width: `${(count / surveyAnalytics.totalResponses) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900 w-16 text-right">
+                          {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Future Engagement</h2>
+              
+              <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Share with Others</h3>
+              <div className="space-y-2 mb-6">
+                {Object.entries(surveyAnalytics.sharing)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([response, count]) => (
+                    <div key={response} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700">{response}</span>
+                      <span className="font-semibold text-gray-900">
+                        {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                      </span>
+                    </div>
+                  ))}
+              </div>
+
+              <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Attend Future Sessions</h3>
+              <div className="space-y-2">
+                {Object.entries(surveyAnalytics.attending)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([response, count]) => (
+                    <div key={response} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-700">{response}</span>
+                      <span className="font-semibold text-gray-900">
+                        {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Comments</h2>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
+              {surveys
+                .filter(s => s.comments && s.comments.trim())
+                .slice(0, 20)
+                .map((survey, idx) => {
+                  const webinar = filteredWebinars.find(w => w.id === survey.webinarId);
+                  return (
+                    <div key={idx} className="border-l-4 border-blue-200 pl-4 py-2">
+                      <p className="text-sm text-gray-700 italic">"{survey.comments}"</p>
+                      <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                        <span>{survey.timestamp}</span>
+                        {webinar && <span>{webinar.title} - {new Date(webinar.date).toLocaleDateString()}</span>}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {view === 'analytics' && (
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-lg shadow">
@@ -378,21 +614,28 @@ const WebinarOperations = () => {
                 .filter(w => w.attendanceCount > 0)
                 .sort((a, b) => b.attendanceCount - a.attendanceCount)
                 .slice(0, 10)
-                .map((webinar, index) => (
-                  <div key={`${webinar.id}-${webinar.date}`} className="flex items-center gap-4 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-bold">
-                      {index + 1}
+                .map((webinar, index) => {
+                  const webinarSurveys = surveys.filter(s => s.webinarId === webinar.id);
+                  return (
+                    <div key={`${webinar.id}-${webinar.date}`} className="flex items-center gap-4 border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 font-bold">
+                        {index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900">{webinar.title}</h3>
+                        <p className="text-sm text-gray-600">{new Date(webinar.date).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-gray-900">{webinar.attendanceCount}</p>
+                        <p className="text-sm text-gray-600">attendees</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-lg font-bold text-gray-900">{webinarSurveys.length}</p>
+                        <p className="text-sm text-gray-600">surveys</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{webinar.title}</h3>
-                      <p className="text-sm text-gray-600">{new Date(webinar.date).toLocaleDateString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-gray-900">{webinar.attendanceCount}</p>
-                      <p className="text-sm text-gray-600">attendees</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           </div>
         </div>
