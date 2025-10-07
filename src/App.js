@@ -199,15 +199,26 @@ const App = () => {
       {/* Sidebar */}
       <div className={`bg-brand-blue text-white transition-all duration-300 relative ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         <div className="p-4 flex items-center justify-between border-b border-blue-800">
-          {sidebarOpen && (
-            <div>
-              <h1 className="font-bold text-lg">49 North</h1>
-              <p className="text-xs text-blue-200">Command Center</p>
+          {sidebarOpen ? (
+            <div className="flex-1 pr-2">
+              <img 
+                src="/images/49NLogo.png" 
+                alt="49 North Logo" 
+                className="w-full h-auto max-w-[180px]"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center w-full">
+              <img 
+                src="/images/49NLogo.png" 
+                alt="49 North" 
+                className="w-8 h-8 object-contain"
+              />
             </div>
           )}
           <button
             onClick={() => setSidebarOpen(v => !v)}
-            className="p-2 hover:bg-blue-800 rounded transition-colors"
+            className="p-2 hover:bg-blue-800 rounded transition-colors shrink-0"
             aria-label="Toggle sidebar"
           >
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
