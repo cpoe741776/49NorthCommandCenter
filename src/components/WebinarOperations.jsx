@@ -40,10 +40,16 @@ const WebinarOperations = () => {
   }, [webinars, showLegacyData]);
 
   // Filter surveys to only those matching visible webinars
-  const surveys = useMemo(() => {
-    const visibleWebinarIds = new Set(filteredWebinars.map(w => w.id));
-    return allSurveys.filter(s => visibleWebinarIds.has(s.webinarId));
-  }, [allSurveys, filteredWebinars]);
+  // Filter surveys based on toggle - use survey timestamp directly
+const surveys = useMemo(() => {
+  if (showLegacyData) return allSurveys;
+  
+  return allSurveys.filter(s => {
+    if (!s.timestamp) return false;
+    const surveyDate = new Date(s.timestamp);
+    return surveyDate >= DATA_QUALITY_CUTOFF;
+  });
+}, [allSurveys, showLegacyData]);
 
   const summary = useMemo(() => {
     const completed = filteredWebinars.filter(w => w.status === 'Completed');
