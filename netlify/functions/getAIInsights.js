@@ -418,14 +418,14 @@ function extractContactLeads(surveys, registrations) {
     if (!email) return;
     
     const contactRequestValue = survey.contactRequest;
-    const attendingValue = survey.attending;
     
+    // Check if they want immediate contact OR a 3-month reminder
     const wantsContact = contactRequestValue && String(contactRequestValue).toLowerCase().includes('yes');
-    const wantsReminder = attendingValue && String(attendingValue).includes('🟢 Drop me a reminder in 3 months or so');
+    const wantsReminder = contactRequestValue && String(contactRequestValue).includes('🟢 Drop me a reminder in 3 months or so');
     
     // Debug first few surveys
-    if (idx < 3) {
-      console.log(`Survey ${idx}: email=${survey.email}, contactRequest="${contactRequestValue}", attending="${attendingValue}", wantsContact=${wantsContact}, wantsReminder=${wantsReminder}`);
+    if (idx < 5) {
+      console.log(`Survey ${idx}: email=${survey.email}, contactRequest="${contactRequestValue}", wantsContact=${wantsContact}, wantsReminder=${wantsReminder}`);
     }
     
     // Include if they requested contact OR want a reminder
