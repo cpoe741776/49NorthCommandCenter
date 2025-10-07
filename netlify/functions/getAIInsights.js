@@ -290,18 +290,26 @@ DO NOT connect bids to webinar attendees. They are separate activities.`
 // Helper function to fetch relevant news
 async function fetchRelevantNews() {
   try {
+    console.log('Attempting to fetch news...');
+    
     const response = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent('mental health training government OR resilience training military OR law enforcement mental health programs')}&hl=en-US&gl=US&ceid=US:en`);
     
     if (!response.ok) {
-      console.log('News fetch failed, returning empty array');
+      console.log(`News fetch failed with status: ${response.status}`);
       return [];
     }
 
     const xml = await response.text();
+    console.log(`Fetched XML length: ${xml.length} characters`);
     
-    // Parse RSS feed (simple extraction)
+    // Log first 500 characters to see format
+    console.log('XML preview:', xml.substring(0, 500));
+    
+    // Try multiple regex patterns
     const articles = [];
-    const itemRegex = /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g;
+    
+    // Pattern 1: Standard RSS with CDATA
+    let itemRegex = /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g;
     let match;
     
     while ((match = itemRegex.exec(xml)) !== null && articles.length < 5) {
@@ -313,11 +321,27 @@ async function fetchRelevantNews() {
       });
     }
     
-    console.log(`Parsed ${articles.length} news articles`);
+    // Pattern 2: Try without CDATA if pattern 1 didn't work
+    if (articles.length === 0) {
+      console.log('Trying alternative RSS pattern...');
+      itemRegex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g;
+      
+      while ((match = itemRegex.exec(xml)) !== null && articles.length < 5) {
+        articles.push({
+          title: match[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim(),
+          link: match[2],
+          pubDate: match[3],
+          source: 'Google News'
+        });
+      }
+    }
+    
+    console.log(`Successfully parsed ${articles.length} news articles`);
     return articles;
     
   } catch (error) {
     console.error('Error fetching news:', error);
+    console.error('Error stack:', error.stack);
     return [];
   }
 }
@@ -386,12 +410,20 @@ function parseRegistrations(rows) {
 function extractContactLeads(surveys, registrations) {
   const leads = new Map();
   
+  console.log(`Processing ${surveys.length} surveys for contact requests`);
+  
   // ONLY surveys with explicit contact requests
-  surveys.forEach(survey => {
+  surveys.forEach((survey, idx) => {
     const email = survey.email?.toLowerCase().trim();
     if (!email) return;
     
-    const wantsContact = survey.contactRequest?.toLowerCase().includes('yes');
+    const contactRequestValue = survey.contactRequest;
+    const wantsContact = contactRequestValue && String(contactRequestValue).toLowerCase().includes('yes');
+    
+    // Debug first few surveys
+    if (idx < 3) {
+      console.log(`Survey ${idx}: email=${survey.email}, contactRequest="${contactRequestValue}", wantsContact=${wantsContact}`);
+    }
     
     // ONLY include if they requested contact
     if (wantsContact) {
@@ -404,7 +436,7 @@ function extractContactLeads(surveys, registrations) {
           name: reg?.name || 'Unknown',
           organization: reg?.organization || 'Unknown',
           phone: reg?.phone || '',
-          score: 50, // Base score for requesting contact
+          score: 50,
           factors: ['Requested Contact'],
           comments: survey.comments || '',
           lastActivity: survey.timestamp
@@ -412,6 +444,8 @@ function extractContactLeads(surveys, registrations) {
       }
     }
   });
+  
+  console.log(`After contact request filter: ${leads.size} leads`);
   
   // Count multiple webinar attendance to boost score
   const attendanceCounts = new Map();
