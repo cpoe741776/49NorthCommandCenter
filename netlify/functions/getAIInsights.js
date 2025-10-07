@@ -266,7 +266,7 @@ function parseRegistrations(rows) {
   }));
 }
 
-// NEW: Extract contact leads with priority scoring
+// Extract contact leads with priority scoring
 function extractContactLeads(surveys, registrations, bids) {
   const leads = new Map();
   
@@ -308,23 +308,6 @@ function extractContactLeads(surveys, registrations, bids) {
         lead.factors.push('Left Comments');
       }
     }
-  });
-  
-  // Boost score if their organization has active bids
-  bids.forEach(bid => {
-    leads.forEach(lead => {
-      const org = lead.organization.toLowerCase();
-      const agency = bid.agency?.toLowerCase();
-      if (org.length > 3 && agency && (agency.includes(org) || org.includes(agency))) {
-        lead.score += 100;
-        lead.factors.push('Active Bid Match');
-        lead.matchingBid = {
-          solicitation: bid.solicitation,
-          agency: bid.agency,
-          dueDate: bid.dueDate
-        };
-      }
-    });
   });
   
   // Count multiple webinar attendance

@@ -174,7 +174,7 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
               </div>
             )}
 
-           {/* Contact Leads - NEW SECTION */}
+           {/* Contact Leads */}
 {aiInsights?.contactLeads && aiInsights.contactLeads.length > 0 && (
   <div className="bg-white rounded-lg p-4 border border-blue-200">
     <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -197,14 +197,6 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
               <p className="text-sm text-gray-600">{lead.organization}</p>
               <p className="text-sm text-gray-600">{lead.email}</p>
               {lead.phone && <p className="text-sm text-gray-600">📞 {lead.phone}</p>}
-              
-              {lead.matchingBid && (
-                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
-                  <p className="text-xs font-semibold text-yellow-800">🎯 Active Bid Match!</p>
-                  <p className="text-xs text-yellow-700">{lead.matchingBid.agency} - {lead.matchingBid.solicitation}</p>
-                  <p className="text-xs text-yellow-700">Due: {lead.matchingBid.dueDate}</p>
-                </div>
-              )}
               
               {lead.comments && (
                 <p className="text-sm text-gray-700 italic mt-2 border-l-2 border-blue-200 pl-2">
