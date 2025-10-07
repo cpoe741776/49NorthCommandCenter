@@ -6,12 +6,17 @@ const openai = new OpenAI({
 });
 
 exports.handler = async (event, context) => {
+  console.log('Function started');
+  
   try {
+    console.log('Authenticating with Google...');
+    
     // Authenticate with Google Sheets
     const serviceAccountKey = JSON.parse(
       Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
     );
 
+    console.log('Creating auth...');
     const auth = new google.auth.GoogleAuth({
       credentials: serviceAccountKey,
       scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
@@ -19,7 +24,8 @@ exports.handler = async (event, context) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch data from all sheets
+    console.log('Fetching data from sheets...');
+    // Fetch data from all sheets - now including ALL columns to get status
     const [bidsData, webinarData] = await Promise.all([
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -31,6 +37,8 @@ exports.handler = async (event, context) => {
       })
     ]);
 
+    console.log('Data fetched successfully. Parsing...');
+    
     // Parse the data
     const activeBids = parseBids(bidsData.data.valueRanges[0].values || []);
     const submittedBids = parseBids(bidsData.data.valueRanges[1].values || []);
@@ -39,25 +47,56 @@ exports.handler = async (event, context) => {
     const surveys = parseSurveys(webinarData.data.valueRanges[1].values || []);
     const registrations = parseRegistrations(webinarData.data.valueRanges[2].values || []);
 
-    // Extract contact leads from surveys
-    const contactLeads = extractContactLeads(surveys, registrations, activeBids);
+    console.log(`Parsed: ${activeBids.length} active bids, ${submittedBids.length} submitted, ${webinars.length} webinars, ${surveys.length} surveys, ${registrations.length} registrations`);
+
+    // Extract contact leads from surveys - ONLY those who requested contact
+    console.log('Extracting contact leads...');
+    const contactLeads = extractContactLeads(surveys, registrations);
+    console.log(`Found ${contactLeads.length} contact leads`);
+
+    // Filter bids with "Respond" status
+    const respondBids = activeBids.filter(bid => 
+      bid.status && bid.status.toLowerCase().includes('respond')
+    );
+    console.log(`Found ${respondBids.length} bids with "Respond" status`);
+
+    // Fetch relevant news articles
+    console.log('Fetching news articles...');
+    const newsArticles = await fetchRelevantNews();
+    console.log(`Found ${newsArticles.length} news articles`);
 
     // Aggregate and analyze
+    console.log('Aggregating data...');
     const aggregatedData = {
       timestamp: new Date().toISOString(),
       summary: {
         activeBidsCount: activeBids.length,
+        respondBidsCount: respondBids.length,
         submittedBidsCount: submittedBids.length,
         disregardedBidsCount: disregardedBids.length,
         completedWebinars: webinars.filter(w => w.status === 'Completed').length,
         upcomingWebinars: webinars.filter(w => w.status === 'Upcoming').length,
         totalSurveyResponses: surveys.length,
-        contactRequests: surveys.filter(s => s.contactRequest?.toLowerCase().includes('yes')).length,
+        contactRequests: contactLeads.length,
         totalRegistrations: registrations.length
       },
       
-      // Contact leads with priority scoring
+      // Priority bids - only those with "Respond" status
+      priorityBids: respondBids.slice(0, 10).map(bid => ({
+        solicitation: bid.solicitation,
+        agency: bid.agency,
+        title: bid.title,
+        dueDate: bid.dueDate,
+        status: bid.status,
+        setAside: bid.setAside,
+        naics: bid.naics
+      })),
+      
+      // Contact leads - only those who requested contact
       contactLeads: contactLeads,
+      
+      // News articles for business development
+      newsArticles: newsArticles,
       
       // Cross-operation insights
       organizations: identifyOrganizations(activeBids, registrations, surveys),
@@ -79,15 +118,15 @@ exports.handler = async (event, context) => {
           agency: b.agency,
           title: b.title,
           dueDate: b.dueDate,
+          status: b.status,
           daysRemaining: Math.ceil((new Date(b.dueDate) - new Date()) / (1000 * 60 * 60 * 24))
-        })),
-        crossOverOpportunities: findCrossOvers(activeBids, registrations)
+        }))
       },
       
       // Recent activity
       recentActivity: {
         lastWebinar: webinars.filter(w => w.status === 'Completed').sort((a, b) => new Date(b.date) - new Date(a.date))[0],
-        recentContactRequests: surveys.filter(s => s.contactRequest?.toLowerCase().includes('yes')).slice(-5),
+        recentContactRequests: contactLeads.slice(0, 5),
         newBids: activeBids.filter(b => {
           const addedDate = new Date(b.dateAdded || b.discovered);
           const daysSinceAdded = (new Date() - addedDate) / (1000 * 60 * 60 * 24);
@@ -96,96 +135,133 @@ exports.handler = async (event, context) => {
       }
     };
 
-    // Call OpenAI for strategic insights
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are a strategic business analyst for 49 North, a mental health training company specializing in Mental Armor™ programs for government agencies and organizations.
+    console.log('Aggregation complete. Calling OpenAI...');
 
-CRITICAL: Understand the business model correctly:
+    // Call OpenAI for strategic insights with timeout protection
+    let insights;
+    try {
+      console.log('Starting OpenAI API call...');
+      
+      const completion = await Promise.race([
+        openai.chat.completions.create({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "system",
+              content: `You are a strategic business analyst for 49 North, a mental health training company specializing in Mental Armor™ programs for government agencies and organizations.
 
-**BIDS PROCESS:**
-- Bids are INCOMING opportunities from automated systems (SAM.gov) - NOT something 49 North creates
-- Active_Bids = opportunities they are considering responding to
-- Submitted = bids they have already responded to
-- Disregarded = opportunities they decided not to pursue
-- Your role: Help prioritize WHICH incoming bids to respond to based on engagement data
-- DO NOT suggest "creating bids" or "developing bid proposals" - they respond to existing opportunities
+CRITICAL RULES:
 
-**WEBINARS:**
-- 49 North runs training webinars to engage potential clients
-- Survey data shows engagement levels and contact requests
-- High engagement = warmer leads for sales follow-up
+**BIDS ARE COMPLETELY SEPARATE FROM WEBINARS/CONTACTS:**
+- Bids = incoming government contract opportunities (from SAM.gov)
+- Webinars/Surveys = marketing/engagement activities
+- DO NOT connect bids to webinar attendees or survey respondents
+- DO NOT suggest that webinar engagement indicates bid alignment
+- Priority bids are determined SOLELY by their "Respond" status in the spreadsheet
 
-**WHAT 49 NORTH CAN DO:**
-1. Prioritize which incoming bids to respond to
-2. Follow up with webinar attendees who requested contact
-3. Reach out to engaged organizations proactively
-4. Create webinar content that resonates with target audiences
-
-Focus on:
-1. Bid prioritization - which INCOMING bids should they respond to, based on engagement
-2. Sales lead prioritization - who from webinars should they contact (already handled in contactLeads)
-3. Content strategy - what webinar topics drive engagement
-4. Risk identification - declining engagement, missed follow-ups
-5. Cross-operation connections - organizations in both bids AND webinars
+**YOUR ROLE:**
+1. Analyze priority bids (status="Respond") and suggest response strategies
+2. Content strategy - what webinar topics resonate
+3. Business development - analyze news articles for opportunities
+4. Risk identification - operational concerns
 
 Provide insights in this JSON structure:
 {
-  "executiveSummary": "2-3 sentence overview focusing on incoming bid opportunities and sales leads",
+  "executiveSummary": "2-3 sentence overview of bid pipeline, webinar engagement, and market opportunities",
   "topPriorities": [
     {"title": "Priority name", "description": "Why this matters", "action": "Specific next step", "urgency": "high/medium/low"}
   ],
   "bidRecommendations": [
-    {"solicitation": "Bid number", "agency": "Agency name", "reason": "Why prioritize responding to this INCOMING bid", "action": "Next step to respond", "dueDate": "date"}
+    {"solicitation": "Bid number", "agency": "Agency name", "reason": "Why prioritize (based on bid details, NOT webinars)", "action": "Next step to respond", "dueDate": "date"}
   ],
   "contentInsights": {
     "topPerforming": "What webinar content drives engagement",
-    "suggestions": "Topics to try based on survey feedback and bid patterns"
+    "suggestions": "Topics to try based on survey feedback"
   },
+  "newsOpportunities": [
+    {"headline": "Article headline", "relevance": "How this creates opportunity for 49 North", "action": "Suggested next step"}
+  ],
   "riskAlerts": [
     {"issue": "What's concerning", "impact": "Business impact", "mitigation": "How to address"}
-  ],
-  "opportunityMapping": [
-    {"type": "bid-response/content/partnership", "description": "The opportunity", "potential": "high/medium/low", "nextStep": "What to do"}
   ]
 }
 
-DO NOT include contact leads in your response - they are handled separately.`
-        },
-        {
-          role: "user",
-          content: `Analyze this operational data and provide strategic insights:
+DO NOT mention webinar engagement when discussing bids. They are separate business activities.`
+            },
+            {
+              role: "user",
+              content: `Analyze this operational data and provide strategic insights:
 
 ${JSON.stringify(aggregatedData, null, 2)}
 
 Current date: ${new Date().toISOString().split('T')[0]}
 
 Focus on:
-1. Which INCOMING bids (from Active_Bids) should be prioritized for response
-2. Content strategy for webinars
-3. Operational risks
-4. Cross-operation patterns (organizations appearing in both bids and webinars)
+1. Priority bids with "Respond" status - suggest response strategies based on bid details
+2. Content strategy for webinars based on survey feedback
+3. Business development opportunities from news articles
+4. Operational risks
 
-DO NOT suggest actions about contacting individuals - that's handled in the separate Contact Leads section.`
-        }
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 2000
-    });
+DO NOT connect bids to webinar attendees. They are separate activities.`
+            }
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.7,
+          max_tokens: 2000
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('OpenAI API timeout after 25 seconds')), 25000)
+        )
+      ]);
 
-    const insights = JSON.parse(completion.choices[0].message.content);
+      console.log('OpenAI API call completed');
+      insights = JSON.parse(completion.choices[0].message.content);
+      
+    } catch (openaiError) {
+      console.error('OpenAI API Error:', openaiError);
+      
+      // Return a fallback response if OpenAI fails
+      insights = {
+        executiveSummary: "AI analysis temporarily unavailable. Manual review recommended.",
+        topPriorities: [
+          {
+            title: "Review Priority Bids",
+            description: `${aggregatedData.respondBidsCount} bids marked as "Respond" need review`,
+            action: "Prioritize bids with upcoming deadlines",
+            urgency: "high"
+          }
+        ],
+        bidRecommendations: respondBids.slice(0, 3).map(bid => ({
+          solicitation: bid.solicitation,
+          agency: bid.agency,
+          reason: `Marked as "Respond" in tracking system`,
+          action: "Review requirements and assess fit",
+          dueDate: bid.dueDate
+        })),
+        contentInsights: {
+          topPerforming: "Webinar data available in Webinar Operations",
+          suggestions: "Review survey feedback for content ideas"
+        },
+        newsOpportunities: newsArticles.slice(0, 3).map(article => ({
+          headline: article.title,
+          relevance: "Potential business development opportunity",
+          action: "Review article and assess relevance"
+        })),
+        riskAlerts: []
+      };
+    }
 
+    console.log('Preparing response...');
+    
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         success: true,
         insights,
-        contactLeads: contactLeads.slice(0, 15), // Top 15 contact leads
+        contactLeads: contactLeads.slice(0, 15), // Top 15 contact leads (only those who requested contact)
+        priorityBids: respondBids.slice(0, 10), // Top 10 bids with "Respond" status
+        newsArticles: newsArticles,
         aggregatedData: {
           summary: aggregatedData.summary,
           opportunities: aggregatedData.opportunities,
@@ -197,16 +273,54 @@ DO NOT suggest actions about contacting individuals - that's handled in the sepa
 
   } catch (error) {
     console.error('Error generating AI insights:', error);
+    console.error('Error stack:', error.stack);
+    
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         success: false,
-        error: error.message 
+        error: error.message,
+        stack: error.stack
       })
     };
   }
 };
+
+// Helper function to fetch relevant news
+async function fetchRelevantNews() {
+  try {
+    const response = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent('mental health training government OR resilience training military OR law enforcement mental health programs')}&hl=en-US&gl=US&ceid=US:en`);
+    
+    if (!response.ok) {
+      console.log('News fetch failed, returning empty array');
+      return [];
+    }
+
+    const xml = await response.text();
+    
+    // Parse RSS feed (simple extraction)
+    const articles = [];
+    const itemRegex = /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g;
+    let match;
+    
+    while ((match = itemRegex.exec(xml)) !== null && articles.length < 5) {
+      articles.push({
+        title: match[1],
+        link: match[2],
+        pubDate: match[3],
+        source: 'Google News'
+      });
+    }
+    
+    console.log(`Parsed ${articles.length} news articles`);
+    return articles;
+    
+  } catch (error) {
+    console.error('Error fetching news:', error);
+    return [];
+  }
+}
 
 // Helper functions
 function parseBids(rows) {
@@ -220,7 +334,9 @@ function parseBids(rows) {
     dateAdded: row[5],
     setAside: row[6],
     naics: row[7],
-    placeOfPerformance: row[8]
+    placeOfPerformance: row[8],
+    status: row[9] || '',
+    link: row[10] || ''
   }));
 }
 
@@ -266,19 +382,19 @@ function parseRegistrations(rows) {
   }));
 }
 
-// Extract contact leads with priority scoring
-function extractContactLeads(surveys, registrations, bids) {
+// Extract contact leads - ONLY those who requested contact
+function extractContactLeads(surveys, registrations) {
   const leads = new Map();
   
-  // Surveys with contact requests or meaningful comments
+  // ONLY surveys with explicit contact requests
   surveys.forEach(survey => {
     const email = survey.email?.toLowerCase().trim();
     if (!email) return;
     
     const wantsContact = survey.contactRequest?.toLowerCase().includes('yes');
-    const hasComments = survey.comments && survey.comments.trim().length > 10;
     
-    if (wantsContact || hasComments) {
+    // ONLY include if they requested contact
+    if (wantsContact) {
       if (!leads.has(email)) {
         // Find registration info for this email
         const reg = registrations.find(r => r.email?.toLowerCase().trim() === email);
@@ -288,29 +404,16 @@ function extractContactLeads(surveys, registrations, bids) {
           name: reg?.name || 'Unknown',
           organization: reg?.organization || 'Unknown',
           phone: reg?.phone || '',
-          score: 0,
-          factors: [],
-          contactRequest: wantsContact,
+          score: 50, // Base score for requesting contact
+          factors: ['Requested Contact'],
           comments: survey.comments || '',
           lastActivity: survey.timestamp
         });
       }
-      
-      const lead = leads.get(email);
-      
-      if (wantsContact) {
-        lead.score += 50;
-        lead.factors.push('Requested Contact');
-      }
-      
-      if (hasComments) {
-        lead.score += 20;
-        lead.factors.push('Left Comments');
-      }
     }
   });
   
-  // Count multiple webinar attendance
+  // Count multiple webinar attendance to boost score
   const attendanceCounts = new Map();
   registrations.forEach(reg => {
     const email = reg.email?.toLowerCase().trim();
@@ -324,6 +427,12 @@ function extractContactLeads(surveys, registrations, bids) {
     if (count >= 2) {
       lead.score += 30 * (count - 1);
       lead.factors.push(`${count} Webinars Attended`);
+    }
+    
+    // Boost for leaving comments
+    if (lead.comments && lead.comments.trim().length > 10) {
+      lead.score += 20;
+      lead.factors.push('Left Detailed Comments');
     }
   });
   
@@ -396,28 +505,4 @@ function getBidPatterns(activeBids, submittedBids) {
     submitted: submittedBids.length,
     conversionRate: total > 0 ? Math.round((submittedBids.length / total) * 100) : 0
   };
-}
-
-function findCrossOvers(activeBids, registrations) {
-  const bidAgencies = new Set(
-    activeBids.map(b => b.agency?.toLowerCase().trim()).filter(Boolean)
-  );
-  const webinarOrgs = new Set(
-    registrations.map(r => r.organization?.toLowerCase().trim()).filter(Boolean)
-  );
-  
-  const crossovers = [];
-  bidAgencies.forEach(agency => {
-    webinarOrgs.forEach(org => {
-      if (agency.includes(org) || org.includes(agency)) {
-        crossovers.push({ 
-          bidAgency: agency, 
-          webinarOrganization: org,
-          match: 'high'
-        });
-      }
-    });
-  });
-  
-  return crossovers.slice(0, 15);
 }
