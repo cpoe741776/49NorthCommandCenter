@@ -1,3 +1,5 @@
+//WebinarOperations.jsx//
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, ChevronRight, MessageSquare, RefreshCw, TrendingUp, Users, X } from 'lucide-react';
 import { fetchWebinars } from '../services/webinarService';
@@ -10,6 +12,7 @@ const WebinarOperations = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedWebinar, setSelectedWebinar] = useState(null);
+  const [selectedWebinarForRegistrants, setSelectedWebinarForRegistrants] = useState(null);
   const [view, setView] = useState('overview');
   const [showLegacyData, setShowLegacyData] = useState(false);
 
@@ -32,6 +35,7 @@ const WebinarOperations = () => {
 
   const webinars = useMemo(() => data?.webinars ?? [], [data]);
   const allSurveys = useMemo(() => data?.surveys ?? [], [data]);
+  const allRegistrations = useMemo(() => data?.registrations ?? [], [data]);
 
   // Filter webinars based on toggle
   const filteredWebinars = useMemo(() => {
@@ -41,15 +45,15 @@ const WebinarOperations = () => {
 
   // Filter surveys to only those matching visible webinars
   // Filter surveys based on toggle - use survey timestamp directly
-const surveys = useMemo(() => {
-  if (showLegacyData) return allSurveys;
-  
-  return allSurveys.filter(s => {
-    if (!s.timestamp) return false;
-    const surveyDate = new Date(s.timestamp);
-    return surveyDate >= DATA_QUALITY_CUTOFF;
-  });
-}, [allSurveys, showLegacyData]);
+  const surveys = useMemo(() => {
+    if (showLegacyData) return allSurveys;
+    
+    return allSurveys.filter(s => {
+      if (!s.timestamp) return false;
+      const surveyDate = new Date(s.timestamp);
+      return surveyDate >= DATA_QUALITY_CUTOFF;
+    });
+  }, [allSurveys, showLegacyData]);
 
   const summary = useMemo(() => {
     const completed = filteredWebinars.filter(w => w.status === 'Completed');
@@ -82,28 +86,28 @@ const surveys = useMemo(() => {
   );
 
   const surveyAnalytics = useMemo(() => {
-  if (surveys.length === 0) return null;
+    if (surveys.length === 0) return null;
 
-  // Extract numeric ratings from emoji-based responses
-  const extractRating = (value) => {
-    const val = String(value).toLowerCase();
-    
-    // Map emoji responses to numeric ratings
-    if (val.includes('🌟') || val.includes('awesome')) return 5;
-    if (val.includes('🟢') || val.includes('strong')) return 4;
-    if (val.includes('🟡') || val.includes('neutral')) return 3;
-    if (val.includes('🟠') || val.includes('weak')) return 2;
-    if (val.includes('🔴') || val.includes('poor')) return 1;
-    if (val.includes('⚪') || val.includes('absent')) return null; // Don't count absent
-    
-    // Fallback: try to extract numeric value
-    const match = val.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : null;
-  };
+    // Extract numeric ratings from emoji-based responses
+    const extractRating = (value) => {
+      const val = String(value).toLowerCase();
+      
+      // Map emoji responses to numeric ratings
+      if (val.includes('🌟') || val.includes('awesome')) return 5;
+      if (val.includes('🟢') || val.includes('strong')) return 4;
+      if (val.includes('🟡') || val.includes('neutral')) return 3;
+      if (val.includes('🟠') || val.includes('weak')) return 2;
+      if (val.includes('🔴') || val.includes('poor')) return 1;
+      if (val.includes('⚪') || val.includes('absent')) return null; // Don't count absent
+      
+      // Fallback: try to extract numeric value
+      const match = val.match(/(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    };
 
-  const rhondaRatings = surveys.map(s => extractRating(s.rhonda)).filter(r => r !== null && r >= 1 && r <= 5);
-  const chrisRatings = surveys.map(s => extractRating(s.chris)).filter(r => r !== null && r >= 1 && r <= 5);
-  const guestRatings = surveys.map(s => extractRating(s.guest)).filter(r => r !== null && r >= 1 && r <= 5);
+    const rhondaRatings = surveys.map(s => extractRating(s.rhonda)).filter(r => r !== null && r >= 1 && r <= 5);
+    const chrisRatings = surveys.map(s => extractRating(s.chris)).filter(r => r !== null && r >= 1 && r <= 5);
+    const guestRatings = surveys.map(s => extractRating(s.guest)).filter(r => r !== null && r >= 1 && r <= 5);
 
     const avgRating = (ratings) => ratings.length > 0 
       ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(2)
@@ -210,7 +214,7 @@ const surveys = useMemo(() => {
       </div>
 
       <div className="flex gap-2 border-b border-gray-200">
-        {['overview', 'upcoming', 'past', 'surveys', 'analytics'].map(v => (
+        {['overview', 'upcoming', 'past', 'registrants', 'surveys', 'analytics'].map(v => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -315,7 +319,7 @@ const surveys = useMemo(() => {
                         </div>
                       </div>
                       
-                        <a href={webinar.platformLink}
+                      <a href={webinar.platformLink}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors"
@@ -381,16 +385,14 @@ const surveys = useMemo(() => {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    
-                      <a href={webinar.platformLink}
+                    <a href={webinar.platformLink}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors text-center"
                     >
                       Join Webinar
                     </a>
-                    
-                      <a href={webinar.registrationFormUrl}
+                    <a href={webinar.registrationFormUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
@@ -440,168 +442,317 @@ const surveys = useMemo(() => {
         </div>
       )}
 
-      {view === 'surveys' && (
-  surveys.length === 0 ? (
-    <div className="bg-white p-6 rounded-lg shadow">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
-      <p className="text-gray-500">
-        {showLegacyData 
-          ? "No survey data available" 
-          : "No survey responses for webinars after October 2025. Enable 'Include legacy data' to view historical responses."}
-      </p>
-    </div>
-  ) : surveyAnalytics && (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-600">Total Responses</p>
-            <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.totalResponses}</p>
-          </div>
-          <div className="border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-600">Response Rate</p>
-            <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
-          </div>
-          <div className="border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-600">Contact Requests</p>
-            <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.contactRequests}</p>
-            <p className="text-xs text-gray-600 mt-1">
-              {surveyAnalytics.totalResponses > 0 
-                ? Math.round((surveyAnalytics.contactRequests / surveyAnalytics.totalResponses) * 100)
-                : 0}% of respondents
-            </p>
-          </div>
-          <div className="border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-600">With Comments</p>
-            <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.commentsCount}</p>
-            <p className="text-xs text-gray-600 mt-1">
-              {surveyAnalytics.totalResponses > 0 
-                ? Math.round((surveyAnalytics.commentsCount / surveyAnalytics.totalResponses) * 100)
-                : 0}% provided feedback
-            </p>
+      {view === 'registrants' && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Webinar Registrants</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {allRegistrations.length} total registrations across all webinars
+                </p>
+              </div>
+              <select
+                value={selectedWebinarForRegistrants || ''}
+                onChange={(e) => setSelectedWebinarForRegistrants(e.target.value || null)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Webinars</option>
+                <optgroup label="Upcoming">
+                  {upcomingWebinars.map(w => (
+                    <option key={w.id} value={w.id}>
+                      {w.title} - {new Date(w.date).toLocaleDateString()}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Past">
+                  {completedWebinars.slice(0, 20).map(w => (
+                    <option key={w.id} value={w.id}>
+                      {w.title} - {new Date(w.date).toLocaleDateString()}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            </div>
+
+            {(() => {
+              const filteredRegistrations = selectedWebinarForRegistrants
+                ? allRegistrations.filter(r => r.webinarId === selectedWebinarForRegistrants)
+                : allRegistrations;
+
+              const selectedWebinarInfo = selectedWebinarForRegistrants
+                ? filteredWebinars.find(w => w.id === selectedWebinarForRegistrants)
+                : null;
+
+              return (
+                <>
+                  {selectedWebinarInfo && (
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <h3 className="font-semibold text-gray-900">{selectedWebinarInfo.title}</h3>
+                      <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                        <span>📅 {new Date(selectedWebinarInfo.date).toLocaleDateString()}</span>
+                        <span>🕐 {selectedWebinarInfo.time}</span>
+                        <span>👥 {filteredRegistrations.length} registered</span>
+                        <span className={`font-semibold ${selectedWebinarInfo.status === 'Completed' ? 'text-green-600' : 'text-blue-600'}`}>
+                          {selectedWebinarInfo.status}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {filteredRegistrations.length === 0 ? (
+                    <p className="text-gray-500 text-center py-8">
+                      No registrations found{selectedWebinarForRegistrants ? ' for this webinar' : ''}
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Registration Date
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Name
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Email
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Organization
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Phone
+                            </th>
+                            {!selectedWebinarForRegistrants && (
+                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Webinar
+                              </th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {filteredRegistrations
+                            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                            .map((reg, index) => {
+                              const webinar = filteredWebinars.find(w => w.id === reg.webinarId);
+                              return (
+                                <tr key={index} className="hover:bg-gray-50">
+                                  <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                                    {new Date(reg.timestamp).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-900">
+                                    {reg.name || '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-600">
+                                    {reg.email || '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-600">
+                                    {reg.organization || '-'}
+                                  </td>
+                                  <td className="px-4 py-3 text-sm text-gray-600">
+                                    {reg.phone || '-'}
+                                  </td>
+                                  {!selectedWebinarForRegistrants && (
+                                    <td className="px-4 py-3 text-sm text-gray-600">
+                                      <div className="max-w-xs truncate">
+                                        {webinar ? (
+                                          <>
+                                            <div className="font-medium text-gray-900">{webinar.title}</div>
+                                            <div className="text-xs text-gray-500">
+                                              {new Date(webinar.date).toLocaleDateString()}
+                                            </div>
+                                          </>
+                                        ) : (
+                                          <span className="text-gray-400">Unknown</span>
+                                        )}
+                                      </div>
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="mt-4 text-sm text-gray-600">
+                    Showing {filteredRegistrations.length} registration{filteredRegistrations.length !== 1 ? 's' : ''}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Presenter Ratings</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {['rhonda', 'chris', 'guest'].map(presenter => {
-            const presenterData = surveyAnalytics[presenter];
-            const presenterName = presenter.charAt(0).toUpperCase() + presenter.slice(1);
-            
-            return (
-              <div key={presenter} className="border border-gray-200 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">{presenterName}</h3>
-                <div className="flex items-baseline gap-2 mb-4">
-                  <span className="text-4xl font-bold text-gray-900">{presenterData.avg}</span>
-                  <span className="text-gray-600">/5.0</span>
+      {view === 'surveys' && (
+        surveys.length === 0 ? (
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
+            <p className="text-gray-500">
+              {showLegacyData 
+                ? "No survey data available" 
+                : "No survey responses for webinars after October 2025. Enable 'Include legacy data' to view historical responses."}
+            </p>
+          </div>
+        ) : surveyAnalytics && (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Survey Overview</h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-600">Total Responses</p>
+                  <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.totalResponses}</p>
                 </div>
-                <p className="text-sm text-gray-600 mb-3">{presenterData.count} ratings</p>
-                <div className="space-y-2">
-                  {presenterData.distribution.reverse().map(({ rating, count }) => (
-                    <div key={rating} className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600 w-8">{rating} ★</span>
-                      <div className="flex-1 bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all"
-                          style={{ 
-                            width: `${presenterData.count > 0 ? (count / presenterData.count) * 100 : 0}%` 
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-600 w-8 text-right">{count}</span>
-                    </div>
-                  ))}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-600">Response Rate</p>
+                  <p className="text-3xl font-bold text-gray-900">{summary.surveyResponseRate}%</p>
+                </div>
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-600">Contact Requests</p>
+                  <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.contactRequests}</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {surveyAnalytics.totalResponses > 0 
+                      ? Math.round((surveyAnalytics.contactRequests / surveyAnalytics.totalResponses) * 100)
+                      : 0}% of respondents
+                  </p>
+                </div>
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <p className="text-sm text-gray-600">With Comments</p>
+                  <p className="text-3xl font-bold text-gray-900">{surveyAnalytics.commentsCount}</p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {surveyAnalytics.totalResponses > 0 
+                      ? Math.round((surveyAnalytics.commentsCount / surveyAnalytics.totalResponses) * 100)
+                      : 0}% provided feedback
+                  </p>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Relevance to Organizations</h2>
-          <div className="space-y-3">
-            {Object.entries(surveyAnalytics.relevance)
-              .sort((a, b) => b[1] - a[1])
-              .map(([response, count]) => (
-                <div key={response} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">{response}</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-24 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-green-600 h-2 rounded-full"
-                        style={{ width: `${(count / surveyAnalytics.totalResponses) * 100}%` }}
-                      />
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Presenter Ratings</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {['rhonda', 'chris', 'guest'].map(presenter => {
+                  const presenterData = surveyAnalytics[presenter];
+                  const presenterName = presenter.charAt(0).toUpperCase() + presenter.slice(1);
+                  
+                  return (
+                    <div key={presenter} className="border border-gray-200 rounded-lg p-4">
+                      <h3 className="font-semibold text-gray-900 mb-3">{presenterName}</h3>
+                      <div className="flex items-baseline gap-2 mb-4">
+                        <span className="text-4xl font-bold text-gray-900">{presenterData.avg}</span>
+                        <span className="text-gray-600">/5.0</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-3">{presenterData.count} ratings</p>
+                      <div className="space-y-2">
+                        {presenterData.distribution.reverse().map(({ rating, count }) => (
+                          <div key={rating} className="flex items-center gap-2">
+                            <span className="text-xs text-gray-600 w-8">{rating} ★</span>
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-blue-600 h-2 rounded-full transition-all"
+                                style={{ 
+                                  width: `${presenterData.count > 0 ? (count / presenterData.count) * 100 : 0}%` 
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-600 w-8 text-right">{count}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900 w-16 text-right">
-                      {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
-                    </span>
-                  </div>
-                </div>
-              ))}
-          </div>
-        </div>
+                  );
+                })}
+              </div>
+            </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Future Engagement</h2>
-          
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Share with Others</h3>
-          <div className="space-y-2 mb-6">
-            {Object.entries(surveyAnalytics.sharing)
-              .sort((a, b) => b[1] - a[1])
-              .map(([response, count]) => (
-                <div key={response} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">{response}</span>
-                  <span className="font-semibold text-gray-900">
-                    {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
-                  </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Relevance to Organizations</h2>
+                <div className="space-y-3">
+                  {Object.entries(surveyAnalytics.relevance)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([response, count]) => (
+                      <div key={response} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-700">{response}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-24 bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-green-600 h-2 rounded-full"
+                              style={{ width: `${(count / surveyAnalytics.totalResponses) * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-sm font-semibold text-gray-900 w-16 text-right">
+                            {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                 </div>
-              ))}
-          </div>
+              </div>
 
-          <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Attend Future Sessions</h3>
-          <div className="space-y-2">
-            {Object.entries(surveyAnalytics.attending)
-              .sort((a, b) => b[1] - a[1])
-              .map(([response, count]) => (
-                <div key={response} className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700">{response}</span>
-                  <span className="font-semibold text-gray-900">
-                    {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
-                  </span>
+              <div className="bg-white p-6 rounded-lg shadow">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Future Engagement</h2>
+                
+                <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Share with Others</h3>
+                <div className="space-y-2 mb-6">
+                  {Object.entries(surveyAnalytics.sharing)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([response, count]) => (
+                      <div key={response} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700">{response}</span>
+                        <span className="font-semibold text-gray-900">
+                          {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                        </span>
+                      </div>
+                    ))}
                 </div>
-              ))}
-          </div>
-        </div>
-      </div>
 
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Comments</h2>
-        <div className="space-y-4 max-h-96 overflow-y-auto">
-          {surveys
-            .filter(s => s.comments && s.comments.trim())
-            .slice(0, 20)
-            .map((survey, idx) => {
-              const webinar = filteredWebinars.find(w => w.id === survey.webinarId);
-              return (
-                <div key={idx} className="border-l-4 border-blue-200 pl-4 py-2">
-                  <p className="text-sm text-gray-700 italic">"{survey.comments}"</p>
-                  <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                    <span>{survey.timestamp}</span>
-                    {webinar && <span>{webinar.title} - {new Date(webinar.date).toLocaleDateString()}</span>}
-                  </div>
+                <h3 className="text-sm font-semibold text-gray-600 mb-3">Will Attend Future Sessions</h3>
+                <div className="space-y-2">
+                  {Object.entries(surveyAnalytics.attending)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([response, count]) => (
+                      <div key={response} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-700">{response}</span>
+                        <span className="font-semibold text-gray-900">
+                          {count} ({Math.round((count / surveyAnalytics.totalResponses) * 100)}%)
+                        </span>
+                      </div>
+                    ))}
                 </div>
-              );
-            })}
-        </div>
-      </div>
-    </div>
-  )
-)}
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Comments</h2>
+              <div className="space-y-4 max-h-96 overflow-y-auto">
+                {surveys
+                  .filter(s => s.comments && s.comments.trim())
+                  .slice(0, 20)
+                  .map((survey, idx) => {
+                    const webinar = filteredWebinars.find(w => w.id === survey.webinarId);
+                    return (
+                      <div key={idx} className="border-l-4 border-blue-200 pl-4 py-2">
+                        <p className="text-sm text-gray-700 italic">"{survey.comments}"</p>
+                        <div className="flex gap-4 mt-2 text-xs text-gray-500">
+                          <span>{survey.timestamp}</span>
+                          {webinar && <span>{webinar.title} - {new Date(webinar.date).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        )
+      )}
 
       {view === 'analytics' && (
         <div className="space-y-6">

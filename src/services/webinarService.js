@@ -1,3 +1,5 @@
+//webinarService.js//
+
 export const fetchWebinars = async () => {
   try {
     const response = await fetch('/.netlify/functions/fetchWebinars');

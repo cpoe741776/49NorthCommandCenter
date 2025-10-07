@@ -14,7 +14,7 @@ exports.handler = async () => {
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.WEBINAR_SHEET_ID;
 
-    // Fetch webinars - now reading A through L to get all columns
+    // Fetch webinars
     const webinarResponse = await sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Webinars!A2:L',
@@ -26,13 +26,17 @@ exports.handler = async () => {
       range: 'Survey_Responses!A2:L',
     });
 
+    // Fetch registrations - NEW
+    const registrationResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Registrations!A2:F',
+    });
+
     const webinarRows = webinarResponse.data.values || [];
     const surveyRows = surveyResponse.data.values || [];
+    const registrationRows = registrationResponse.data.values || [];
 
-    // Map to your actual column order:
-    // A: Webinar ID, B: Title, C: Date, D: Time, E: Platform Link
-    // F: Registration Form URL, G: Status, H: Capacity, I: Registration Count
-    // J: Attendance Count, K: Survey Link, L: Created Date
+    // Map webinars
     const webinars = webinarRows.map((row, index) => ({
       id: row[0] || `webinar-${index}`,
       title: row[1] || '',
@@ -47,6 +51,7 @@ exports.handler = async () => {
       surveyLink: row[10] || '',
     }));
 
+    // Map surveys
     const surveys = surveyRows.map(row => ({
       timestamp: row[0] || '',
       email: row[1] || '',
@@ -59,6 +64,17 @@ exports.handler = async () => {
       attending: row[8] || '',
       contactRequest: row[9] || '',
       comments: row[10] || '',
+    }));
+
+    // Map registrations - NEW
+    // Columns: Timestamp, Webinar ID, Name, Email, Organization, Phone
+    const registrations = registrationRows.map((row, index) => ({
+      timestamp: row[0] || '',
+      webinarId: row[1] || '',
+      name: row[2] || '',
+      email: row[3] || '',
+      organization: row[4] || '',
+      phone: row[5] || '',
     }));
 
     const completedWebinars = webinars.filter(w => w.status === 'Completed');
@@ -82,7 +98,7 @@ exports.handler = async () => {
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webinars, surveys, summary }),
+      body: JSON.stringify({ webinars, surveys, registrations, summary }),
     };
   } catch (error) {
     console.error('Error fetching webinars:', error);
