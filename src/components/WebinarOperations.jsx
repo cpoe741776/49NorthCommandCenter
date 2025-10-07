@@ -874,30 +874,44 @@ const WebinarOperations = () => {
               </div>
 
               {selectedWebinar.status === 'Completed' && (() => {
-                const webinarSurveys = surveys.filter(s => s.webinarId === selectedWebinar.id);
-                const responseRate = selectedWebinar.attendanceCount > 0
-                  ? Math.round((webinarSurveys.length / selectedWebinar.attendanceCount) * 100)
-                  : 0;
+  const webinarSurveys = surveys.filter(s => s.webinarId === selectedWebinar.id);
+  const responseRate = selectedWebinar.attendanceCount > 0
+    ? Math.round((webinarSurveys.length / selectedWebinar.attendanceCount) * 100)
+    : 0;
 
-                const relevanceCounts = {};
-                webinarSurveys.forEach(s => {
-                  const rel = s.relevance || 'Not specified';
-                  relevanceCounts[rel] = (relevanceCounts[rel] || 0) + 1;
-                });
+  const relevanceCounts = {};
+  webinarSurveys.forEach(s => {
+    const rel = s.relevance || 'Not specified';
+    relevanceCounts[rel] = (relevanceCounts[rel] || 0) + 1;
+  });
 
-                const calculateAvg = (field) => {
-                  const ratings = webinarSurveys
-                    .map(s => {
-                      const match = String(s[field]).match(/(\d+)/);
-                      return match ? parseInt(match[1], 10) : null;
-                    })
-                    .filter(r => r !== null && r >= 1 && r <= 5);
-                  return ratings.length ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1) : 'N/A';
-                };
+  // Use the same emoji-based rating extraction as the surveys section
+  const extractRating = (value) => {
+    const val = String(value).toLowerCase();
+    
+    // Map emoji responses to numeric ratings
+    if (val.includes('🌟') || val.includes('awesome')) return 5;
+    if (val.includes('🟢') || val.includes('strong')) return 4;
+    if (val.includes('🟡') || val.includes('neutral')) return 3;
+    if (val.includes('🟠') || val.includes('weak')) return 2;
+    if (val.includes('🔴') || val.includes('poor')) return 1;
+    if (val.includes('⚪') || val.includes('absent')) return null; // Don't count absent
+    
+    // Fallback: try to extract numeric value
+    const match = val.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+  };
 
-                const rhondaAvg = calculateAvg('rhonda');
-                const chrisAvg = calculateAvg('chris');
-                const guestAvg = calculateAvg('guest');
+  const calculateAvg = (field) => {
+    const ratings = webinarSurveys
+      .map(s => extractRating(s[field]))
+      .filter(r => r !== null && r >= 1 && r <= 5);
+    return ratings.length ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1) : 'N/A';
+  };
+
+  const rhondaAvg = calculateAvg('rhonda');
+  const chrisAvg = calculateAvg('chris');
+  const guestAvg = calculateAvg('guest');
 
                 return (
                   <>
