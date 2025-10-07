@@ -443,153 +443,185 @@ const WebinarOperations = () => {
       )}
 
       {view === 'registrants' && (
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Webinar Registrants</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  {allRegistrations.length} total registrations across all webinars
-                </p>
+  <div className="space-y-6">
+    {/* Add toggle to registrants section */}
+    <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input 
+          type="checkbox" 
+          checked={showLegacyData}
+          onChange={(e) => {
+            setShowLegacyData(e.target.checked);
+            setSelectedWebinarForRegistrants(null); // Reset selection when toggle changes
+          }}
+          className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+        />
+        <div className="flex-1">
+          <span className="text-sm font-medium text-gray-900">
+            Include legacy data (before October 2025)
+          </span>
+          <p className="text-xs text-gray-600 mt-0.5">
+            Registration data before October 2025 may be incomplete due to recurring series limitations
+          </p>
+        </div>
+      </label>
+    </div>
+
+    <div className="bg-white p-6 rounded-lg shadow">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Webinar Registrants</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {allRegistrations.length} total registrations across all webinars
+          </p>
+        </div>
+        <select
+          value={selectedWebinarForRegistrants || ''}
+          onChange={(e) => {
+            const value = e.target.value || null;
+            setSelectedWebinarForRegistrants(value);
+          }}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">All Webinars</option>
+          {upcomingWebinars.length > 0 && (
+            <optgroup label="Upcoming">
+              {upcomingWebinars.map(w => (
+                <option key={w.id} value={w.id}>
+                  {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {completedWebinars.length > 0 && (
+            <optgroup label="Past">
+              {completedWebinars.map(w => (
+                <option key={w.id} value={w.id}>
+                  {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
+
+      {(() => {
+        // Filter registrations based on selected webinar
+        const filteredRegistrations = selectedWebinarForRegistrants
+          ? allRegistrations.filter(r => r.webinarId === selectedWebinarForRegistrants)
+          : allRegistrations;
+
+        // Get the selected webinar info from filteredWebinars (which respects the toggle)
+        const selectedWebinarInfo = selectedWebinarForRegistrants
+          ? filteredWebinars.find(w => w.id === selectedWebinarForRegistrants)
+          : null;
+
+        return (
+          <>
+            {selectedWebinarInfo && (
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="font-semibold text-gray-900">{selectedWebinarInfo.title}</h3>
+                <div className="flex gap-4 mt-2 text-sm text-gray-600">
+                  <span>📅 {new Date(selectedWebinarInfo.date).toLocaleDateString()}</span>
+                  <span>🕐 {selectedWebinarInfo.time}</span>
+                  <span>👥 {filteredRegistrations.length} registered</span>
+                  <span className={`font-semibold ${selectedWebinarInfo.status === 'Completed' ? 'text-green-600' : 'text-blue-600'}`}>
+                    {selectedWebinarInfo.status}
+                  </span>
+                </div>
               </div>
-              <select
-  value={selectedWebinarForRegistrants || ''}
-  onChange={(e) => setSelectedWebinarForRegistrants(e.target.value || null)}
-  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
->
-  <option value="">All Webinars</option>
-  <optgroup label="Upcoming">
-    {upcomingWebinars.map(w => (
-      <option key={w.id} value={w.id}>
-        {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-      </option>
-    ))}
-  </optgroup>
-  <optgroup label="Past">
-    {completedWebinars.slice(0, 20).map(w => (
-      <option key={w.id} value={w.id}>
-        {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-      </option>
-    ))}
-  </optgroup>
-</select>
-            </div>
+            )}
 
-            {(() => {
-              const filteredRegistrations = selectedWebinarForRegistrants
-                ? allRegistrations.filter(r => r.webinarId === selectedWebinarForRegistrants)
-                : allRegistrations;
-
-              const selectedWebinarInfo = selectedWebinarForRegistrants
-                ? filteredWebinars.find(w => w.id === selectedWebinarForRegistrants)
-                : null;
-
-              return (
-                <>
-                  {selectedWebinarInfo && (
-                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <h3 className="font-semibold text-gray-900">{selectedWebinarInfo.title}</h3>
-                      <div className="flex gap-4 mt-2 text-sm text-gray-600">
-                        <span>📅 {new Date(selectedWebinarInfo.date).toLocaleDateString()}</span>
-                        <span>🕐 {selectedWebinarInfo.time}</span>
-                        <span>👥 {filteredRegistrations.length} registered</span>
-                        <span className={`font-semibold ${selectedWebinarInfo.status === 'Completed' ? 'text-green-600' : 'text-blue-600'}`}>
-                          {selectedWebinarInfo.status}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {filteredRegistrations.length === 0 ? (
-                    <p className="text-gray-500 text-center py-8">
-                      No registrations found{selectedWebinarForRegistrants ? ' for this webinar' : ''}
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Registration Date
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Name
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Email
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Organization
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Phone
-                            </th>
+            {filteredRegistrations.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                No registrations found{selectedWebinarForRegistrants ? ' for this webinar' : ''}
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Registration Date
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Organization
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Phone
+                      </th>
+                      {!selectedWebinarForRegistrants && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Webinar
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredRegistrations
+                      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                      .map((reg, index) => {
+                        const webinar = filteredWebinars.find(w => w.id === reg.webinarId);
+                        return (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                              {new Date(reg.timestamp).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {reg.name || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {reg.email || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {reg.organization || '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {reg.phone || '-'}
+                            </td>
                             {!selectedWebinarForRegistrants && (
-                              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                Webinar
-                              </th>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                <div className="max-w-xs truncate">
+                                  {webinar ? (
+                                    <>
+                                      <div className="font-medium text-gray-900">{webinar.title}</div>
+                                      <div className="text-xs text-gray-500">
+                                        {new Date(webinar.date).toLocaleDateString()}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-400">Unknown</span>
+                                  )}
+                                </div>
+                              </td>
                             )}
                           </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {filteredRegistrations
-                            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-                            .map((reg, index) => {
-                              const webinar = filteredWebinars.find(w => w.id === reg.webinarId);
-                              return (
-                                <tr key={index} className="hover:bg-gray-50">
-                                  <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                                    {new Date(reg.timestamp).toLocaleDateString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric'
-                                    })}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-900">
-                                    {reg.name || '-'}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-600">
-                                    {reg.email || '-'}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-600">
-                                    {reg.organization || '-'}
-                                  </td>
-                                  <td className="px-4 py-3 text-sm text-gray-600">
-                                    {reg.phone || '-'}
-                                  </td>
-                                  {!selectedWebinarForRegistrants && (
-                                    <td className="px-4 py-3 text-sm text-gray-600">
-                                      <div className="max-w-xs truncate">
-                                        {webinar ? (
-                                          <>
-                                            <div className="font-medium text-gray-900">{webinar.title}</div>
-                                            <div className="text-xs text-gray-500">
-                                              {new Date(webinar.date).toLocaleDateString()}
-                                            </div>
-                                          </>
-                                        ) : (
-                                          <span className="text-gray-400">Unknown</span>
-                                        )}
-                                      </div>
-                                    </td>
-                                  )}
-                                </tr>
-                              );
-                            })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-                  <div className="mt-4 text-sm text-gray-600">
-                    Showing {filteredRegistrations.length} registration{filteredRegistrations.length !== 1 ? 's' : ''}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      )}
+            <div className="mt-4 text-sm text-gray-600">
+              Showing {filteredRegistrations.length} registration{filteredRegistrations.length !== 1 ? 's' : ''}
+            </div>
+          </>
+        );
+      })()}
+    </div>
+  </div>
+)}
 
       {view === 'surveys' && (
         surveys.length === 0 ? (
