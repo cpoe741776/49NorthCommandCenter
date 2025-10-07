@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target } from 'lucide-react';
+import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
 
 const Dashboard = ({ summary, loading, onNavigate }) => {
@@ -57,14 +57,7 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
     }
   };
 
-  const getPotentialColor = (potential) => {
-    switch (potential) {
-      case 'high': return 'text-green-600';
-      case 'medium': return 'text-yellow-600';
-      case 'low': return 'text-gray-600';
-      default: return 'text-gray-600';
-    }
-  };
+  
 
   return (
     <div className="space-y-6">
@@ -112,7 +105,7 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
         </div>
       </div>
 
-       {/* AI Strategic Insights Section */}
+      {/* AI Strategic Insights Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -129,7 +122,6 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
           </button>
         </div>
 
-        {/* Show "Click Refresh" message if no cached data */}
         {!aiLoading && !aiError && !aiInsights && (
           <div className="text-center py-12">
             <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
@@ -200,54 +192,99 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
               </div>
             )}
 
-           {/* Contact Leads */}
-{aiInsights?.contactLeads && aiInsights.contactLeads.length > 0 && (
-  <div className="bg-white rounded-lg p-4 border border-blue-200">
-    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-      <Mail size={18} className="text-blue-600" />
-      Hot Contact Leads ({aiInsights.contactLeads.length})
-    </h3>
-    <div className="space-y-2">
-      {aiInsights.contactLeads.slice(0, 8).map((lead, idx) => (
-        <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h4 className="font-semibold text-gray-900">{lead.name}</h4>
-                {lead.contactRequest && (
-                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-semibold">
-                    Requested Contact
-                  </span>
+            {/* Priority Bids - NEW */}
+            {aiInsights.priorityBids && aiInsights.priorityBids.length > 0 && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <FileText size={18} className="text-blue-600" />
+                  Priority Bids ({aiInsights.priorityBids.length} with "Respond" Status)
+                </h3>
+                <div className="space-y-2">
+                  {aiInsights.priorityBids.slice(0, 5).map((bid, idx) => (
+                    <div 
+                      key={idx} 
+                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
+                      onClick={() => onNavigate('bids')}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">{bid.agency}</h4>
+                          <p className="text-xs text-gray-500">{bid.solicitation}</p>
+                          <p className="text-sm text-gray-600 mt-1">{bid.title}</p>
+                          <div className="flex gap-3 mt-2 text-xs text-gray-600">
+                            <span>Due: {bid.dueDate}</span>
+                            {bid.setAside && <span>Set-Aside: {bid.setAside}</span>}
+                            {bid.naics && <span>NAICS: {bid.naics}</span>}
+                          </div>
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {aiInsights.insights.bidRecommendations && aiInsights.insights.bidRecommendations.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Recommendations:</h4>
+                    <div className="space-y-2">
+                      {aiInsights.insights.bidRecommendations.slice(0, 3).map((rec, idx) => (
+                        <div key={idx} className="text-sm bg-blue-50 p-2 rounded">
+                          <p className="font-medium text-gray-900">{rec.agency} - {rec.solicitation}</p>
+                          <p className="text-gray-600 text-xs mt-1">{rec.reason}</p>
+                          <p className="text-blue-600 text-xs mt-1">→ {rec.action}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
-              <p className="text-sm text-gray-600">{lead.organization}</p>
-              <p className="text-sm text-gray-600">{lead.email}</p>
-              {lead.phone && <p className="text-sm text-gray-600">📞 {lead.phone}</p>}
-              
-              {lead.comments && (
-                <p className="text-sm text-gray-700 italic mt-2 border-l-2 border-blue-200 pl-2">
-                  "{lead.comments.substring(0, 150)}{lead.comments.length > 150 ? '...' : ''}"
-                </p>
-              )}
-              
-              <div className="flex flex-wrap gap-1 mt-2">
-                {lead.factors.map((factor, i) => (
-                  <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">
-                    {factor}
-                  </span>
-                ))}
+            )}
+
+            {/* Hot Contact Leads - NEW */}
+            {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Mail size={18} className="text-blue-600" />
+                  Hot Contact Leads ({aiInsights.contactLeads.length})
+                </h3>
+                <div className="space-y-2">
+                  {aiInsights.contactLeads.slice(0, 8).map((lead, idx) => (
+                    <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-semibold text-gray-900">{lead.name}</h4>
+                            <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-semibold">
+                              Requested Contact
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">{lead.organization}</p>
+                          <p className="text-sm text-gray-600">{lead.email}</p>
+                          {lead.phone && <p className="text-sm text-gray-600">📞 {lead.phone}</p>}
+                          
+                          {lead.comments && (
+                            <p className="text-sm text-gray-700 italic mt-2 border-l-2 border-blue-200 pl-2">
+                              "{lead.comments.substring(0, 150)}{lead.comments.length > 150 ? '...' : ''}"
+                            </p>
+                          )}
+                          
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {lead.factors.map((factor, i) => (
+                              <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs">
+                                {factor}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="ml-3 text-center">
+                          <span className="text-2xl font-bold text-blue-600">{lead.score}</span>
+                          <p className="text-xs text-gray-500">priority</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="ml-3 text-center">
-              <span className="text-2xl font-bold text-blue-600">{lead.score}</span>
-              <p className="text-xs text-gray-500">priority</p>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Content Insights */}
@@ -287,55 +324,46 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
               )}
             </div>
 
-            {/* Opportunity Mapping */}
-            {aiInsights.insights.opportunityMapping && aiInsights.insights.opportunityMapping.length > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h3 className="font-semibold text-gray-900 mb-3">Opportunities</h3>
-                <div className="space-y-2">
-                  {aiInsights.insights.opportunityMapping.slice(0, 4).map((opp, idx) => (
-                    <div key={idx} className="flex items-start justify-between border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
-                      <div className="flex-1">
-                        <span className="text-xs uppercase font-semibold text-gray-500">{opp.type}</span>
-                        <p className="text-sm text-gray-700 mt-1">{opp.description}</p>
-                        {opp.nextStep && (
-                          <p className="text-sm text-blue-600 mt-1 font-medium">→ {opp.nextStep}</p>
-                        )}
-                      </div>
-                      <span className={`text-xs uppercase font-bold ml-3 ${getPotentialColor(opp.potential)}`}>
-                        {opp.potential}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Bid Recommendations */}
-            {aiInsights.insights.bidRecommendations && aiInsights.insights.bidRecommendations.length > 0 && (
+            {/* News Opportunities - NEW */}
+            {aiInsights.newsArticles && aiInsights.newsArticles.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <FileText size={18} className="text-blue-600" />
-                  Priority Bids
+                  <Newspaper size={18} className="text-blue-600" />
+                  Market Opportunities from News
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.insights.bidRecommendations.slice(0, 3).map((bid, idx) => (
-                    <div 
-                      key={idx} 
-                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-                      onClick={() => onNavigate('bids')}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">{bid.agency}</h4>
-                          <p className="text-xs text-gray-500">{bid.solicitation}</p>
-                          <p className="text-sm text-gray-600 mt-1">{bid.reason}</p>
-                          <p className="text-sm text-blue-600 mt-2 font-medium">→ {bid.action}</p>
-                        </div>
-                        <ChevronRight size={20} className="text-gray-400" />
-                      </div>
+                  {aiInsights.newsArticles.map((article, idx) => (
+                    <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
+                      <a 
+                        href={article.link} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        <h4 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                          {article.title}
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {article.source} • {new Date(article.pubDate).toLocaleDateString()}
+                        </p>
+                      </a>
                     </div>
                   ))}
                 </div>
+                {aiInsights.insights.newsOpportunities && aiInsights.insights.newsOpportunities.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Analysis:</h4>
+                    <div className="space-y-2">
+                      {aiInsights.insights.newsOpportunities.map((opp, idx) => (
+                        <div key={idx} className="text-sm bg-green-50 p-2 rounded">
+                          <p className="font-medium text-gray-900">{opp.headline}</p>
+                          <p className="text-gray-600 text-xs mt-1">{opp.relevance}</p>
+                          <p className="text-green-600 text-xs mt-1">→ {opp.action}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
