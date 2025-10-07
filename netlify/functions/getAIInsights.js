@@ -23,7 +23,7 @@ exports.handler = async (event, context) => {
     const [bidsData, webinarData] = await Promise.all([
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        ranges: ['Active_Bids!A2:Z', 'Submitted_Bids!A2:Z', 'Disregarded_Bids!A2:Z']
+        ranges: ['Active_Bids!A2:Z', 'Submitted!A2:Z', 'Disregarded!A2:Z']
       }),
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: process.env.WEBINAR_SHEET_ID,
