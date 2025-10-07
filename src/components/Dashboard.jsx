@@ -1,11 +1,25 @@
-import React, { useState, } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
 
 const Dashboard = ({ summary, loading, onNavigate }) => {
   const [aiInsights, setAiInsights] = useState(null);
-  const [aiLoading, setAiLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
+
+  // Load cached insights on mount
+  useEffect(() => {
+    const cachedInsights = localStorage.getItem('aiInsights');
+    if (cachedInsights) {
+      try {
+        const parsed = JSON.parse(cachedInsights);
+        setAiInsights(parsed);
+      } catch (err) {
+        console.error('Error parsing cached insights:', err);
+        localStorage.removeItem('aiInsights');
+      }
+    }
+  }, []);
 
   const loadAIInsights = async () => {
     try {
@@ -13,6 +27,8 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
       setAiError(null);
       const data = await fetchAIInsights();
       setAiInsights(data);
+      // Cache the insights
+      localStorage.setItem('aiInsights', JSON.stringify(data));
     } catch (err) {
       setAiError(err.message);
     } finally {
@@ -96,7 +112,7 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
         </div>
       </div>
 
-      {/* AI Strategic Insights Section */}
+       {/* AI Strategic Insights Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -109,15 +125,25 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
           >
             <RefreshCw size={16} className={aiLoading ? 'animate-spin' : ''} />
-            Refresh
+            {aiLoading ? 'Analyzing...' : 'Refresh Analysis'}
           </button>
         </div>
+
+        {/* Show "Click Refresh" message if no cached data */}
+        {!aiLoading && !aiError && !aiInsights && (
+          <div className="text-center py-12">
+            <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
+            <p className="text-gray-600 mb-2">No analysis loaded</p>
+            <p className="text-sm text-gray-500">Click "Refresh Analysis" to generate strategic insights</p>
+          </div>
+        )}
 
         {aiLoading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
               <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
               <p className="text-gray-600">Analyzing operational data...</p>
+              <p className="text-sm text-gray-500 mt-1">This may take 10-20 seconds</p>
             </div>
           </div>
         )}
