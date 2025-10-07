@@ -406,27 +406,30 @@ function parseRegistrations(rows) {
   }));
 }
 
-// Extract contact leads - ONLY those who requested contact
+// Extract contact leads - ONLY those who requested contact OR want a reminder
 function extractContactLeads(surveys, registrations) {
   const leads = new Map();
   
   console.log(`Processing ${surveys.length} surveys for contact requests`);
   
-  // ONLY surveys with explicit contact requests
+  // Surveys with contact requests OR reminder requests
   surveys.forEach((survey, idx) => {
     const email = survey.email?.toLowerCase().trim();
     if (!email) return;
     
     const contactRequestValue = survey.contactRequest;
+    const attendingValue = survey.attending;
+    
     const wantsContact = contactRequestValue && String(contactRequestValue).toLowerCase().includes('yes');
+    const wantsReminder = attendingValue && String(attendingValue).includes('🟢 Drop me a reminder in 3 months or so');
     
     // Debug first few surveys
     if (idx < 3) {
-      console.log(`Survey ${idx}: email=${survey.email}, contactRequest="${contactRequestValue}", wantsContact=${wantsContact}`);
+      console.log(`Survey ${idx}: email=${survey.email}, contactRequest="${contactRequestValue}", attending="${attendingValue}", wantsContact=${wantsContact}, wantsReminder=${wantsReminder}`);
     }
     
-    // ONLY include if they requested contact
-    if (wantsContact) {
+    // Include if they requested contact OR want a reminder
+    if (wantsContact || wantsReminder) {
       if (!leads.has(email)) {
         // Find registration info for this email
         const reg = registrations.find(r => r.email?.toLowerCase().trim() === email);
@@ -436,16 +439,28 @@ function extractContactLeads(surveys, registrations) {
           name: reg?.name || 'Unknown',
           organization: reg?.organization || 'Unknown',
           phone: reg?.phone || '',
-          score: 50,
-          factors: ['Requested Contact'],
+          score: 0,
+          factors: [],
           comments: survey.comments || '',
           lastActivity: survey.timestamp
         });
       }
+      
+      const lead = leads.get(email);
+      
+      if (wantsContact) {
+        lead.score += 50;
+        lead.factors.push('Requested Contact');
+      }
+      
+      if (wantsReminder) {
+        lead.score += 30;
+        lead.factors.push('Wants 3-Month Reminder');
+      }
     }
   });
   
-  console.log(`After contact request filter: ${leads.size} leads`);
+  console.log(`After contact/reminder filter: ${leads.size} leads`);
   
   // Count multiple webinar attendance to boost score
   const attendanceCounts = new Map();
