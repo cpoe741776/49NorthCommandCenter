@@ -39,6 +39,9 @@ exports.handler = async (event, context) => {
     const surveys = parseSurveys(webinarData.data.valueRanges[1].values || []);
     const registrations = parseRegistrations(webinarData.data.valueRanges[2].values || []);
 
+    // Extract contact leads from surveys
+    const contactLeads = extractContactLeads(surveys, registrations, activeBids);
+
     // Aggregate and analyze
     const aggregatedData = {
       timestamp: new Date().toISOString(),
@@ -53,11 +56,11 @@ exports.handler = async (event, context) => {
         totalRegistrations: registrations.length
       },
       
+      // Contact leads with priority scoring
+      contactLeads: contactLeads,
+      
       // Cross-operation insights
       organizations: identifyOrganizations(activeBids, registrations, surveys),
-      
-      // Lead scoring
-      leads: scoreLeads(registrations, surveys, activeBids),
       
       // Engagement patterns
       engagement: {
@@ -71,8 +74,13 @@ exports.handler = async (event, context) => {
         urgentBids: activeBids.filter(b => {
           const daysUntilDue = Math.ceil((new Date(b.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
           return daysUntilDue <= 7 && daysUntilDue > 0;
-        }),
-        highEngagementNoContact: findHighEngagementLeads(surveys, registrations),
+        }).map(b => ({
+          solicitation: b.solicitation,
+          agency: b.agency,
+          title: b.title,
+          dueDate: b.dueDate,
+          daysRemaining: Math.ceil((new Date(b.dueDate) - new Date()) / (1000 * 60 * 60 * 24))
+        })),
         crossOverOpportunities: findCrossOvers(activeBids, registrations)
       },
       
@@ -84,7 +92,7 @@ exports.handler = async (event, context) => {
           const addedDate = new Date(b.dateAdded || b.discovered);
           const daysSinceAdded = (new Date() - addedDate) / (1000 * 60 * 60 * 24);
           return daysSinceAdded <= 7;
-        })
+        }).length
       }
     };
 
@@ -96,39 +104,56 @@ exports.handler = async (event, context) => {
           role: "system",
           content: `You are a strategic business analyst for 49 North, a mental health training company specializing in Mental Armor™ programs for government agencies and organizations.
 
-Your role is to analyze operational data across bids, webinars, and marketing activities to provide actionable insights for sales and marketing.
+CRITICAL: Understand the business model correctly:
+
+**BIDS PROCESS:**
+- Bids are INCOMING opportunities from automated systems (SAM.gov) - NOT something 49 North creates
+- Active_Bids = opportunities they are considering responding to
+- Submitted = bids they have already responded to
+- Disregarded = opportunities they decided not to pursue
+- Your role: Help prioritize WHICH incoming bids to respond to based on engagement data
+- DO NOT suggest "creating bids" or "developing bid proposals" - they respond to existing opportunities
+
+**WEBINARS:**
+- 49 North runs training webinars to engage potential clients
+- Survey data shows engagement levels and contact requests
+- High engagement = warmer leads for sales follow-up
+
+**WHAT 49 NORTH CAN DO:**
+1. Prioritize which incoming bids to respond to
+2. Follow up with webinar attendees who requested contact
+3. Reach out to engaged organizations proactively
+4. Create webinar content that resonates with target audiences
 
 Focus on:
-1. Lead prioritization (hot leads = webinar engagement + contact request + active bid with that organization)
-2. Cross-selling opportunities (organizations engaging in one area but not others)
-3. Content strategy (which webinar topics drive highest engagement and conversions)
-4. Timing optimization (when to follow up, best times for outreach)
-5. Risk identification (declining engagement, missed opportunities)
-6. Bid strategy (which opportunities to prioritize based on engagement data)
+1. Bid prioritization - which INCOMING bids should they respond to, based on engagement
+2. Sales lead prioritization - who from webinars should they contact (already handled in contactLeads)
+3. Content strategy - what webinar topics drive engagement
+4. Risk identification - declining engagement, missed follow-ups
+5. Cross-operation connections - organizations in both bids AND webinars
 
 Provide insights in this JSON structure:
 {
-  "executiveSummary": "2-3 sentence overview of current state and key opportunities",
+  "executiveSummary": "2-3 sentence overview focusing on incoming bid opportunities and sales leads",
   "topPriorities": [
     {"title": "Priority name", "description": "Why this matters", "action": "Specific next step", "urgency": "high/medium/low"}
   ],
-  "hotLeads": [
-    {"organization": "Name", "reason": "Why they're hot (be specific)", "suggestedAction": "Concrete next step", "score": "numerical score"}
+  "bidRecommendations": [
+    {"solicitation": "Bid number", "agency": "Agency name", "reason": "Why prioritize responding to this INCOMING bid", "action": "Next step to respond", "dueDate": "date"}
   ],
   "contentInsights": {
-    "topPerforming": "What's working in webinar content",
-    "suggestions": "Specific topics to try next based on survey feedback"
+    "topPerforming": "What webinar content drives engagement",
+    "suggestions": "Topics to try based on survey feedback and bid patterns"
   },
   "riskAlerts": [
-    {"issue": "What's concerning", "impact": "Potential business impact", "mitigation": "How to address"}
+    {"issue": "What's concerning", "impact": "Business impact", "mitigation": "How to address"}
   ],
   "opportunityMapping": [
-    {"type": "cross-sell/upsell/follow-up", "description": "The opportunity with specifics", "potential": "high/medium/low", "nextStep": "What to do"}
-  ],
-  "bidRecommendations": [
-    {"solicitation": "Bid number", "agency": "Agency name", "reason": "Why prioritize this", "action": "Next step"}
+    {"type": "bid-response/content/partnership", "description": "The opportunity", "potential": "high/medium/low", "nextStep": "What to do"}
   ]
-}`
+}
+
+DO NOT include contact leads in your response - they are handled separately.`
         },
         {
           role: "user",
@@ -138,12 +163,18 @@ ${JSON.stringify(aggregatedData, null, 2)}
 
 Current date: ${new Date().toISOString().split('T')[0]}
 
-Provide actionable insights for the next 1-2 weeks focusing on highest-value opportunities. Be specific with organization names, bid numbers, and concrete actions.`
+Focus on:
+1. Which INCOMING bids (from Active_Bids) should be prioritized for response
+2. Content strategy for webinars
+3. Operational risks
+4. Cross-operation patterns (organizations appearing in both bids and webinars)
+
+DO NOT suggest actions about contacting individuals - that's handled in the separate Contact Leads section.`
         }
       ],
       response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 2500
+      max_tokens: 2000
     });
 
     const insights = JSON.parse(completion.choices[0].message.content);
@@ -154,9 +185,9 @@ Provide actionable insights for the next 1-2 weeks focusing on highest-value opp
       body: JSON.stringify({
         success: true,
         insights,
+        contactLeads: contactLeads.slice(0, 15), // Top 15 contact leads
         aggregatedData: {
           summary: aggregatedData.summary,
-          leads: aggregatedData.leads.slice(0, 10),
           opportunities: aggregatedData.opportunities,
           organizations: aggregatedData.organizations.slice(0, 10)
         },
@@ -213,6 +244,11 @@ function parseSurveys(rows) {
     email: row[1],
     webinarId: row[2],
     relevance: row[3],
+    rhonda: row[4],
+    chris: row[5],
+    guest: row[6],
+    sharing: row[7],
+    attending: row[8],
     contactRequest: row[9],
     comments: row[10]
   }));
@@ -228,6 +264,88 @@ function parseRegistrations(rows) {
     organization: row[4],
     phone: row[5]
   }));
+}
+
+// NEW: Extract contact leads with priority scoring
+function extractContactLeads(surveys, registrations, bids) {
+  const leads = new Map();
+  
+  // Surveys with contact requests or meaningful comments
+  surveys.forEach(survey => {
+    const email = survey.email?.toLowerCase().trim();
+    if (!email) return;
+    
+    const wantsContact = survey.contactRequest?.toLowerCase().includes('yes');
+    const hasComments = survey.comments && survey.comments.trim().length > 10;
+    
+    if (wantsContact || hasComments) {
+      if (!leads.has(email)) {
+        // Find registration info for this email
+        const reg = registrations.find(r => r.email?.toLowerCase().trim() === email);
+        
+        leads.set(email, {
+          email: survey.email,
+          name: reg?.name || 'Unknown',
+          organization: reg?.organization || 'Unknown',
+          phone: reg?.phone || '',
+          score: 0,
+          factors: [],
+          contactRequest: wantsContact,
+          comments: survey.comments || '',
+          lastActivity: survey.timestamp
+        });
+      }
+      
+      const lead = leads.get(email);
+      
+      if (wantsContact) {
+        lead.score += 50;
+        lead.factors.push('Requested Contact');
+      }
+      
+      if (hasComments) {
+        lead.score += 20;
+        lead.factors.push('Left Comments');
+      }
+    }
+  });
+  
+  // Boost score if their organization has active bids
+  bids.forEach(bid => {
+    leads.forEach(lead => {
+      const org = lead.organization.toLowerCase();
+      const agency = bid.agency?.toLowerCase();
+      if (org.length > 3 && agency && (agency.includes(org) || org.includes(agency))) {
+        lead.score += 100;
+        lead.factors.push('Active Bid Match');
+        lead.matchingBid = {
+          solicitation: bid.solicitation,
+          agency: bid.agency,
+          dueDate: bid.dueDate
+        };
+      }
+    });
+  });
+  
+  // Count multiple webinar attendance
+  const attendanceCounts = new Map();
+  registrations.forEach(reg => {
+    const email = reg.email?.toLowerCase().trim();
+    if (email) {
+      attendanceCounts.set(email, (attendanceCounts.get(email) || 0) + 1);
+    }
+  });
+  
+  leads.forEach((lead, email) => {
+    const count = attendanceCounts.get(email) || 0;
+    if (count >= 2) {
+      lead.score += 30 * (count - 1);
+      lead.factors.push(`${count} Webinars Attended`);
+    }
+  });
+  
+  return Array.from(leads.values())
+    .sort((a, b) => b.score - a.score);
 }
 
 function identifyOrganizations(bids, registrations, surveys) {
@@ -257,62 +375,6 @@ function identifyOrganizations(bids, registrations, surveys) {
     .filter(org => org.sources.size > 1)
     .map(org => ({ ...org, sources: Array.from(org.sources) }))
     .sort((a, b) => b.count - a.count);
-}
-
-function scoreLeads(registrations, surveys, bids) {
-  const leadScores = new Map();
-  
-  // Score based on webinar attendance
-  registrations.forEach(reg => {
-    const key = reg.email?.toLowerCase().trim();
-    if (!key) return;
-    
-    if (!leadScores.has(key)) {
-      leadScores.set(key, {
-        email: reg.email,
-        name: reg.name,
-        organization: reg.organization,
-        score: 0,
-        factors: []
-      });
-    }
-    
-    const lead = leadScores.get(key);
-    lead.score += 10;
-    lead.factors.push('webinar_registration');
-  });
-  
-  // Boost for survey completion
-  surveys.forEach(survey => {
-    const key = survey.email?.toLowerCase().trim();
-    if (!key) return;
-    
-    if (leadScores.has(key)) {
-      const lead = leadScores.get(key);
-      lead.score += 20;
-      lead.factors.push('survey_response');
-      
-      // Extra boost for contact request
-      if (survey.contactRequest?.toLowerCase().includes('yes')) {
-        lead.score += 30;
-        lead.factors.push('contact_request');
-      }
-    }
-  });
-  
-  // Major boost if their organization has active bids
-  bids.forEach(bid => {
-    leadScores.forEach(lead => {
-      if (lead.organization && bid.agency?.toLowerCase().includes(lead.organization.toLowerCase())) {
-        lead.score += 50;
-        lead.factors.push('active_bid_match');
-      }
-    });
-  });
-  
-  return Array.from(leadScores.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 25);
 }
 
 function getTopDomains(surveys) {
@@ -351,41 +413,6 @@ function getBidPatterns(activeBids, submittedBids) {
     submitted: submittedBids.length,
     conversionRate: total > 0 ? Math.round((submittedBids.length / total) * 100) : 0
   };
-}
-
-function findHighEngagementLeads(surveys, registrations) {
-  const engagement = new Map();
-  
-  registrations.forEach(reg => {
-    const key = reg.email?.toLowerCase().trim();
-    if (!key) return;
-    if (!engagement.has(key)) {
-      engagement.set(key, { 
-        email: reg.email, 
-        name: reg.name, 
-        organization: reg.organization, 
-        webinarCount: 0, 
-        surveyCount: 0,
-        contactRequest: false
-      });
-    }
-    engagement.get(key).webinarCount++;
-  });
-  
-  surveys.forEach(survey => {
-    const key = survey.email?.toLowerCase().trim();
-    if (key && engagement.has(key)) {
-      engagement.get(key).surveyCount++;
-      if (survey.contactRequest?.toLowerCase().includes('yes')) {
-        engagement.get(key).contactRequest = true;
-      }
-    }
-  });
-  
-  return Array.from(engagement.values())
-    .filter(lead => lead.webinarCount >= 2 || lead.surveyCount >= 1 || lead.contactRequest)
-    .sort((a, b) => (b.webinarCount + b.surveyCount * 2) - (a.webinarCount + a.surveyCount * 2))
-    .slice(0, 20);
 }
 
 function findCrossOvers(activeBids, registrations) {
