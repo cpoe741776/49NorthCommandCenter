@@ -455,24 +455,24 @@ const WebinarOperations = () => {
               <select
   value={selectedWebinarForRegistrants || ''}
   onChange={(e) => setSelectedWebinarForRegistrants(e.target.value || null)}
-  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 max-w-md"
+  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
 >
-                <option value="">All Webinars</option>
-                <optgroup label="Upcoming">
-                  {upcomingWebinars.map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.title} - {new Date(w.date).toLocaleDateString()}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="Past">
-                  {completedWebinars.slice(0, 20).map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.title} - {new Date(w.date).toLocaleDateString()}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
+  <option value="">All Webinars</option>
+  <optgroup label="Upcoming">
+    {upcomingWebinars.map(w => (
+      <option key={w.id} value={w.id}>
+        {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      </option>
+    ))}
+  </optgroup>
+  <optgroup label="Past">
+    {completedWebinars.slice(0, 20).map(w => (
+      <option key={w.id} value={w.id}>
+        {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+      </option>
+    ))}
+  </optgroup>
+</select>
             </div>
 
             {(() => {
