@@ -487,7 +487,7 @@ const WebinarOperations = () => {
           {upcomingWebinars.length > 0 && (
             <optgroup label="Upcoming">
               {upcomingWebinars.map(w => (
-                <option key={w.id} value={w.id}>
+                <option key={`${w.id}|${w.date}`} value={`${w.id}|${w.date}`}>
                   {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </option>
               ))}
@@ -496,7 +496,7 @@ const WebinarOperations = () => {
           {completedWebinars.length > 0 && (
             <optgroup label="Past">
               {completedWebinars.map(w => (
-                <option key={w.id} value={w.id}>
+                <option key={`${w.id}|${w.date}`} value={`${w.id}|${w.date}`}>
                   {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </option>
               ))}
@@ -506,14 +506,24 @@ const WebinarOperations = () => {
       </div>
 
       {(() => {
-        // Filter registrations based on selected webinar
+        // Parse the composite key to get webinarId and date
+        let selectedWebinarId = null;
+        let selectedWebinarDate = null;
+        
+        if (selectedWebinarForRegistrants) {
+          const parts = selectedWebinarForRegistrants.split('|');
+          selectedWebinarId = parts[0];
+          selectedWebinarDate = parts[1];
+        }
+
+        // Filter registrations based on selected webinar ID and date
         const filteredRegistrations = selectedWebinarForRegistrants
-          ? allRegistrations.filter(r => r.webinarId === selectedWebinarForRegistrants)
+          ? allRegistrations.filter(r => r.webinarId === selectedWebinarId)
           : allRegistrations;
 
-        // Get the selected webinar info from filteredWebinars (which respects the toggle)
+        // Get the selected webinar info using both ID and date
         const selectedWebinarInfo = selectedWebinarForRegistrants
-          ? filteredWebinars.find(w => w.id === selectedWebinarForRegistrants)
+          ? filteredWebinars.find(w => w.id === selectedWebinarId && w.date === selectedWebinarDate)
           : null;
 
         return (
