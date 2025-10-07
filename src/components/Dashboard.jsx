@@ -22,19 +22,25 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
   }, []);
 
   const loadAIInsights = async () => {
-    try {
-      setAiLoading(true);
-      setAiError(null);
-      const data = await fetchAIInsights();
-      setAiInsights(data);
-      // Cache the insights
-      localStorage.setItem('aiInsights', JSON.stringify(data));
-    } catch (err) {
-      setAiError(err.message);
-    } finally {
-      setAiLoading(false);
-    }
-  };
+  try {
+    setAiLoading(true);
+    setAiError(null);
+    const data = await fetchAIInsights();
+    
+    // DEBUG: Log what we received
+    console.log('AI Insights Response:', data);
+    console.log('Priority Bids:', data.priorityBids);
+    console.log('Contact Leads:', data.contactLeads);
+    console.log('News Articles:', data.newsArticles);
+    
+    setAiInsights(data);
+    localStorage.setItem('aiInsights', JSON.stringify(data));
+  } catch (err) {
+    setAiError(err.message);
+  } finally {
+    setAiLoading(false);
+  }
+};
 
   if (loading) {
     return (

@@ -326,16 +326,16 @@ async function fetchRelevantNews() {
 function parseBids(rows) {
   if (!rows) return [];
   return rows.map(row => ({
-    solicitation: row[0],
-    agency: row[1],
-    title: row[2],
-    dueDate: row[3],
-    discovered: row[4],
-    dateAdded: row[5],
-    setAside: row[6],
-    naics: row[7],
-    placeOfPerformance: row[8],
-    status: row[9] || '',
+    status: row[0] || '', // Column A - Recommendation/Status
+    solicitation: row[1],
+    agency: row[2],
+    title: row[3],
+    dueDate: row[4],
+    discovered: row[5],
+    dateAdded: row[6],
+    setAside: row[7],
+    naics: row[8],
+    placeOfPerformance: row[9],
     link: row[10] || ''
   }));
 }
