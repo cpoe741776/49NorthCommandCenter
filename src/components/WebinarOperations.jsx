@@ -309,24 +309,14 @@ const WebinarOperations = () => {
               <div className="space-y-3">
                 {upcomingWebinars.map(webinar => (
                   <div key={`${webinar.id}-${webinar.date}`} className="border border-gray-200 rounded-lg p-4 hover:border-blue-600 transition-colors">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{webinar.title}</h3>
-                        <div className="flex gap-4 mt-2 text-sm text-gray-600">
-                          <span>📅 {new Date(webinar.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                          <span>🕐 {webinar.time}</span>
-                          <span>👥 {webinar.registrationCount} registered</span>
-                        </div>
-                      </div>
-                      
-                      <a href={webinar.platformLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors"
-                      >
-                        Join
-                      </a>
-                    </div>
+                   <div className="flex-1">
+  <h3 className="font-semibold text-gray-900">{webinar.title}</h3>
+  <div className="flex gap-4 mt-2 text-sm text-gray-600">
+    <span>📅 {new Date(webinar.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+    <span>🕐 {webinar.time}</span>
+    <span>👥 {webinar.registrationCount} registered</span>
+  </div>
+</div>
                   </div>
                 ))}
               </div>
@@ -370,36 +360,20 @@ const WebinarOperations = () => {
               {upcomingWebinars.map(webinar => (
                 <div key={`${webinar.id}-${webinar.date}`} className="border border-gray-200 rounded-lg p-6">
                   <h3 className="font-semibold text-gray-900 mb-3">{webinar.title}</h3>
-                  <div className="space-y-2 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Calendar size={16} />
-                      <span>{new Date(webinar.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span>🕐</span>
-                      <span>{webinar.time}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Users size={16} />
-                      <span>{webinar.registrationCount} registered (capacity: {webinar.capacity})</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <a href={webinar.platformLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors text-center"
-                    >
-                      Join Webinar
-                    </a>
-                    <a href={webinar.registrationFormUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
-                    >
-                      Register
-                    </a>
-                  </div>
+                  <div className="space-y-2 text-sm text-gray-600">
+  <div className="flex items-center gap-2">
+    <Calendar size={16} />
+    <span>{new Date(webinar.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <span>🕐</span>
+    <span>{webinar.time}</span>
+  </div>
+  <div className="flex items-center gap-2">
+    <Users size={16} />
+    <span>{webinar.registrationCount} registered (capacity: {webinar.capacity})</span>
+  </div>
+</div>
                 </div>
               ))}
             </div>
