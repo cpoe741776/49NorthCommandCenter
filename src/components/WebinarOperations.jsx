@@ -688,18 +688,18 @@ const WebinarOperations = () => {
             <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
               <div className="flex items-center gap-4">
                 <Filter size={20} className="text-gray-600" />
-                <select
-                  value={surveyFilterWebinar || ''}
-                  onChange={(e) => setSurveyFilterWebinar(e.target.value || null)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">All Webinars</option>
-                  {completedWebinars.map(w => (
-                    <option key={w.id} value={w.id}>
-                      {w.title} - {new Date(w.date).toLocaleDateString()}
-                    </option>
-                  ))}
-                </select>
+               <select
+  value={surveyFilterWebinar || ''}
+  onChange={(e) => setSurveyFilterWebinar(e.target.value || null)}
+  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+>
+  <option value="">All Webinars</option>
+  {completedWebinars.map(w => (
+    <option key={w.id} value={w.id}>
+      {new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+    </option>
+  ))}
+</select>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
                     type="checkbox" 
