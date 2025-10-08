@@ -48,16 +48,20 @@ const App = () => {
   }, []);
 
   const loadTickerFeed = useCallback(async () => {
-    try {
-      const items = await fetchTickerItems();
-      setTickerItems(items);
-    } catch {
-      setTickerItems([
-        { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
-        { message: '📊 Loading latest updates...', priority: 'medium' }
-      ]);
-    }
-  }, []);
+  try {
+    console.log('🎯 Loading ticker feed...');
+    const items = await fetchTickerItems();
+    console.log('✅ Ticker items loaded:', items.length, 'items');
+    console.log('📋 Items:', items);
+    setTickerItems(items);
+  } catch (error) {
+    console.error('❌ Ticker feed error:', error);
+    setTickerItems([
+      { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
+      { message: '📊 Loading latest updates...', priority: 'medium' }
+    ]);
+  }
+}, []);
 
   const loadBids = useCallback(async () => {
     try {

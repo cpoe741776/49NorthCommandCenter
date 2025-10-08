@@ -213,11 +213,11 @@ This is a comprehensive daily review, so be thorough and specific.`
           ],
           response_format: { type: "json_object" },
           temperature: 0.7,
-          max_tokens: 3000
+          max_tokens: 2000
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)
-        )
+  setTimeout(() => reject(new Error('OpenAI API timeout after 20 seconds')), 20000)
+)
       ]);
 
       console.log('OpenAI API call completed successfully');
