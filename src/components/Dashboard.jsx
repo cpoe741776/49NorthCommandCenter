@@ -37,7 +37,8 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
         await fetch('/.netlify/functions/refreshAutoTickerItems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: aiTickerItems })
+          body: JSON.stringify({ items: aiTickerItems }),
+          source: 'auto-ai'
         });
         
         // RELOAD TICKER DISPLAY - ADD THIS

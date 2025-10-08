@@ -75,7 +75,9 @@ const App = () => {
         await fetch('/.netlify/functions/refreshAutoTickerItems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [...autoTickerItems, ...submittedTickerItems] })
+          body: JSON.stringify({ items: [...autoTickerItems, ...submittedTickerItems],
+          source: 'auto-bid'  // ADD THIS
+          })
         });
       } catch {
         // non-fatal
