@@ -177,22 +177,37 @@ const App = () => {
   if (!user) return <LoginPage onLogin={login} />;
 
   const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard': return <Dashboard summary={summary} loading={loading} onNavigate={setCurrentPage} />;
-      case 'bids': return (
-        <BidOperations
-          bids={bids}
-          disregardedBids={disregardedBids}
-          submittedBids={submittedBids}
-          loading={loading}
-          onRefresh={loadBids}
+  switch (currentPage) {
+    case 'dashboard': 
+      return (
+        <Dashboard 
+          summary={summary} 
+          loading={loading} 
+          onNavigate={setCurrentPage}
+          onTickerUpdate={loadTickerFeed}  // ADD THIS
         />
       );
-      case 'webinars': return <WebinarOperations />;
-      case 'social': return <SocialMediaOperations />;
-      default: return <Dashboard summary={summary} loading={loading} onNavigate={setCurrentPage} />;
-    }
-  };
+    case 'bids': return (
+      <BidOperations
+        bids={bids}
+        disregardedBids={disregardedBids}
+        submittedBids={submittedBids}
+        loading={loading}
+        onRefresh={loadBids}
+      />
+    );
+    case 'webinars': return <WebinarOperations />;
+    case 'social': return <SocialMediaOperations />;
+    default: return (
+      <Dashboard 
+        summary={summary} 
+        loading={loading} 
+        onNavigate={setCurrentPage}
+        onTickerUpdate={loadTickerFeed}  // ADD THIS
+      />
+    );
+  }
+};
 
   return (
     <div className="flex h-screen bg-gray-100">

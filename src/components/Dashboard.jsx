@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
 
-const Dashboard = ({ summary, loading, onNavigate }) => {
+const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // ADD onTickerUpdate
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -22,30 +22,35 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
   }, []);
 
   const loadAIInsights = async () => {
-  try {
-    setAiLoading(true);
-    setAiError(null);
-    const data = await fetchAIInsights();
-    setAiInsights(data);
-    localStorage.setItem('aiInsights', JSON.stringify(data));
-    
-    // Update ticker with AI insights
-    const { generateAIInsightsTickerItems } = await import('../services/tickerService');
-    const aiTickerItems = generateAIInsightsTickerItems(data);
-    
-    if (aiTickerItems.length > 0) {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: aiTickerItems })
-      });
+    try {
+      setAiLoading(true);
+      setAiError(null);
+      const data = await fetchAIInsights();
+      setAiInsights(data);
+      localStorage.setItem('aiInsights', JSON.stringify(data));
+      
+      // Update ticker with AI insights
+      const { generateAIInsightsTickerItems } = await import('../services/tickerService');
+      const aiTickerItems = generateAIInsightsTickerItems(data);
+      
+      if (aiTickerItems.length > 0) {
+        await fetch('/.netlify/functions/refreshAutoTickerItems', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: aiTickerItems })
+        });
+        
+        // RELOAD TICKER DISPLAY - ADD THIS
+        if (onTickerUpdate) {
+          await onTickerUpdate();
+        }
+      }
+    } catch (err) {
+      setAiError(err.message);
+    } finally {
+      setAiLoading(false);
     }
-  } catch (err) {
-    setAiError(err.message);
-  } finally {
-    setAiLoading(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -142,14 +147,15 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
         )}
 
         {aiLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
-              <p className="text-gray-600">Analyzing operational data...</p>
-              <p className="text-sm text-gray-500 mt-1">This may take 10-20 seconds</p>
-            </div>
-          </div>
-        )}
+  <div className="flex items-center justify-center py-12">
+    <div className="text-center">
+      <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
+      <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
+      <p className="text-sm text-gray-500 mt-1">This may take 30-45 seconds for detailed insights</p>
+      <p className="text-xs text-gray-400 mt-2">Analyzing bids, leads, webinars, and market opportunities</p>
+    </div>
+  </div>
+)}
 
         {aiError && (
           <div className="bg-red-50 border border-red-200 rounded p-4">

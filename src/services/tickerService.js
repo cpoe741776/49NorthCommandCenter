@@ -167,12 +167,14 @@ export function generateAIInsightsTickerItems(aiInsights) {
     });
   }
 
-  // News opportunities
+  // News articles - CREATE INDIVIDUAL ITEMS FOR EACH ARTICLE
   if (aiInsights.newsArticles && aiInsights.newsArticles.length > 0) {
-    items.push({
-      message: `📰 ${aiInsights.newsArticles.length} relevant market opportunities identified`,
-      priority: 'medium',
-      target: 'dashboard'
+    aiInsights.newsArticles.forEach(article => {
+      items.push({
+        message: `📰 Latest News: ${article.title}`,
+        priority: 'medium',
+        target: 'dashboard'
+      });
     });
   }
 
