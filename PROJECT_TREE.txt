@@ -1,0 +1,54 @@
+.
+├── .gitignore
+├── netlify
+│   └── functions
+│       ├── addTickerItem.js
+│       ├── archiveTickerItems.js
+│       ├── fetchWebinars.js
+│       ├── getAIInsights.js
+│       ├── getBids.js
+│       ├── getTickerFeed.js
+│       ├── refreshAutoTickerItems.js
+│       └── updateBidStatus.js
+├── netlify.toml
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── PROJECT_TREE.txt
+├── project-structure.txt
+├── public
+│   ├── favicon.ico
+│   ├── images
+│   │   └── 49NLogo.png
+│   ├── index.html
+│   ├── logo192.png
+│   ├── logo512.png
+│   ├── manifest.json
+│   └── robots.txt
+├── README.md
+├── src
+│   ├── App.css
+│   ├── App.js
+│   ├── App.test.js
+│   ├── components
+│   │   ├── Auth.js
+│   │   ├── BidCard.jsx
+│   │   ├── BidOperations.jsx
+│   │   ├── Dashboard.jsx
+│   │   ├── LoginPage.js
+│   │   ├── RadioPlayer.jsx
+│   │   ├── SocialMediaOperations.jsx
+│   │   └── WebinarOperations.jsx
+│   ├── index.css
+│   ├── index.js
+│   ├── logo.svg
+│   ├── reportWebVitals.js
+│   ├── services
+│   │   ├── aiInsightsService.js
+│   │   ├── bidService.js
+│   │   ├── tickerService.js
+│   │   └── webinarService.js
+│   └── setupTests.js
+└── tailwind.config.js
+
+8 directories, 44 files
