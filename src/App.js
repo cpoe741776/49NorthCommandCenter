@@ -197,95 +197,70 @@ const App = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <div className={`bg-brand-blue text-white transition-all duration-300 relative ${sidebarOpen ? 'w-64' : 'w-20'}`}>
-        <div className="p-4 flex items-center justify-between border-b border-blue-800">
-          {sidebarOpen ? (
-  <div className="flex-1 pr-2">
-    <img 
-      src="/images/49NLogo.png" 
-      alt="49 North Logo" 
-      className="w-full h-auto max-w-[240px]"
-    />
-  </div>
-) : (
-  <div className="flex items-center justify-center w-full">
-    <img 
-      src="/images/49NLogo.png" 
-      alt="49 North" 
-      className="w-8 h-8 object-contain"
-    />
-  </div>
-)}
-          <button
-            onClick={() => setSidebarOpen(v => !v)}
-            className="p-2 hover:bg-blue-800 rounded transition-colors shrink-0"
-            aria-label="Toggle sidebar"
-          >
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-
-        <nav className="p-4 space-y-2 pb-32">
-          {navItems.map(item => {
-            const Icon = item.icon;
-            const active = currentPage === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setCurrentPage(item.id)}
-                className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
-                  active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
-                }`}
-                aria-current={active ? 'page' : undefined}
-              >
-                <Icon size={20} />
-                {sidebarOpen && <span>{item.label}</span>}
-              </button>
-            );
-          })}
-        </nav>
-<nav className="p-4 space-y-2 pb-32">
-  {navItems.map(item => {
-    const Icon = item.icon;
-    const active = currentPage === item.id;
-    return (
-      <button
-        key={item.id}
-        onClick={() => setCurrentPage(item.id)}
-        className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
-          active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
-        }`}
-        aria-current={active ? 'page' : undefined}
-      >
-        <Icon size={20} />
-        {sidebarOpen && <span>{item.label}</span>}
-      </button>
-    );
-  })}
-</nav>
-
-{/* Add RadioPlayer here - before Sign Out button */}
-{sidebarOpen && <RadioPlayer />}
-
-<div className="absolute bottom-12 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
-  <button
-    onClick={logout}
-    className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
-  >
-    <LogOut size={20} />
-    {sidebarOpen && <span>Sign Out</span>}
-  </button>
-</div>
-        <div className="absolute bottom-12 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
-          >
-            <LogOut size={20} />
-            {sidebarOpen && <span>Sign Out</span>}
-          </button>
-        </div>
+<div className={`bg-brand-blue text-white transition-all duration-300 relative flex flex-col ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+  {/* Logo */}
+  <div className="p-4 flex items-center justify-between border-b border-blue-800">
+    {sidebarOpen ? (
+      <div className="flex-1 pr-2">
+        <img 
+          src="/images/49NLogo.png" 
+          alt="49 North Logo" 
+          className="w-full h-auto max-w-[240px]"
+        />
       </div>
+    ) : (
+      <div className="flex items-center justify-center w-full">
+        <img 
+          src="/images/49NLogo.png" 
+          alt="49 North" 
+          className="w-8 h-8 object-contain"
+        />
+      </div>
+    )}
+    <button
+      onClick={() => setSidebarOpen(v => !v)}
+      className="p-2 hover:bg-blue-800 rounded transition-colors shrink-0"
+      aria-label="Toggle sidebar"
+    >
+      {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+    </button>
+  </div>
+
+  {/* Navigation */}
+  <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+    {navItems.map(item => {
+      const Icon = item.icon;
+      const active = currentPage === item.id;
+      return (
+        <button
+          key={item.id}
+          onClick={() => setCurrentPage(item.id)}
+          className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
+            active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
+          }`}
+          aria-current={active ? 'page' : undefined}
+        >
+          <Icon size={20} />
+          {sidebarOpen && <span>{item.label}</span>}
+        </button>
+      );
+    })}
+  </nav>
+
+  {/* Radio Player */}
+  {sidebarOpen && <RadioPlayer />}
+
+  {/* Sign Out */}
+  <div className="p-4 border-t border-blue-800">
+    <button
+      onClick={logout}
+      className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
+    >
+      <LogOut size={20} />
+      {sidebarOpen && <span>Sign Out</span>}
+    </button>
+  </div>
+</div>
 
       {/* Main */}
       <div className="flex-1 overflow-auto">
