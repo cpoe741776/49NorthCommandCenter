@@ -197,7 +197,7 @@ const App = () => {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-<div className={`bg-brand-blue text-white transition-all duration-300 relative flex flex-col ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+<div className={`bg-brand-blue text-white transition-all duration-300 relative flex flex-col h-screen pb-16 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
   {/* Logo */}
   <div className="p-4 flex items-center justify-between border-b border-blue-800">
     {sidebarOpen ? (
@@ -251,7 +251,7 @@ const App = () => {
   {sidebarOpen && <RadioPlayer />}
 
   {/* Sign Out */}
-  <div className="p-4 border-t border-blue-800">
+  <div className="p-4 border-t border-blue-800 mt-auto">
     <button
       onClick={logout}
       className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
