@@ -144,7 +144,7 @@ exports.handler = async (event, context) => {
       
       const completion = await Promise.race([
         openai.chat.completions.create({
-          model: "gpt-4o",
+          model: "gpt-5",
           messages: [
             {
               role: "system",
@@ -213,10 +213,10 @@ This is a comprehensive daily review, so be thorough and specific.`
           ],
           response_format: { type: "json_object" },
           temperature: 0.7,
-          max_tokens: 2000
+          max_tokens: 3000
         }),
         new Promise((_, reject) => 
-  setTimeout(() => reject(new Error('OpenAI API timeout after 20 seconds')), 20000)
+  setTimeout(() => reject(new Error('OpenAI API timeout after 20 seconds')), 45000)
 )
       ]);
 
