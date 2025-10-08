@@ -19,17 +19,29 @@ const WebinarOperations = () => {
   const [surveyFilterContactOnly, setSurveyFilterContactOnly] = useState(false);
 
   const loadWebinarData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const webinarData = await fetchWebinars();
-      setData(webinarData);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    const webinarData = await fetchWebinars();
+    setData(webinarData);
+    setError(null);
+    
+    // Update ticker with webinar items
+    const { generateWebinarTickerItems } = await import('../services/tickerService');
+    const webinarTickerItems = generateWebinarTickerItems(webinarData);
+    
+    if (webinarTickerItems.length > 0) {
+      await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: webinarTickerItems })
+      });
     }
-  }, []);
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   useEffect(() => {
     loadWebinarData();

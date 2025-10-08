@@ -26,15 +26,20 @@ const Dashboard = ({ summary, loading, onNavigate }) => {
     setAiLoading(true);
     setAiError(null);
     const data = await fetchAIInsights();
-    
-    // DEBUG: Log what we received
-    console.log('AI Insights Response:', data);
-    console.log('Priority Bids:', data.priorityBids);
-    console.log('Contact Leads:', data.contactLeads);
-    console.log('News Articles:', data.newsArticles);
-    
     setAiInsights(data);
     localStorage.setItem('aiInsights', JSON.stringify(data));
+    
+    // Update ticker with AI insights
+    const { generateAIInsightsTickerItems } = await import('../services/tickerService');
+    const aiTickerItems = generateAIInsightsTickerItems(data);
+    
+    if (aiTickerItems.length > 0) {
+      await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: aiTickerItems })
+      });
+    }
   } catch (err) {
     setAiError(err.message);
   } finally {

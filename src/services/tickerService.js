@@ -124,3 +124,151 @@ function getFallbackTickerItems() {
     }
   ];
 }
+
+/**
+ * Generate ticker items from AI insights
+ */
+export function generateAIInsightsTickerItems(aiInsights) {
+  const items = [];
+  
+  if (!aiInsights) return items;
+
+  // Hot contact leads
+  if (aiInsights.contactLeads && aiInsights.contactLeads.length > 0) {
+    const highPriorityLeads = aiInsights.contactLeads.filter(lead => lead.score >= 70);
+    if (highPriorityLeads.length > 0) {
+      items.push({
+        message: `🔥 ${highPriorityLeads.length} HOT lead${highPriorityLeads.length > 1 ? 's' : ''} requesting contact - Review Dashboard`,
+        priority: 'high',
+        target: 'dashboard'
+      });
+    }
+  }
+
+  // Top AI priorities
+  if (aiInsights.insights?.topPriorities) {
+    aiInsights.insights.topPriorities.slice(0, 2).forEach(priority => {
+      if (priority.urgency === 'high') {
+        items.push({
+          message: `⚡ AI Priority: ${priority.title}`,
+          priority: 'high',
+          target: 'dashboard'
+        });
+      }
+    });
+  }
+
+  // Priority bids from AI
+  if (aiInsights.priorityBids && aiInsights.priorityBids.length > 0) {
+    items.push({
+      message: `📋 ${aiInsights.priorityBids.length} bid${aiInsights.priorityBids.length > 1 ? 's' : ''} marked "Respond" - Action required`,
+      priority: 'high',
+      target: 'bids'
+    });
+  }
+
+  // News opportunities
+  if (aiInsights.newsArticles && aiInsights.newsArticles.length > 0) {
+    items.push({
+      message: `📰 ${aiInsights.newsArticles.length} relevant market opportunities identified`,
+      priority: 'medium',
+      target: 'dashboard'
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Generate ticker items from webinar operations
+ */
+export function generateWebinarTickerItems(webinarData) {
+  const items = [];
+  
+  if (!webinarData) return items;
+
+  const { webinars = [], surveys = [] } = webinarData;
+  
+  // Upcoming webinars (within 7 days)
+  const upcomingWebinars = webinars.filter(w => {
+    if (w.status !== 'Upcoming') return false;
+    const webinarDate = new Date(w.date);
+    const now = new Date();
+    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return webinarDate > now && webinarDate < sevenDaysFromNow;
+  });
+
+  upcomingWebinars.forEach(webinar => {
+    const webinarDate = new Date(webinar.date);
+    const daysUntil = Math.ceil((webinarDate - new Date()) / (1000 * 60 * 60 * 24));
+    items.push({
+      message: `📅 Webinar "${webinar.title}" in ${daysUntil} day${daysUntil > 1 ? 's' : ''} - ${webinar.registrationCount} registered`,
+      priority: daysUntil <= 2 ? 'high' : 'medium',
+      target: 'webinars'
+    });
+  });
+
+  // Recent contact requests from surveys
+  const recentContactRequests = surveys.filter(s => 
+    s.contactRequest && String(s.contactRequest).toLowerCase().includes('yes')
+  );
+
+  if (recentContactRequests.length > 0) {
+    // Get last 7 days of contact requests
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentRequests = recentContactRequests.filter(s => 
+      new Date(s.timestamp) > sevenDaysAgo
+    );
+
+    if (recentRequests.length > 0) {
+      items.push({
+        message: `📞 ${recentRequests.length} new contact request${recentRequests.length > 1 ? 's' : ''} from webinar attendees`,
+        priority: 'high',
+        target: 'dashboard'
+      });
+    }
+  }
+
+  // High attendance webinar completed
+  const recentCompleted = webinars
+    .filter(w => w.status === 'Completed')
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 1);
+
+  if (recentCompleted.length > 0 && recentCompleted[0].attendanceCount > 20) {
+    const webinar = recentCompleted[0];
+    items.push({
+      message: `✨ Latest webinar had ${webinar.attendanceCount} attendees - Strong engagement!`,
+      priority: 'medium',
+      target: 'webinars'
+    });
+  }
+
+  return items;
+}
+
+/**
+ * Send all auto-generated items to the ticker
+ */
+export async function refreshAllTickerItems(bids, webinarData, aiInsights) {
+  try {
+    const allItems = [
+      ...generateTickerItemsFromBids(bids.activeBids || []),
+      ...generateSubmittedBidItems(bids.submittedBids || []),
+      ...generateWebinarTickerItems(webinarData),
+      ...generateAIInsightsTickerItems(aiInsights)
+    ];
+
+    if (allItems.length === 0) return;
+
+    await fetch('/.netlify/functions/refreshAutoTickerItems', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: allItems })
+    });
+
+    console.log(`Refreshed ${allItems.length} ticker items`);
+  } catch (error) {
+    console.error('Error refreshing ticker items:', error);
+  }
+}
