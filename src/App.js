@@ -4,7 +4,7 @@ import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 import { fetchBids } from './services/bidService';
 import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems } from './services/tickerService';
-
+import RadioPlayer from './components/RadioPlayer';
 import Dashboard from './components/Dashboard';
 import BidOperations from './components/BidOperations';
 import WebinarOperations from './components/WebinarOperations';
@@ -244,7 +244,38 @@ const App = () => {
             );
           })}
         </nav>
+<nav className="p-4 space-y-2 pb-32">
+  {navItems.map(item => {
+    const Icon = item.icon;
+    const active = currentPage === item.id;
+    return (
+      <button
+        key={item.id}
+        onClick={() => setCurrentPage(item.id)}
+        className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
+          active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
+        }`}
+        aria-current={active ? 'page' : undefined}
+      >
+        <Icon size={20} />
+        {sidebarOpen && <span>{item.label}</span>}
+      </button>
+    );
+  })}
+</nav>
 
+{/* Add RadioPlayer here - before Sign Out button */}
+{sidebarOpen && <RadioPlayer />}
+
+<div className="absolute bottom-12 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
+  <button
+    onClick={logout}
+    className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
+  >
+    <LogOut size={20} />
+    {sidebarOpen && <span>Sign Out</span>}
+  </button>
+</div>
         <div className="absolute bottom-12 left-0 right-0 p-4 border-t border-blue-800 bg-brand-blue">
           <button
             onClick={logout}
