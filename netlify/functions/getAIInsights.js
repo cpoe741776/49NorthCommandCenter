@@ -135,12 +135,12 @@ exports.handler = async (event, context) => {
       }
     };
 
-    console.log('Aggregation complete. Calling OpenAI...');
+    console.log('Aggregation complete. Calling OpenAI for comprehensive analysis...');
 
-    // Call OpenAI for strategic insights with timeout protection
+    // Call OpenAI for strategic insights with extended timeout for comprehensive analysis
     let insights;
     try {
-      console.log('Starting OpenAI API call...');
+      console.log('Starting OpenAI API call (comprehensive analysis)...');
       
       const completion = await Promise.race([
         openai.chat.completions.create({
@@ -160,29 +160,33 @@ CRITICAL RULES:
 - Priority bids are determined SOLELY by their "Respond" status in the spreadsheet
 
 **YOUR ROLE:**
-1. Analyze priority bids (status="Respond") and suggest response strategies
-2. Content strategy - what webinar topics resonate
-3. Business development - analyze news articles for opportunities
-4. Risk identification - operational concerns
+Provide comprehensive, actionable strategic analysis covering:
+1. Detailed bid prioritization with specific reasoning for each "Respond" status bid
+2. In-depth content strategy analysis based on webinar engagement patterns
+3. Business development opportunities from news articles with specific action plans
+4. Risk identification with detailed mitigation strategies
+5. Cross-operational insights and patterns
+
+Be thorough and specific. This analysis is reviewed once or twice daily, so depth matters more than brevity.
 
 Provide insights in this JSON structure:
 {
-  "executiveSummary": "2-3 sentence overview of bid pipeline, webinar engagement, and market opportunities",
+  "executiveSummary": "3-4 sentence comprehensive overview of bid pipeline, webinar engagement, contact leads, market opportunities, and key risks",
   "topPriorities": [
-    {"title": "Priority name", "description": "Why this matters", "action": "Specific next step", "urgency": "high/medium/low"}
+    {"title": "Priority name", "description": "Detailed explanation of why this matters", "action": "Specific, actionable next steps", "urgency": "high/medium/low"}
   ],
   "bidRecommendations": [
-    {"solicitation": "Bid number", "agency": "Agency name", "reason": "Why prioritize (based on bid details, NOT webinars)", "action": "Next step to respond", "dueDate": "date"}
+    {"solicitation": "Bid number", "agency": "Agency name", "reason": "Detailed reasoning for prioritization based on bid specifics", "action": "Detailed next steps for response", "dueDate": "date"}
   ],
   "contentInsights": {
-    "topPerforming": "What webinar content drives engagement",
-    "suggestions": "Topics to try based on survey feedback"
+    "topPerforming": "Detailed analysis of what webinar content drives the most engagement and why",
+    "suggestions": "Specific topic recommendations based on patterns in survey feedback, engagement data, and industry trends"
   },
   "newsOpportunities": [
-    {"headline": "Article headline", "relevance": "How this creates opportunity for 49 North", "action": "Suggested next step"}
+    {"headline": "Article headline", "relevance": "Detailed explanation of how this creates opportunity for 49 North", "action": "Specific action plan to capitalize on this opportunity"}
   ],
   "riskAlerts": [
-    {"issue": "What's concerning", "impact": "Business impact", "mitigation": "How to address"}
+    {"issue": "Detailed description of the concern", "impact": "Specific business impact", "mitigation": "Detailed mitigation strategy with steps"}
   ]
 }
 
@@ -190,64 +194,85 @@ DO NOT mention webinar engagement when discussing bids. They are separate busine
             },
             {
               role: "user",
-              content: `Analyze this operational data and provide strategic insights:
+              content: `Analyze this operational data comprehensively and provide detailed strategic insights:
 
 ${JSON.stringify(aggregatedData, null, 2)}
 
 Current date: ${new Date().toISOString().split('T')[0]}
 
-Focus on:
-1. Priority bids with "Respond" status - suggest response strategies based on bid details
-2. Content strategy for webinars based on survey feedback
-3. Business development opportunities from news articles
-4. Operational risks
+Provide detailed analysis on:
+1. Priority bids with "Respond" status - detailed response strategies for each
+2. Content strategy - what's working in webinars and why, with specific recommendations
+3. Contact leads - patterns and follow-up priorities (${aggregatedData.contactLeads.length} leads identified)
+4. Business development - how to leverage the ${newsArticles.length} news articles found
+5. Operational risks - what needs attention and specific mitigation plans
+6. Cross-operational patterns - connections between different data sources
 
-DO NOT connect bids to webinar attendees. They are separate activities.`
+This is a comprehensive daily review, so be thorough and specific.`
             }
           ],
           response_format: { type: "json_object" },
           temperature: 0.7,
-          max_tokens: 2000
+          max_tokens: 3000
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('OpenAI API timeout after 25 seconds')), 25000)
+          setTimeout(() => reject(new Error('OpenAI API timeout after 45 seconds')), 45000)
         )
       ]);
 
-      console.log('OpenAI API call completed');
+      console.log('OpenAI API call completed successfully');
       insights = JSON.parse(completion.choices[0].message.content);
       
     } catch (openaiError) {
       console.error('OpenAI API Error:', openaiError);
+      console.error('This was a comprehensive analysis attempt - consider retrying');
       
-      // Return a fallback response if OpenAI fails
+      // Return a detailed fallback response if OpenAI fails
       insights = {
-        executiveSummary: "AI analysis temporarily unavailable. Manual review recommended.",
+        executiveSummary: `AI analysis temporarily unavailable. Current status: ${aggregatedData.summary.respondBidsCount} priority bids marked "Respond", ${aggregatedData.contactLeads.length} hot contact leads identified, ${newsArticles.length} relevant news articles found. Manual comprehensive review recommended.`,
         topPriorities: [
           {
-            title: "Review Priority Bids",
-            description: `${aggregatedData.respondBidsCount} bids marked as "Respond" need review`,
-            action: "Prioritize bids with upcoming deadlines",
+            title: "Review Priority Bids for Response",
+            description: `${aggregatedData.summary.respondBidsCount} bids marked as "Respond" require detailed review and response preparation. These represent immediate business opportunities.`,
+            action: "Review each bid's requirements, assess alignment with 49 North's capabilities, and begin response preparation for bids with nearest deadlines",
             urgency: "high"
+          },
+          {
+            title: "Follow Up with Hot Contact Leads",
+            description: `${aggregatedData.contactLeads.length} webinar attendees have either requested immediate contact or asked for 3-month reminders. These are warm leads showing interest in Mental Armor™ programs.`,
+            action: "Review contact lead details in Dashboard, prioritize by score, and initiate personalized follow-up communications",
+            urgency: "high"
+          },
+          {
+            title: "Analyze Market Opportunities from News",
+            description: `${newsArticles.length} recent news articles about mental health training, resilience programs, and related topics have been identified. These may reveal new opportunities or partnerships.`,
+            action: "Review each article for potential leads, grant opportunities, or market trends relevant to 49 North's services",
+            urgency: "medium"
           }
         ],
-        bidRecommendations: respondBids.slice(0, 3).map(bid => ({
+        bidRecommendations: respondBids.slice(0, 5).map(bid => ({
           solicitation: bid.solicitation,
           agency: bid.agency,
-          reason: `Marked as "Respond" in tracking system`,
-          action: "Review requirements and assess fit",
+          reason: `Marked as "Respond" in tracking system. ${bid.naics ? `NAICS: ${bid.naics}. ` : ''}${bid.setAside ? `Set-Aside: ${bid.setAside}. ` : ''}Review full requirements to assess strategic fit.`,
+          action: `Review solicitation details, assess capability alignment, gather necessary documentation, and prepare tailored response highlighting 49 North's Mental Armor™ expertise`,
           dueDate: bid.dueDate
         })),
         contentInsights: {
-          topPerforming: "Webinar data available in Webinar Operations",
-          suggestions: "Review survey feedback for content ideas"
+          topPerforming: `Based on ${aggregatedData.summary.totalSurveyResponses} survey responses from ${aggregatedData.summary.completedWebinars} completed webinars, engagement metrics available in Webinar Operations`,
+          suggestions: "Review detailed survey feedback to identify patterns in attendee interests, pain points, and requested topics. Consider trends in mental health training and resilience building for future webinar themes."
         },
-        newsOpportunities: newsArticles.slice(0, 3).map(article => ({
+        newsOpportunities: newsArticles.slice(0, 5).map(article => ({
           headline: article.title,
-          relevance: "Potential business development opportunity",
-          action: "Review article and assess relevance"
+          relevance: "Potential business development opportunity - article may reveal new market needs, grant opportunities, or organizations seeking mental health training programs",
+          action: "Review article content, identify key stakeholders mentioned, and assess relevance to 49 North's service offerings"
         })),
-        riskAlerts: []
+        riskAlerts: aggregatedData.summary.respondBidsCount === 0 ? [
+          {
+            issue: "No active bids currently marked for response",
+            impact: "Potential gap in business pipeline and future revenue",
+            mitigation: "Increase bid monitoring frequency, review 'Gather Info' status bids for potential advancement, and actively search for new opportunities aligned with 49 North's expertise"
+          }
+        ] : []
       };
     }
 
