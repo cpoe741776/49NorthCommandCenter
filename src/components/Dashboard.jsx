@@ -56,7 +56,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading bid data...</div>
+        <div className="text-gray-600">Refreshing Dashboard Data...</div>
       </div>
     );
   }
