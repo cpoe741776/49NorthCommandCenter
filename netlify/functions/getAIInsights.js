@@ -6,7 +6,7 @@ const OpenAI = require('openai');
 // Config (env-overridable)
 // =======================
 const CFG = {
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-5',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4.1',
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '5000', 10),
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '45000', 10),
