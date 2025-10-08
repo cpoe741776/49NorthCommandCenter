@@ -216,7 +216,7 @@ This is a comprehensive daily review, so be thorough and specific.`
           max_tokens: 3000
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('OpenAI API timeout after 45 seconds')), 45000)
+          setTimeout(() => reject(new Error('OpenAI API timeout after 60 seconds')), 60000)
         )
       ]);
 

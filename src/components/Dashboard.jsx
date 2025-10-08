@@ -152,7 +152,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
     <div className="text-center">
       <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
       <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
-      <p className="text-sm text-gray-500 mt-1">This may take 30-45 seconds for detailed insights</p>
+      <p className="text-sm text-gray-500 mt-1">This may take 60 seconds for detailed insights</p>
       <p className="text-xs text-gray-400 mt-2">Analyzing bids, leads, webinars, and market opportunities</p>
     </div>
   </div>
