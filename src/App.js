@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2 } from 'lucide-react';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 import { fetchBids } from './services/bidService';
@@ -9,12 +9,17 @@ import Dashboard from './components/Dashboard';
 import BidOperations from './components/BidOperations';
 import WebinarOperations from './components/WebinarOperations';
 import SocialMediaOperations from './components/SocialMediaOperations';
+import BidSystemsManager from './components/BidSystemsManager';
+import CompanyDataVault from './components/CompanyDataVault';
+
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'bids', label: 'Bid Operations', icon: FileText },
   { id: 'webinars', label: 'Webinar Operations', icon: Video },
-  { id: 'social', label: 'Social Media', icon: Share2 }
+  { id: 'social', label: 'Social Media', icon: Share2 },
+  { id: 'bid-systems', label: 'Bid Systems', icon: Database },      // ADD THIS
+  { id: 'company-data', label: 'Company Data', icon: Building2 },
 ];
 
 const App = () => {
@@ -190,28 +195,36 @@ const App = () => {
           summary={summary} 
           loading={loading} 
           onNavigate={setCurrentPage}
-          onTickerUpdate={loadTickerFeed}  // ADD THIS
+          onTickerUpdate={loadTickerFeed}
         />
       );
-    case 'bids': return (
-      <BidOperations
-        bids={bids}
-        disregardedBids={disregardedBids}
-        submittedBids={submittedBids}
-        loading={loading}
-        onRefresh={loadBids}
-      />
-    );
-    case 'webinars': return <WebinarOperations />;
-    case 'social': return <SocialMediaOperations />;
-    default: return (
-      <Dashboard 
-        summary={summary} 
-        loading={loading} 
-        onNavigate={setCurrentPage}
-        onTickerUpdate={loadTickerFeed}  // ADD THIS
-      />
-    );
+    case 'bids': 
+      return (
+        <BidOperations
+          bids={bids}
+          disregardedBids={disregardedBids}
+          submittedBids={submittedBids}
+          loading={loading}
+          onRefresh={loadBids}
+        />
+      );
+    case 'webinars': 
+      return <WebinarOperations />;
+    case 'social': 
+      return <SocialMediaOperations />;
+    case 'bid-systems':                    // ADD THIS
+      return <BidSystemsManager />;        // ADD THIS
+    case 'company-data':                   // ADD THIS
+      return <CompanyDataVault />;         // ADD THIS
+    default: 
+      return (
+        <Dashboard 
+          summary={summary} 
+          loading={loading} 
+          onNavigate={setCurrentPage}
+          onTickerUpdate={loadTickerFeed}
+        />
+      );
   }
 };
 

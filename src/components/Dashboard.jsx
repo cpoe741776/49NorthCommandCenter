@@ -1,3 +1,5 @@
+// Dashboard.jsx //
+
 import React, { useState, useEffect } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
@@ -400,6 +402,17 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
             <h3 className="font-semibold text-gray-900">Check Webinar Registrations</h3>
             <p className="text-sm text-gray-600 mt-1">Track attendance and survey responses</p>
           </div>
+          
+
+<div onClick={() => onNavigate('bid-systems')} className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
+  <h3 className="font-semibold text-gray-900">Bid Systems Registry</h3>
+  <p className="text-sm text-gray-600 mt-1">Manage your 25 procurement system registrations</p>
+</div>
+
+<div onClick={() => onNavigate('company-data')} className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
+  <h3 className="font-semibold text-gray-900">Company Data Vault</h3>
+  <p className="text-sm text-gray-600 mt-1">Quick copy/paste access to all company information</p>
+</div>
         </div>
       </div>
     </div>

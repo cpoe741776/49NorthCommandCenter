@@ -1,4 +1,4 @@
-// netlify/functions/getBidSystems.js
+// netlify/functions/getBidSystems.js //
 const { google } = require('googleapis');
 
 const SHEET_ID = process.env.BID_SYSTEMS_SHEET_ID;
