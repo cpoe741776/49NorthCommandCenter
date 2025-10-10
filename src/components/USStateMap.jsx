@@ -1,111 +1,63 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 
-const USStateMap = ({ registeredStates, stateSystemsMap, onStateHover, hoveredState }) => {
-  const [svgContent, setSvgContent] = useState('');
+const USStateMap = ({ registeredStates, stateSystemsMap, onStateHover, hoveredState, allSystems }) => {
+  const [paths, setPaths] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load SVG file on mount
   useEffect(() => {
     fetch('/images/us-states.svg')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to load map');
-        return res.text();
-      })
+      .then(res => res.text())
       .then(svgText => {
-        // Extract just the paths from inside <g id="states">
         const parser = new DOMParser();
         const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
         const statesGroup = svgDoc.querySelector('#states');
         
         if (statesGroup) {
-          setSvgContent(statesGroup.innerHTML);
+          const pathElements = Array.from(statesGroup.querySelectorAll('path[id]'));
+          const pathData = pathElements.map(p => ({
+            id: p.id,
+            d: p.getAttribute('d'),
+            name: p.getAttribute('data-name') || p.id
+          }));
+          setPaths(pathData);
         }
         setLoading(false);
       })
       .catch(err => {
-        console.error('Error loading US map:', err);
+        console.error('Error loading map:', err);
         setLoading(false);
       });
   }, []);
 
-  // Handle state interactions
-  const handlePathClick = useCallback((e) => {
-    const path = e.target.closest('path[id]');
-    if (!path) return;
+  const getStateColor = (stateId) => {
+    const isRegistered = registeredStates.includes(stateId);
+    const isHovered = hoveredState === stateId;
+    return isRegistered ? (isHovered ? '#3b82f6' : '#60a5fa') : '#e5e7eb';
+  };
+
+  const handleStateClick = (stateId) => {
+    const systemNames = stateSystemsMap[stateId];
+    if (!systemNames || systemNames.length === 0) return;
     
-    const stateId = path.id;
-    if (stateId && stateId.length === 2) {
-      // Could add click handler here if needed
-    }
-  }, []);
-
-  const handlePathMouseEnter = useCallback((e) => {
-    const path = e.target.closest('path[id]');
-    if (!path) return;
+    // Find the first system
+    const firstSystemName = systemNames[0];
+    const system = allSystems.find(s => s.systemName === firstSystemName);
     
-    const stateId = path.id;
-    if (stateId && stateId.length === 2 && onStateHover) {
-      onStateHover(stateId);
+    if (system) {
+      // Open login URL if available, otherwise website URL
+      const url = system.loginUrl || system.websiteUrl;
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     }
-  }, [onStateHover]);
-
-  const handlePathMouseLeave = useCallback(() => {
-    if (onStateHover) {
-      onStateHover(null);
-    }
-  }, [onStateHover]);
-
-  // Update colors when registration or hover state changes
-  useEffect(() => {
-    if (!svgContent) return;
-
-    // Use a small delay to ensure DOM is ready
-    const timer = setTimeout(() => {
-      const container = document.getElementById('us-map-container');
-      if (!container) return;
-
-      const statePaths = container.querySelectorAll('path[id]');
-      
-      statePaths.forEach(path => {
-        const stateId = path.id;
-        if (!stateId || stateId.length !== 2) return;
-        
-        const isRegistered = registeredStates.includes(stateId);
-        const isHovered = hoveredState === stateId;
-        
-        // Set colors
-        if (isRegistered) {
-          path.style.fill = isHovered ? '#3b82f6' : '#60a5fa';
-        } else {
-          path.style.fill = '#e5e7eb';
-        }
-        
-        // Set styles
-        path.style.stroke = '#ffffff';
-        path.style.strokeWidth = '1.5';
-        path.style.vectorEffect = 'non-scaling-stroke';
-        path.style.transition = 'fill 0.2s ease';
-        path.style.cursor = 'pointer';
-      });
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [registeredStates, hoveredState, svgContent]);
+  };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
-        Loading map...
-      </div>
-    );
+    return <div className="flex items-center justify-center h-64 text-gray-500">Loading map...</div>;
   }
 
-  if (!svgContent) {
-    return (
-      <div className="flex items-center justify-center h-64 text-red-500">
-        Failed to load map
-      </div>
-    );
+  if (!paths.length) {
+    return <div className="flex items-center justify-center h-64 text-red-500">Failed to load map</div>;
   }
 
   return (
@@ -115,9 +67,6 @@ const USStateMap = ({ registeredStates, stateSystemsMap, onStateHover, hoveredSt
       className="w-full h-auto"
       role="img" 
       aria-label="US States map"
-      onClick={handlePathClick}
-      onMouseMove={handlePathMouseEnter}
-      onMouseLeave={handlePathMouseLeave}
     >
       <style>{`
         .state { 
@@ -128,10 +77,21 @@ const USStateMap = ({ registeredStates, stateSystemsMap, onStateHover, hoveredSt
           cursor: pointer;
         }
       `}</style>
-      <g 
-        id="us-map-container"
-        dangerouslySetInnerHTML={{ __html: svgContent }}
-      />
+      <g id="states">
+        {paths.map(path => (
+          <path
+            key={path.id}
+            id={path.id}
+            className="state"
+            d={path.d}
+            fill={getStateColor(path.id)}
+            onMouseEnter={() => onStateHover && onStateHover(path.id)}
+            onMouseLeave={() => onStateHover && onStateHover(null)}
+            onClick={() => handleStateClick(path.id)}
+            aria-label={path.name}
+          />
+        ))}
+      </g>
     </svg>
   );
 };

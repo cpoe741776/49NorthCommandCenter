@@ -51,69 +51,71 @@ const BidSystemsManager = ({ allBids }) => {
 
   // Parse state and country coverage
   const coverageData = useMemo(() => {
-    const states = new Set();
-    const countries = new Set();
-    const stateSystemsMap = {};
-    const countrySystemsMap = {};
+  const states = new Set();
+  const countries = new Set();
+  const stateSystemsMap = {};
+  const countrySystemsMap = {};
 
-    const stateAbbreviations = {
-      'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-      'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-      'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-      'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-      'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
-      'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-      'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
-      'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-      'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
-      'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
-    };
+  const stateAbbreviations = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
+  };
 
-    systems.forEach(system => {
-      const geo = (system.geographicCoverage || '').toLowerCase();
-      const category = (system.category || '').toLowerCase();
+  systems.forEach(system => {
+    const geo = (system.geographicCoverage || '').toLowerCase();
+    const category = (system.category || '').toLowerCase();
 
-      if (category === 'us state' || category === 'local/county') {
-        Object.entries(stateAbbreviations).forEach(([fullName, abbr]) => {
-          if (geo.includes(fullName)) {
-            states.add(abbr);
-            if (!stateSystemsMap[abbr]) stateSystemsMap[abbr] = [];
-            stateSystemsMap[abbr].push(system.systemName);
-          }
-        });
-      }
+    // ONLY detect US states from "US State" category
+    if (category === 'us state') {
+      Object.entries(stateAbbreviations).forEach(([fullName, abbr]) => {
+        if (geo.includes(fullName)) {
+          states.add(abbr);
+          if (!stateSystemsMap[abbr]) stateSystemsMap[abbr] = [];
+          stateSystemsMap[abbr].push(system.systemName);
+        }
+      });
+    }
 
-      if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') || 
-          geo.includes('united kingdom') || geo.includes('uk')) {
-        countries.add('UK');
-        if (!countrySystemsMap['UK']) countrySystemsMap['UK'] = [];
-        countrySystemsMap['UK'].push(system.systemName);
-      } else if (geo.includes('united states') || geo.includes('usa') || category === 'us state') {
-        countries.add('USA');
-        if (!countrySystemsMap['USA']) countrySystemsMap['USA'] = [];
-        countrySystemsMap['USA'].push(system.systemName);
-      } else if (geo.includes('canada')) {
-        countries.add('Canada');
-        if (!countrySystemsMap['Canada']) countrySystemsMap['Canada'] = [];
-        countrySystemsMap['Canada'].push(system.systemName);
-      } else if (geo.includes('australia')) {
-        countries.add('Australia');
-        if (!countrySystemsMap['Australia']) countrySystemsMap['Australia'] = [];
-        countrySystemsMap['Australia'].push(system.systemName);
-      } else if (geo.includes('international') || geo.includes('global')) {
-        countries.add('International');
-        if (!countrySystemsMap['International']) countrySystemsMap['International'] = [];
-        countrySystemsMap['International'].push(system.systemName);
-      }
-    });
+    // Detect countries
+    if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') || 
+        geo.includes('united kingdom') || geo.includes('uk')) {
+      countries.add('UK');
+      if (!countrySystemsMap['UK']) countrySystemsMap['UK'] = [];
+      countrySystemsMap['UK'].push(system.systemName);
+    } else if (geo.includes('united states') || geo.includes('usa') || category === 'us state') {
+      countries.add('USA');
+      if (!countrySystemsMap['USA']) countrySystemsMap['USA'] = [];
+      countrySystemsMap['USA'].push(system.systemName);
+    } else if (geo.includes('canada')) {
+      countries.add('Canada');
+      if (!countrySystemsMap['Canada']) countrySystemsMap['Canada'] = [];
+      countrySystemsMap['Canada'].push(system.systemName);
+    } else if (geo.includes('australia')) {
+      countries.add('Australia');
+      if (!countrySystemsMap['Australia']) countrySystemsMap['Australia'] = [];
+      countrySystemsMap['Australia'].push(system.systemName);
+    } else if (geo.includes('international') || geo.includes('global')) {
+      countries.add('International');
+      if (!countrySystemsMap['International']) countrySystemsMap['International'] = [];
+      countrySystemsMap['International'].push(system.systemName);
+    }
+  });
 
-    return { 
-      states: Array.from(states), 
-      countries: Array.from(countries),
-      stateSystemsMap,
-      countrySystemsMap
-    };
-  }, [systems]);
+  return { 
+    states: Array.from(states), 
+    countries: Array.from(countries),
+    stateSystemsMap,
+    countrySystemsMap
+  };
+}, [systems]);
 
   const togglePasswordVisibility = (systemId) => {
     setShowPasswords(prev => ({
@@ -223,11 +225,12 @@ const BidSystemsManager = ({ allBids }) => {
   </div>
   <div className="bg-gray-50 rounded-lg p-4 relative">
     <USStateMap
-      registeredStates={coverageData.states}
-      stateSystemsMap={coverageData.stateSystemsMap}
-      onStateHover={setHoveredState}
-      hoveredState={hoveredState}
-    />
+  registeredStates={coverageData.states}
+  stateSystemsMap={coverageData.stateSystemsMap}
+  onStateHover={setHoveredState}
+  hoveredState={hoveredState}
+  allSystems={systems}
+/>
     
     {hoveredState && coverageData.stateSystemsMap[hoveredState] && (
       <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs z-10">
