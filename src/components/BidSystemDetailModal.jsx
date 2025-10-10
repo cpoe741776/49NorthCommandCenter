@@ -163,17 +163,34 @@ const BidSystemDetailModal = ({ system, onClose }) => {
                     <Hash size={18} className="text-indigo-600" />
                     Commodity Codes
                   </h3>
-                  <div className="space-y-0">
+                  <div className="space-y-3">
                     {system.codeType && (
-                      <DetailRow label="Code Type" value={system.codeType} />
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Code Type</p>
+                        <p className="text-base font-semibold text-gray-900">
+                          {system.codeType}
+                          {system.codeType === 'NAICS' && ' (North American Industry Classification System)'}
+                          {system.codeType === 'NIGP' && ' (National Institute of Governmental Purchasing)'}
+                          {system.codeType === 'UNSPSC' && ' (United Nations Standard Products and Services)'}
+                          {system.codeType === 'PSC' && ' (Product Service Code - Federal)'}
+                          {system.codeType === 'SIN' && ' (Special Item Number - GSA Schedule)'}
+                          {system.codeType === 'FSC' && ' (Federal Supply Classification)'}
+                          {system.codeType === 'Custom' && ' (Custom/Other Classification)'}
+                        </p>
+                      </div>
                     )}
                     {system.codeNumbers && (
-                      <DetailRow label="Code Numbers" value={system.codeNumbers} />
+                      <div className="pt-3 border-t border-indigo-200">
+                        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Code Numbers</p>
+                        <p className="text-lg font-mono font-bold text-indigo-900">{system.codeNumbers}</p>
+                      </div>
                     )}
                   </div>
-                  <p className="text-xs text-indigo-700 mt-3 bg-indigo-100 rounded p-2">
-                    These codes are monitored for relevant opportunities
-                  </p>
+                  <div className="mt-3 pt-3 border-t border-indigo-200">
+                    <p className="text-xs text-indigo-700 bg-indigo-100 rounded p-2">
+                      ℹ️ These codes are monitored for relevant opportunities in this procurement system
+                    </p>
+                  </div>
                 </div>
               )}
 
