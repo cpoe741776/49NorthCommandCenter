@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff, FileText, MapPin } from 'lucide-react';
 import AddBidSystemForm from './AddBidSystemForm';
 import BidSystemDetailModal from './BidSystemDetailModal';
+import USStateMap from './USStateMap';
 
 const BidSystemsManager = ({ allBids }) => {
   const [systems, setSystems] = useState([]);
@@ -214,107 +215,19 @@ const BidSystemsManager = ({ allBids }) => {
 
       {/* Maps Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-       {/* US State Map - FIXED VERSION */}
+       {/* US State Map - Using Custom SVG */}
 <div className="bg-white p-6 rounded-lg shadow">
   <div className="flex items-center gap-2 mb-4">
     <MapPin className="text-blue-600" size={24} />
     <h2 className="text-xl font-bold text-gray-900">US State Coverage</h2>
   </div>
   <div className="bg-gray-50 rounded-lg p-4 relative">
-    <svg viewBox="0 0 1000 650" className="w-full h-auto">
-      <g id="states">
-        {/* Pacific */}
-        <rect id="WA" x="50" y="30" width="100" height="80" fill={coverageData.states.includes('WA') ? (hoveredState === 'WA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="OR" x="50" y="115" width="100" height="75" fill={coverageData.states.includes('OR') ? (hoveredState === 'OR' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('OR')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="CA" x="30" y="195" width="110" height="150" fill={coverageData.states.includes('CA') ? (hoveredState === 'CA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('CA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Mountain */}
-        <rect id="MT" x="155" y="35" width="130" height="70" fill={coverageData.states.includes('MT') ? (hoveredState === 'MT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="ID" x="155" y="110" width="80" height="115" fill={coverageData.states.includes('ID') ? (hoveredState === 'ID' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('ID')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="WY" x="240" y="110" width="95" height="85" fill={coverageData.states.includes('WY') ? (hoveredState === 'WY' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WY')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NV" x="145" y="230" width="85" height="105" fill={coverageData.states.includes('NV') ? (hoveredState === 'NV' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NV')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="UT" x="235" y="200" width="80" height="100" fill={coverageData.states.includes('UT') ? (hoveredState === 'UT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('UT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="CO" x="320" y="200" width="100" height="85" fill={coverageData.states.includes('CO') ? (hoveredState === 'CO' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('CO')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="AZ" x="235" y="305" width="100" height="100" fill={coverageData.states.includes('AZ') ? (hoveredState === 'AZ' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AZ')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NM" x="340" y="290" width="95" height="115" fill={coverageData.states.includes('NM') ? (hoveredState === 'NM' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NM')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Plains */}
-        <rect id="ND" x="340" y="35" width="100" height="65" fill={coverageData.states.includes('ND') ? (hoveredState === 'ND' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('ND')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="SD" x="340" y="105" width="100" height="70" fill={coverageData.states.includes('SD') ? (hoveredState === 'SD' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('SD')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NE" x="340" y="180" width="115" height="65" fill={coverageData.states.includes('NE') ? (hoveredState === 'NE' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NE')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="KS" x="340" y="250" width="115" height="65" fill={coverageData.states.includes('KS') ? (hoveredState === 'KS' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('KS')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="OK" x="340" y="320" width="135" height="70" fill={coverageData.states.includes('OK') ? (hoveredState === 'OK' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('OK')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="TX" x="340" y="395" width="155" height="155" fill={coverageData.states.includes('TX') ? (hoveredState === 'TX' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('TX')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Midwest */}
-        <rect id="MN" x="445" y="45" width="90" height="110" fill={coverageData.states.includes('MN') ? (hoveredState === 'MN' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MN')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="WI" x="540" y="80" width="75" height="95" fill={coverageData.states.includes('WI') ? (hoveredState === 'WI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="IA" x="460" y="160" width="85" height="75" fill={coverageData.states.includes('IA') ? (hoveredState === 'IA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('IA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="MO" x="460" y="240" width="95" height="85" fill={coverageData.states.includes('MO') ? (hoveredState === 'MO' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MO')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="AR" x="480" y="330" width="85" height="80" fill={coverageData.states.includes('AR') ? (hoveredState === 'AR' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AR')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="LA" x="500" y="415" width="85" height="90" fill={coverageData.states.includes('LA') ? (hoveredState === 'LA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('LA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Great Lakes */}
-        <rect id="MI" x="620" y="95" width="85" height="105" fill={coverageData.states.includes('MI') ? (hoveredState === 'MI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="IL" x="550" y="180" width="70" height="110" fill={coverageData.states.includes('IL') ? (hoveredState === 'IL' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('IL')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="IN" x="625" y="205" width="65" height="85" fill={coverageData.states.includes('IN') ? (hoveredState === 'IN' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('IN')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="OH" x="695" y="195" width="85" height="80" fill={coverageData.states.includes('OH') ? (hoveredState === 'OH' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('OH')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* South */}
-        <rect id="KY" x="625" y="295" width="105" height="55" fill={coverageData.states.includes('KY') ? (hoveredState === 'KY' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('KY')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="TN" x="570" y="355" width="150" height="55" fill={coverageData.states.includes('TN') ? (hoveredState === 'TN' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('TN')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="MS" x="590" y="415" width="60" height="90" fill={coverageData.states.includes('MS') ? (hoveredState === 'MS' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MS')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="AL" x="655" y="415" width="70" height="100" fill={coverageData.states.includes('AL') ? (hoveredState === 'AL' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AL')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Southeast */}
-        <rect id="WV" x="735" y="280" width="70" height="60" fill={coverageData.states.includes('WV') ? (hoveredState === 'WV' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WV')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="VA" x="760" y="245" width="95" height="60" fill={coverageData.states.includes('VA') ? (hoveredState === 'VA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('VA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NC" x="725" y="345" width="125" height="60" fill={coverageData.states.includes('NC') ? (hoveredState === 'NC' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NC')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="SC" x="735" y="410" width="90" height="65" fill={coverageData.states.includes('SC') ? (hoveredState === 'SC' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('SC')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="GA" x="730" y="480" width="90" height="90" fill={coverageData.states.includes('GA') ? (hoveredState === 'GA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('GA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="FL" x="825" y="485" width="110" height="125" fill={coverageData.states.includes('FL') ? (hoveredState === 'FL' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('FL')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Northeast */}
-        <rect id="PA" x="785" y="190" width="90" height="60" fill={coverageData.states.includes('PA') ? (hoveredState === 'PA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('PA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NY" x="810" y="110" width="110" height="75" fill={coverageData.states.includes('NY') ? (hoveredState === 'NY' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NY')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="VT" x="895" y="80" width="35" height="60" fill={coverageData.states.includes('VT') ? (hoveredState === 'VT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('VT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NH" x="935" y="85" width="35" height="60" fill={coverageData.states.includes('NH') ? (hoveredState === 'NH' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NH')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="ME" x="925" y="30" width="45" height="90" fill={coverageData.states.includes('ME') ? (hoveredState === 'ME' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('ME')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="MA" x="905" y="145" width="65" height="30" fill={coverageData.states.includes('MA') ? (hoveredState === 'MA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="RI" x="950" y="155" width="20" height="25" fill={coverageData.states.includes('RI') ? (hoveredState === 'RI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('RI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="CT" x="905" y="180" width="60" height="30" fill={coverageData.states.includes('CT') ? (hoveredState === 'CT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('CT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="NJ" x="880" y="195" width="40" height="55" fill={coverageData.states.includes('NJ') ? (hoveredState === 'NJ' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NJ')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="DE" x="880" y="225" width="25" height="35" fill={coverageData.states.includes('DE') ? (hoveredState === 'DE' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('DE')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="MD" x="820" y="255" width="80" height="35" fill={coverageData.states.includes('MD') ? (hoveredState === 'MD' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MD')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        
-        {/* Alaska & Hawaii */}
-        <rect id="AK" x="30" y="530" width="120" height="90" fill={coverageData.states.includes('AK') ? (hoveredState === 'AK' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AK')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-        <rect id="HI" x="180" y="555" width="100" height="50" fill={coverageData.states.includes('HI') ? (hoveredState === 'HI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('HI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
-      </g>
-      
-      {/* State Labels - Only registered states */}
-      {coverageData.states.map(state => {
-        const positions = {
-          'WA': [100, 70], 'OR': [100, 153], 'CA': [85, 270], 'MT': [220, 70], 'ID': [195, 168],
-          'WY': [288, 153], 'NV': [188, 283], 'UT': [275, 250], 'CO': [370, 243], 'AZ': [285, 355],
-          'NM': [388, 348], 'ND': [390, 68], 'SD': [390, 140], 'NE': [398, 213], 'KS': [398, 283],
-          'OK': [408, 355], 'TX': [418, 473], 'MN': [490, 100], 'WI': [578, 128], 'IA': [503, 198],
-          'MO': [508, 283], 'AR': [523, 370], 'LA': [543, 460], 'MI': [663, 148], 'IL': [585, 235],
-          'IN': [658, 248], 'OH': [738, 235], 'KY': [678, 323], 'TN': [645, 383], 'MS': [620, 460],
-          'AL': [690, 465], 'WV': [770, 310], 'VA': [808, 275], 'NC': [788, 375], 'SC': [780, 443],
-          'GA': [775, 525], 'FL': [880, 548], 'PA': [830, 220], 'NY': [865, 148], 'VT': [913, 110],
-          'NH': [953, 115], 'ME': [948, 75], 'MA': [938, 160], 'RI': [960, 168], 'CT': [935, 195],
-          'NJ': [900, 223], 'DE': [893, 243], 'MD': [860, 273], 'AK': [90, 575], 'HI': [230, 580]
-        };
-        const pos = positions[state];
-        if (!pos) return null;
-        return (
-          <text key={state} x={pos[0]} y={pos[1]} fontSize="12" fontWeight="bold" fill="#1e40af" textAnchor="middle" pointerEvents="none">
-            {state}
-          </text>
-        );
-      })}
-    </svg>
+    <USStateMap
+      registeredStates={coverageData.states}
+      stateSystemsMap={coverageData.stateSystemsMap}
+      onStateHover={setHoveredState}
+      hoveredState={hoveredState}
+    />
     
     {hoveredState && coverageData.stateSystemsMap[hoveredState] && (
       <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs z-10">
