@@ -1,15 +1,16 @@
 // BidSystemsManager.jsx //
 
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff } from 'lucide-react';
 
-const BidSystemsManager = () => {  // THIS LINE WAS MISSING!
+const BidSystemsManager = () => {
   const [systems, setSystems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+  const [showPasswords, setShowPasswords] = useState({});
 
   useEffect(() => {
     loadSystems();
@@ -22,7 +23,9 @@ const BidSystemsManager = () => {  // THIS LINE WAS MISSING!
       const data = await response.json();
       
       if (data.success) {
-        setSystems(data.systems);
+        // Filter out empty rows (where systemName is empty)
+        const validSystems = data.systems.filter(s => s.systemName && s.systemName.trim() !== '');
+        setSystems(validSystems);
       } else {
         setError(data.error);
       }
@@ -32,6 +35,20 @@ const BidSystemsManager = () => {  // THIS LINE WAS MISSING!
     } finally {
       setLoading(false);
     }
+  };
+
+  const togglePasswordVisibility = (systemId) => {
+    setShowPasswords(prev => ({
+      ...prev,
+      [systemId]: !prev[systemId]
+    }));
+  };
+
+  const handleAddNewSystem = () => {
+    // Open Google Sheet in new tab to add manually for now
+    const sheetUrl = `https://docs.google.com/spreadsheets/d/${process.env.REACT_APP_BID_SYSTEMS_SHEET_ID || 'your-sheet-id'}/edit`;
+    window.open(sheetUrl, '_blank');
+    alert('Add your new system in the Google Sheet, then refresh this page to see it here.');
   };
 
   const filteredSystems = systems.filter(system => {
@@ -93,10 +110,19 @@ const BidSystemsManager = () => {  // THIS LINE WAS MISSING!
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Bid Systems Registry</h1>
-        <p className="text-gray-600 mt-1">Manage your {systems.length} registered procurement systems</p>
+      {/* Header with Add Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Bid Systems Registry</h1>
+          <p className="text-gray-600 mt-1">Manage your {systems.length} registered procurement systems</p>
+        </div>
+        <button
+          onClick={handleAddNewSystem}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Plus size={20} />
+          Add New System
+        </button>
       </div>
 
       {/* Summary Cards */}
@@ -189,15 +215,36 @@ const BidSystemsManager = () => {  // THIS LINE WAS MISSING!
               <span className="ml-2 text-xs text-gray-500">{system.category}</span>
             </div>
 
-            {/* Credentials */}
+            {/* Credentials - NOW WITH PASSWORD */}
             {system.username && (
-              <div className="bg-gray-50 rounded p-3 mb-3 text-sm">
+              <div className="bg-gray-50 rounded p-3 mb-3 text-sm space-y-2">
                 <div className="flex items-center gap-2 text-gray-700">
                   <Key size={16} />
+                  <span className="font-semibold text-xs text-gray-500">Username:</span>
                   <span className="font-mono">{system.username}</span>
                 </div>
-                {system.notes && (
-                  <p className="text-xs text-gray-600 mt-1">{system.notes}</p>
+                {system.password && (
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Key size={16} />
+                    <span className="font-semibold text-xs text-gray-500">Password:</span>
+                    <span className="font-mono flex-1">
+                      {showPasswords[system.systemId] ? system.password : '••••••••'}
+                    </span>
+                    <button
+                      onClick={() => togglePasswordVisibility(system.systemId)}
+                      className="p-1 hover:bg-gray-200 rounded transition-colors"
+                      title={showPasswords[system.systemId] ? 'Hide password' : 'Show password'}
+                    >
+                      {showPasswords[system.systemId] ? (
+                        <EyeOff size={16} className="text-gray-600" />
+                      ) : (
+                        <Eye size={16} className="text-gray-600" />
+                      )}
+                    </button>
+                  </div>
+                )}
+                {system.notes && !system.notes.includes('Vendor') && (
+                  <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200">{system.notes}</p>
                 )}
               </div>
             )}
@@ -230,7 +277,7 @@ const BidSystemsManager = () => {  // THIS LINE WAS MISSING!
 
             {/* Vendor Number */}
             {system.notes && system.notes.includes('Vendor') && (
-              <p className="text-xs text-gray-600 mt-2 text-center">{system.notes}</p>
+              <p className="text-xs text-gray-600 mt-2 text-center bg-blue-50 py-1 px-2 rounded">{system.notes}</p>
             )}
           </div>
         ))}
