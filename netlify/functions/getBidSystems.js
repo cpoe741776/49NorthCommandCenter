@@ -1,4 +1,4 @@
-// netlify/functions/getBidSystems.js //
+// netlify/functions/getBidSystems.js
 const { google } = require('googleapis');
 
 const SHEET_ID = process.env.BID_SYSTEMS_SHEET_ID;
@@ -30,10 +30,10 @@ exports.handler = async (event, context) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch BidSystemsRegistry
+    // Fetch BidSystemsRegistry (now A2:U)
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'BidSystemsRegistry!A2:T',
+      range: 'BidSystemsRegistry!A2:U',
     });
 
     const rows = response.data.values || [];
@@ -52,14 +52,15 @@ exports.handler = async (event, context) => {
       lastLoginDate: row[9] || '',
       emailAlertsEnabled: row[10] || '',
       alertEmailAddress: row[11] || '',
-      naicsCodesMonitored: row[12] || '',
-      geographicCoverage: row[13] || '',
-      subscriptionType: row[14] || '',
-      renewalDate: row[15] || '',
-      annualCost: row[16] || '',
-      notes: row[17] || '',
-      dateAdded: row[18] || '',
-      lastUpdated: row[19] || ''
+      codeType: row[12] || '',           // NEW: Code Type
+      codeNumbers: row[13] || '',         // NEW: Code Numbers
+      geographicCoverage: row[14] || '',  // Shifted from [13]
+      subscriptionType: row[15] || '',    // Shifted from [14]
+      renewalDate: row[16] || '',         // Shifted from [15]
+      annualCost: row[17] || '',          // Shifted from [16]
+      notes: row[18] || '',               // Shifted from [17]
+      dateAdded: row[19] || '',           // Shifted from [18]
+      lastUpdated: row[20] || ''          // Shifted from [19]
     }));
 
     return {

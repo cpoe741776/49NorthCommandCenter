@@ -10,11 +10,14 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
     loginUrl: '',
     username: '',
     password: '',
+    registrationDate: '',              // NEW: User-entered
     emailAlertsEnabled: 'No',
     alertEmailAddress: 'automation@mymentalarmor.com',
-    naicsCodes: '611430',
+    codeType: 'NAICS',                 // NEW: Type of code
+    codeNumbers: '611430',             // NEW: Actual codes
     geographicCoverage: '',
     subscriptionType: 'Free',
+    renewalDate: '',
     annualCost: '$0',
     notes: ''
   });
@@ -149,6 +152,21 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
+          {/* Registration Date - NEW */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Registration Date
+            </label>
+            <input
+              type="date"
+              name="registrationDate"
+              value={formData.registrationDate}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">When you originally registered with this system</p>
+          </div>
+
           {/* URLs */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Website URL</label>
@@ -199,6 +217,41 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
+          {/* Commodity Codes - UPDATED */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Code Type</label>
+              <select
+                name="codeType"
+                value={formData.codeType}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">None</option>
+                <option value="NAICS">NAICS</option>
+                <option value="NIGP">NIGP</option>
+                <option value="UNSPSC">UNSPSC</option>
+                <option value="PSC">PSC (Federal)</option>
+                <option value="SIN">SIN (GSA Schedule)</option>
+                <option value="FSC">FSC (Federal Supply Class)</option>
+                <option value="Custom">Custom/Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Code Numbers</label>
+              <input
+                type="text"
+                name="codeNumbers"
+                value={formData.codeNumbers}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="e.g., 611430, 54151S"
+              />
+              <p className="text-xs text-gray-500 mt-1">Comma-separated if multiple</p>
+            </div>
+          </div>
+
           {/* Email Alerts */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -227,7 +280,7 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
           </div>
 
           {/* Subscription Details */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Subscription Type</label>
               <select
@@ -241,6 +294,17 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
                 <option value="Trial">Trial</option>
                 <option value="Enterprise">Enterprise</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Renewal Date</label>
+              <input
+                type="date"
+                name="renewalDate"
+                value={formData.renewalDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
 
             <div>
@@ -265,7 +329,7 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
               onChange={handleChange}
               rows={3}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Vendor numbers, security questions, etc."
+              placeholder="Vendor numbers, security questions, special instructions, etc."
             />
           </div>
 

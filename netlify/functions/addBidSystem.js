@@ -51,34 +51,35 @@ exports.handler = async (event, context) => {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Create row data in the correct order (A-T columns)
+    // Create row data in the correct order (A-U columns)
     const rowData = [
-      newSystemId,                           // A: System ID
-      newSystem.systemName || '',            // B: System Name
-      newSystem.category || '',              // C: Category
+      newSystemId,                              // A: System ID
+      newSystem.systemName || '',               // B: System Name
+      newSystem.category || '',                 // C: Category
       newSystem.status || 'Pending Registration', // D: Status
-      newSystem.websiteUrl || '',            // E: Website URL
-      newSystem.loginUrl || '',              // F: Login URL
-      newSystem.username || '',              // G: Username
-      newSystem.password || '',              // H: Password
-      today,                                 // I: Registration Date
-      '',                                    // J: Last Login Date
-      newSystem.emailAlertsEnabled || 'No', // K: Email Alerts Enabled
-      newSystem.alertEmailAddress || '',     // L: Alert Email Address
-      newSystem.naicsCodes || '',            // M: NAICS Codes Monitored
-      newSystem.geographicCoverage || '',    // N: Geographic Coverage
-      newSystem.subscriptionType || 'Free',  // O: Subscription Type
-      '',                                    // P: Renewal Date
-      newSystem.annualCost || '$0',          // Q: Annual Cost
-      newSystem.notes || '',                 // R: Notes
-      today,                                 // S: Date Added
-      today                                  // T: Last Updated
+      newSystem.websiteUrl || '',               // E: Website URL
+      newSystem.loginUrl || '',                 // F: Login URL
+      newSystem.username || '',                 // G: Username
+      newSystem.password || '',                 // H: Password
+      newSystem.registrationDate || '',         // I: Registration Date (USER ENTERED)
+      '',                                       // J: Last Login Date
+      newSystem.emailAlertsEnabled || 'No',    // K: Email Alerts Enabled
+      newSystem.alertEmailAddress || '',        // L: Alert Email Address
+      newSystem.codeType || '',                 // M: Code Type (NAICS, NIGP, etc.)
+      newSystem.codeNumbers || '',              // N: Code Numbers
+      newSystem.geographicCoverage || '',       // O: Geographic Coverage
+      newSystem.subscriptionType || 'Free',     // P: Subscription Type
+      newSystem.renewalDate || '',              // Q: Renewal Date
+      newSystem.annualCost || '$0',             // R: Annual Cost
+      newSystem.notes || '',                    // S: Notes
+      today,                                    // T: Date Added
+      today                                     // U: Last Updated
     ];
 
     // Append to sheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: 'BidSystemsRegistry!A:T',
+      range: 'BidSystemsRegistry!A:U',
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
       resource: {

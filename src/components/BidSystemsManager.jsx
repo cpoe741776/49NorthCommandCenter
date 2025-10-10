@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff } from 'lucide-react';
-import AddBidSystemForm from './AddBidSystemForm'; 
+import AddBidSystemForm from './AddBidSystemForm';
+import BidSystemDetailModal from './BidSystemDetailModal';
 
 const BidSystemsManager = () => {
   const [systems, setSystems] = useState([]);
@@ -13,6 +14,7 @@ const BidSystemsManager = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [showPasswords, setShowPasswords] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedSystem, setSelectedSystem] = useState(null);
 
   useEffect(() => {
     loadSystems();
@@ -47,13 +49,12 @@ const BidSystemsManager = () => {
   };
 
   const handleAddNewSystem = () => {
-    // Open Google Sheet in new tab to add manually for now
     setShowAddForm(true);
   };
 
-const handleFormSuccess = () => {
+  const handleFormSuccess = () => {
     setShowAddForm(false);
-    loadSystems(); // Reload the list
+    loadSystems();
     alert('System added successfully!');
   };
 
@@ -129,12 +130,6 @@ const handleFormSuccess = () => {
           <Plus size={20} />
           Add New System
         </button>
-        {showAddForm && (
-        <AddBidSystemForm
-          onClose={() => setShowAddForm(false)}
-          onSuccess={handleFormSuccess}
-        />
-      )}
       </div>
 
       {/* Summary Cards */}
@@ -209,7 +204,11 @@ const handleFormSuccess = () => {
       {/* Systems List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredSystems.map(system => (
-          <div key={system.id} className="bg-white p-5 rounded-lg shadow hover:shadow-lg transition-shadow">
+          <div 
+            key={system.id} 
+            onClick={() => setSelectedSystem(system)}
+            className="bg-white p-5 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
+          >
             {/* Header */}
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1">
@@ -227,7 +226,7 @@ const handleFormSuccess = () => {
               <span className="ml-2 text-xs text-gray-500">{system.category}</span>
             </div>
 
-            {/* Credentials - NOW WITH PASSWORD */}
+            {/* Credentials */}
             {system.username && (
               <div className="bg-gray-50 rounded p-3 mb-3 text-sm space-y-2">
                 <div className="flex items-center gap-2 text-gray-700">
@@ -243,7 +242,10 @@ const handleFormSuccess = () => {
                       {showPasswords[system.systemId] ? system.password : '••••••••'}
                     </span>
                     <button
-                      onClick={() => togglePasswordVisibility(system.systemId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePasswordVisibility(system.systemId);
+                      }}
                       className="p-1 hover:bg-gray-200 rounded transition-colors"
                       title={showPasswords[system.systemId] ? 'Hide password' : 'Show password'}
                     >
@@ -268,6 +270,7 @@ const handleFormSuccess = () => {
                   <a href={system.loginUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
                 >
                   <ExternalLink size={16} />
@@ -279,6 +282,7 @@ const handleFormSuccess = () => {
                   <a href={system.websiteUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
                 >
                   <Globe size={16} />
@@ -291,6 +295,9 @@ const handleFormSuccess = () => {
             {system.notes && system.notes.includes('Vendor') && (
               <p className="text-xs text-gray-600 mt-2 text-center bg-blue-50 py-1 px-2 rounded">{system.notes}</p>
             )}
+
+            {/* Click to view details hint */}
+            <p className="text-xs text-gray-400 text-center mt-3 italic">Click card for full details</p>
           </div>
         ))}
       </div>
@@ -299,6 +306,21 @@ const handleFormSuccess = () => {
         <div className="text-center py-12 text-gray-500">
           No systems found matching your filters
         </div>
+      )}
+
+      {/* Modals */}
+      {showAddForm && (
+        <AddBidSystemForm
+          onClose={() => setShowAddForm(false)}
+          onSuccess={handleFormSuccess}
+        />
+      )}
+
+      {selectedSystem && (
+        <BidSystemDetailModal
+          system={selectedSystem}
+          onClose={() => setSelectedSystem(null)}
+        />
       )}
     </div>
   );
