@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff } from 'lucide-react';
+import AddBidSystemForm from './AddBidSystemForm'; 
 
 const BidSystemsManager = () => {
   const [systems, setSystems] = useState([]);
@@ -11,6 +12,7 @@ const BidSystemsManager = () => {
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
   const [showPasswords, setShowPasswords] = useState({});
+  const [showAddForm, setShowAddForm] = useState(false);
 
   useEffect(() => {
     loadSystems();
@@ -46,9 +48,13 @@ const BidSystemsManager = () => {
 
   const handleAddNewSystem = () => {
     // Open Google Sheet in new tab to add manually for now
-    const sheetUrl = `https://docs.google.com/spreadsheets/d/${process.env.REACT_APP_BID_SYSTEMS_SHEET_ID || 'your-sheet-id'}/edit`;
-    window.open(sheetUrl, '_blank');
-    alert('Add your new system in the Google Sheet, then refresh this page to see it here.');
+    setShowAddForm(true);
+  };
+
+const handleFormSuccess = () => {
+    setShowAddForm(false);
+    loadSystems(); // Reload the list
+    alert('System added successfully!');
   };
 
   const filteredSystems = systems.filter(system => {
@@ -123,6 +129,12 @@ const BidSystemsManager = () => {
           <Plus size={20} />
           Add New System
         </button>
+        {showAddForm && (
+        <AddBidSystemForm
+          onClose={() => setShowAddForm(false)}
+          onSuccess={handleFormSuccess}
+        />
+      )}
       </div>
 
       {/* Summary Cards */}
