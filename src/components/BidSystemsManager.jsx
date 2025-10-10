@@ -55,7 +55,6 @@ const BidSystemsManager = ({ allBids }) => {
     const stateSystemsMap = {};
     const countrySystemsMap = {};
 
-    // US State abbreviations map
     const stateAbbreviations = {
       'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
       'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
@@ -73,7 +72,6 @@ const BidSystemsManager = ({ allBids }) => {
       const geo = (system.geographicCoverage || '').toLowerCase();
       const category = (system.category || '').toLowerCase();
 
-      // Detect US states
       if (category === 'us state' || category === 'local/county') {
         Object.entries(stateAbbreviations).forEach(([fullName, abbr]) => {
           if (geo.includes(fullName)) {
@@ -84,7 +82,6 @@ const BidSystemsManager = ({ allBids }) => {
         });
       }
 
-      // Detect countries
       if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') || 
           geo.includes('united kingdom') || geo.includes('uk')) {
         countries.add('UK');
@@ -198,60 +195,6 @@ const BidSystemsManager = ({ allBids }) => {
   const categories = ['All', 'International', 'US State', 'Local/County', 'Private/Commercial'];
   const statuses = ['All', 'Active', 'Pending Registration', 'Access Issues'];
 
-  // Simplified US state map data
-  const usStatePaths = {
-    'CA': 'M50,150 L80,150 L80,200 L50,200 Z',
-    'TX': 'M200,250 L260,250 L260,310 L200,310 Z',
-    'FL': 'M380,270 L420,270 L420,320 L380,320 Z',
-    'NY': 'M420,80 L460,80 L460,110 L420,110 Z',
-    'PA': 'M400,100 L440,100 L440,130 L400,130 Z',
-    'IL': 'M280,140 L310,140 L310,180 L280,180 Z',
-    'OH': 'M340,120 L370,120 L370,155 L340,155 Z',
-    'GA': 'M360,220 L390,220 L390,260 L360,260 Z',
-    'NC': 'M380,180 L430,180 L430,210 L380,210 Z',
-    'MI': 'M320,90 L355,90 L355,135 L320,135 Z',
-    'NJ': 'M440,105 L460,105 L460,130 L440,130 Z',
-    'VA': 'M390,160 L435,160 L435,190 L390,190 Z',
-    'WA': 'M60,40 L100,40 L100,70 L60,70 Z',
-    'MA': 'M460,85 L490,85 L490,100 L460,100 Z',
-    'AZ': 'M100,200 L140,200 L140,250 L100,250 Z',
-    'IN': 'M310,135 L340,135 L340,170 L310,170 Z',
-    'TN': 'M320,180 L380,180 L380,210 L320,210 Z',
-    'MO': 'M250,160 L290,160 L290,200 L250,200 Z',
-    'MD': 'M410,145 L445,145 L445,165 L410,165 Z',
-    'WI': 'M290,90 L320,90 L320,130 L290,130 Z',
-    'MN': 'M250,70 L290,70 L290,120 L250,120 Z',
-    'CO': 'M150,140 L200,140 L200,185 L150,185 Z',
-    'SC': 'M380,210 L415,210 L415,240 L380,240 Z',
-    'AL': 'M330,220 L360,220 L360,265 L330,265 Z',
-    'LA': 'M270,260 L310,260 L310,300 L270,300 Z',
-    'KY': 'M330,170 L380,170 L380,195 L330,195 Z',
-    'OR': 'M50,70 L95,70 L95,115 L50,115 Z',
-    'OK': 'M210,210 L270,210 L270,245 L210,245 Z',
-    'CT': 'M465,100 L485,100 L485,110 L465,110 Z',
-    'IA': 'M260,120 L295,120 L295,155 L260,155 Z',
-    'MS': 'M300,220 L330,220 L330,270 L300,270 Z',
-    'AR': 'M270,210 L310,210 L310,250 L270,250 Z',
-    'KS': 'M220,165 L270,165 L270,200 L220,200 Z',
-    'UT': 'M120,140 L155,140 L155,190 L120,190 Z',
-    'NV': 'M70,115 L110,115 L110,180 L70,180 Z',
-    'NM': 'M140,190 L185,190 L185,260 L140,260 Z',
-    'WV': 'M370,145 L405,145 L405,180 L370,180 Z',
-    'NE': 'M210,130 L270,130 L270,165 L210,165 Z',
-    'ID': 'M95,70 L130,70 L130,130 L95,130 Z',
-    'HI': 'M120,330 L160,330 L160,350 L120,350 Z',
-    'ME': 'M485,50 L510,50 L510,85 L485,85 Z',
-    'NH': 'M475,75 L495,75 L495,95 L475,95 Z',
-    'RI': 'M480,100 L495,100 L495,110 L480,110 Z',
-    'MT': 'M130,50 L200,50 L200,100 L130,100 Z',
-    'ND': 'M220,50 L270,50 L270,90 L220,90 Z',
-    'SD': 'M220,90 L270,90 L270,130 L220,130 Z',
-    'WY': 'M150,100 L200,100 L200,145 L150,145 Z',
-    'AK': 'M20,300 L90,300 L90,350 L20,350 Z',
-    'VT': 'M465,70 L485,70 L485,95 L465,95 Z',
-    'DE': 'M445,145 L460,145 L460,165 L445,165 Z'
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -271,47 +214,121 @@ const BidSystemsManager = ({ allBids }) => {
 
       {/* Maps Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* US State Map */}
+        {/* US State Map - IMPROVED VERSION */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center gap-2 mb-4">
             <MapPin className="text-blue-600" size={24} />
             <h2 className="text-xl font-bold text-gray-900">US State Coverage</h2>
           </div>
           <div className="bg-gray-50 rounded-lg p-4 relative">
-            <svg viewBox="0 0 520 360" className="w-full h-auto">
-              {/* Draw all states */}
-              {Object.entries(usStatePaths).map(([state, path]) => {
-                const isRegistered = coverageData.states.includes(state);
-                const isHovered = hoveredState === state;
+            <svg viewBox="0 0 960 600" className="w-full h-auto">
+              <g id="states">
+                {/* West Coast */}
+                <path id="WA" d="M90,50 L150,50 L150,110 L90,110 Z" fill={coverageData.states.includes('WA') ? (hoveredState === 'WA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="OR" d="M90,115 L150,115 L150,175 L90,175 Z" fill={coverageData.states.includes('OR') ? (hoveredState === 'OR' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('OR')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="CA" d="M75,180 L145,180 L145,290 L75,290 Z" fill={coverageData.states.includes('CA') ? (hoveredState === 'CA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('CA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Mountain West */}
+                <path id="MT" d="M155,50 L245,50 L245,115 L155,115 Z" fill={coverageData.states.includes('MT') ? (hoveredState === 'MT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="ID" d="M155,120 L215,120 L215,195 L155,195 Z" fill={coverageData.states.includes('ID') ? (hoveredState === 'ID' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('ID')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="WY" d="M220,120 L300,120 L300,185 L220,185 Z" fill={coverageData.states.includes('WY') ? (hoveredState === 'WY' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WY')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NV" d="M150,200 L210,200 L210,285 L150,285 Z" fill={coverageData.states.includes('NV') ? (hoveredState === 'NV' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NV')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="UT" d="M215,200 L275,200 L275,265 L215,265 Z" fill={coverageData.states.includes('UT') ? (hoveredState === 'UT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('UT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="CO" d="M280,190 L370,190 L370,260 L280,260 Z" fill={coverageData.states.includes('CO') ? (hoveredState === 'CO' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('CO')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="AZ" d="M215,270 L295,270 L295,360 L215,360 Z" fill={coverageData.states.includes('AZ') ? (hoveredState === 'AZ' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AZ')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NM" d="M300,265 L380,265 L380,360 L300,360 Z" fill={coverageData.states.includes('NM') ? (hoveredState === 'NM' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NM')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Great Plains */}
+                <path id="ND" d="M375,50 L455,50 L455,105 L375,105 Z" fill={coverageData.states.includes('ND') ? (hoveredState === 'ND' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('ND')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="SD" d="M375,110 L455,110 L455,170 L375,170 Z" fill={coverageData.states.includes('SD') ? (hoveredState === 'SD' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('SD')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NE" d="M375,175 L465,175 L465,235 L375,235 Z" fill={coverageData.states.includes('NE') ? (hoveredState === 'NE' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NE')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="KS" d="M375,240 L465,240 L465,295 L375,295 Z" fill={coverageData.states.includes('KS') ? (hoveredState === 'KS' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('KS')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="OK" d="M385,300 L495,300 L495,360 L385,360 Z" fill={coverageData.states.includes('OK') ? (hoveredState === 'OK' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('OK')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="TX" d="M400,365 L540,365 L540,505 L400,505 Z" fill={coverageData.states.includes('TX') ? (hoveredState === 'TX' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('TX')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Upper Midwest */}
+                <path id="MN" d="M460,60 L535,60 L535,165 L460,165 Z" fill={coverageData.states.includes('MN') ? (hoveredState === 'MN' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MN')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="WI" d="M540,90 L600,90 L600,175 L540,175 Z" fill={coverageData.states.includes('WI') ? (hoveredState === 'WI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="IA" d="M470,170 L545,170 L545,230 L470,230 Z" fill={coverageData.states.includes('IA') ? (hoveredState === 'IA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('IA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="MO" d="M470,235 L555,235 L555,305 L470,305 Z" fill={coverageData.states.includes('MO') ? (hoveredState === 'MO' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MO')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="AR" d="M500,310 L570,310 L570,375 L500,375 Z" fill={coverageData.states.includes('AR') ? (hoveredState === 'AR' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AR')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="LA" d="M525,380 L600,380 L600,445 L525,445 Z" fill={coverageData.states.includes('LA') ? (hoveredState === 'LA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('LA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Great Lakes */}
+                <path id="MI" d="M605,105 L675,105 L675,185 L605,185 Z" fill={coverageData.states.includes('MI') ? (hoveredState === 'MI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="IL" d="M550,180 L605,180 L605,265 L550,265 Z" fill={coverageData.states.includes('IL') ? (hoveredState === 'IL' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('IL')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="IN" d="M610,185 L665,185 L665,255 L610,255 Z" fill={coverageData.states.includes('IN') ? (hoveredState === 'IN' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('IN')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="OH" d="M670,190 L735,190 L735,255 L670,255 Z" fill={coverageData.states.includes('OH') ? (hoveredState === 'OH' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('OH')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* South */}
+                <path id="KY" d="M610,260 L690,260 L690,305 L610,305 Z" fill={coverageData.states.includes('KY') ? (hoveredState === 'KY' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('KY')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="TN" d="M575,310 L695,310 L695,360 L575,360 Z" fill={coverageData.states.includes('TN') ? (hoveredState === 'TN' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('TN')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="MS" d="M575,380 L625,380 L625,455 L575,455 Z" fill={coverageData.states.includes('MS') ? (hoveredState === 'MS' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MS')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="AL" d="M630,370 L685,370 L685,465 L630,465 Z" fill={coverageData.states.includes('AL') ? (hoveredState === 'AL' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AL')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Southeast */}
+                <path id="WV" d="M695,260 L755,260 L755,310 L695,310 Z" fill={coverageData.states.includes('WV') ? (hoveredState === 'WV' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('WV')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="VA" d="M740,245 L820,245 L820,295 L740,295 Z" fill={coverageData.states.includes('VA') ? (hoveredState === 'VA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('VA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NC" d="M700,315 L810,315 L810,365 L700,365 Z" fill={coverageData.states.includes('NC') ? (hoveredState === 'NC' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NC')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="SC" d="M710,370 L790,370 L790,420 L710,420 Z" fill={coverageData.states.includes('SC') ? (hoveredState === 'SC' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('SC')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="GA" d="M690,425 L765,425 L765,500 L690,500 Z" fill={coverageData.states.includes('GA') ? (hoveredState === 'GA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('GA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="FL" d="M770,460 L850,460 L850,550 L770,550 Z" fill={coverageData.states.includes('FL') ? (hoveredState === 'FL' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('FL')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Northeast */}
+                <path id="PA" d="M760,195 L835,195 L835,245 L760,245 Z" fill={coverageData.states.includes('PA') ? (hoveredState === 'PA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('PA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NY" d="M760,135 L850,135 L850,190 L760,190 Z" fill={coverageData.states.includes('NY') ? (hoveredState === 'NY' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NY')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="VT" d="M855,100 L885,100 L885,145 L855,145 Z" fill={coverageData.states.includes('VT') ? (hoveredState === 'VT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('VT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NH" d="M890,100 L920,100 L920,145 L890,145 Z" fill={coverageData.states.includes('NH') ? (hoveredState === 'NH' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NH')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="ME" d="M890,50 L935,50 L935,120 L890,120 Z" fill={coverageData.states.includes('ME') ? (hoveredState === 'ME' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('ME')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="MA" d="M855,150 L930,150 L930,175 L855,175 Z" fill={coverageData.states.includes('MA') ? (hoveredState === 'MA' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MA')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="RI" d="M910,175 L930,175 L930,190 L910,190 Z" fill={coverageData.states.includes('RI') ? (hoveredState === 'RI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('RI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="CT" d="M855,180 L905,180 L905,200 L855,200 Z" fill={coverageData.states.includes('CT') ? (hoveredState === 'CT' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('CT')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="NJ" d="M840,200 L870,200 L870,240 L840,240 Z" fill={coverageData.states.includes('NJ') ? (hoveredState === 'NJ' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('NJ')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="DE" d="M840,245 L860,245 L860,270 L840,270 Z" fill={coverageData.states.includes('DE') ? (hoveredState === 'DE' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('DE')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="MD" d="M760,250 L830,250 L830,280 L760,280 Z" fill={coverageData.states.includes('MD') ? (hoveredState === 'MD' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('MD')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                
+                {/* Alaska & Hawaii (inset) */}
+                <path id="AK" d="M50,480 L140,480 L140,550 L50,550 Z" fill={coverageData.states.includes('AK') ? (hoveredState === 'AK' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('AK')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+                <path id="HI" d="M180,500 L260,500 L260,550 L180,550 Z" fill={coverageData.states.includes('HI') ? (hoveredState === 'HI' ? '#3b82f6' : '#60a5fa') : '#e5e7eb'} stroke="#fff" strokeWidth="2" onMouseEnter={() => setHoveredState('HI')} onMouseLeave={() => setHoveredState(null)} className="cursor-pointer transition-colors" />
+              </g>
+              
+              {/* State Labels - Only show for registered states */}
+              {coverageData.states.map(state => {
+                const labelPositions = {
+                  'CA': [110, 235], 'TX': [470, 435], 'FL': [810, 505], 'NY': [805, 163],
+                  'PA': [798, 220], 'IL': [578, 223], 'OH': [703, 223], 'GA': [728, 463],
+                  'NC': [755, 340], 'MI': [640, 145], 'NJ': [855, 220], 'VA': [780, 270],
+                  'WA': [120, 80], 'AZ': [255, 315], 'MA': [893, 163], 'TN': [635, 335],
+                  'IN': [638, 220], 'MO': [513, 270], 'MD': [795, 265], 'WI': [570, 133],
+                  'CO': [325, 225], 'MN': [498, 113], 'SC': [750, 395], 'AL': [658, 418],
+                  'LA': [563, 413], 'KY': [650, 283], 'OR': [120, 145], 'OK': [440, 330],
+                  'CT': [880, 190], 'IA': [508, 200], 'MS': [600, 418], 'AR': [535, 343],
+                  'KS': [420, 268], 'UT': [245, 233], 'NV': [180, 243], 'NM': [340, 313],
+                  'WV': [725, 285], 'NE': [420, 205], 'ID': [185, 158], 'HI': [220, 525],
+                  'ME': [913, 85], 'NH': [905, 123], 'RI': [920, 183], 'MT': [200, 83],
+                  'DE': [850, 258], 'SD': [415, 140], 'ND': [415, 78], 'AK': [95, 515],
+                  'VT': [870, 123], 'WY': [260, 153]
+                };
+                const pos = labelPositions[state];
+                if (!pos) return null;
                 return (
-                  <g key={state}>
-                    <path
-                      d={path}
-                      fill={isRegistered ? (isHovered ? '#3b82f6' : '#60a5fa') : '#e5e7eb'}
-                      stroke="#fff"
-                      strokeWidth="2"
-                      onMouseEnter={() => setHoveredState(state)}
-                      onMouseLeave={() => setHoveredState(null)}
-                      className="cursor-pointer transition-colors"
-                    />
-                    <text
-                      x={path.split(' ')[0].split(',')[0].substring(1)}
-                      y={path.split(' ')[0].split(',')[1]}
-                      dx="15"
-                      dy="20"
-                      fontSize="10"
-                      fill={isRegistered ? '#1e40af' : '#6b7280'}
-                      fontWeight={isRegistered ? 'bold' : 'normal'}
-                      pointerEvents="none"
-                    >
-                      {state}
-                    </text>
-                  </g>
+                  <text
+                    key={state}
+                    x={pos[0]}
+                    y={pos[1]}
+                    fontSize="11"
+                    fill="#1e40af"
+                    fontWeight="bold"
+                    textAnchor="middle"
+                    pointerEvents="none"
+                  >
+                    {state}
+                  </text>
                 );
               })}
             </svg>
             {hoveredState && coverageData.stateSystemsMap[hoveredState] && (
-              <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs">
+              <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs z-10">
                 <p className="font-semibold text-gray-900 mb-1">{hoveredState}</p>
                 <p className="text-xs text-gray-600">
                   {coverageData.stateSystemsMap[hoveredState].join(', ')}
@@ -524,8 +541,7 @@ const BidSystemsManager = ({ allBids }) => {
 
               <div className="flex gap-2">
                 {system.loginUrl && (
-                  
-                    <a href={system.loginUrl}
+                  <a href={system.loginUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -536,8 +552,7 @@ const BidSystemsManager = ({ allBids }) => {
                   </a>
                 )}
                 {system.websiteUrl && !system.loginUrl && (
-                  
-                    <a href={system.websiteUrl}
+                  <a href={system.websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
