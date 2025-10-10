@@ -206,16 +206,17 @@ const App = () => {
           submittedBids={submittedBids}
           loading={loading}
           onRefresh={loadBids}
+          onNavigate={setCurrentPage}
         />
       );
     case 'webinars': 
       return <WebinarOperations />;
     case 'social': 
       return <SocialMediaOperations />;
-    case 'bid-systems':                    // ADD THIS
-      return <BidSystemsManager />;        // ADD THIS
-    case 'company-data':                   // ADD THIS
-      return <CompanyDataVault />;         // ADD THIS
+    case 'bid-systems':
+      return <BidSystemsManager allBids={[...bids, ...submittedBids]} />;  // ADD THIS LINE
+    case 'company-data':
+      return <CompanyDataVault />;
     default: 
       return (
         <Dashboard 

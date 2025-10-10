@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react';
+// BidCard.jsx //
 
-const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
+import React, { useState } from 'react';
+import { ChevronDown, ChevronRight, ExternalLink, Database } from 'lucide-react';
+
+const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClick }) => {
   const [expanded, setExpanded] = useState(false);
   const isRespond = bid.recommendation === 'Respond';
 
@@ -26,21 +28,41 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
             className="mt-1 h-4 w-4 text-blue-600 rounded"
           />
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                className={`px-2 py-1 rounded text-xs font-semibold ${
-                  isRespond ? 'bg-green-600 text-white'
-                    : bid.recommendation === 'Submitted' ? 'bg-blue-600 text-white'
-                    : 'bg-yellow-600 text-white'
-                }`}
-              >
-                {bid.recommendation}
-              </span>
-              <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
-            </div>
-            <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-            <p className="text-sm text-gray-600 mt-1">{bid.emailSummary}</p>
-          </div>
+  <div className="flex items-center gap-2 mb-1 flex-wrap">
+    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+      isRespond ? 'bg-green-600 text-white'
+        : bid.recommendation === 'Submitted' ? 'bg-blue-600 text-white'
+        : 'bg-yellow-600 text-white'
+    }`}>
+      {bid.recommendation}
+    </span>
+    {bid.scoreDetails && (
+      <span className={`px-2 py-1 rounded text-xs font-bold ${
+        parseFloat(bid.scoreDetails) >= 9 ? 'bg-green-100 text-green-800'
+          : parseFloat(bid.scoreDetails) >= 6 ? 'bg-yellow-100 text-yellow-800'
+          : 'bg-gray-100 text-gray-800'
+      }`}>
+        Score: {bid.scoreDetails}
+      </span>
+    )}
+    {bid.bidSystem && bid.bidSystem !== 'Unknown' && (
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onSystemClick) onSystemClick(bid.bidSystem);
+        }}
+        className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded text-xs font-semibold hover:bg-indigo-200 transition-colors flex items-center gap-1"
+        title="View this bid system"
+      >
+        <Database size={12} />
+        {bid.bidSystem}
+      </button>
+    )}
+    <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
+  </div>
+  <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
+  <p className="text-sm text-gray-600 mt-1">{bid.aiSummary || bid.emailSummary}</p>
+</div>
         </div>
         <button
           className="ml-4 text-gray-400 hover:text-gray-600"
@@ -55,113 +77,139 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect }) => {
       </div>
 
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 ml-7" onClick={(e) => e.stopPropagation()}>
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Email Summary:</label>
-            <p className="text-sm text-gray-700 mt-1">{bid.emailSummary}</p>
-          </div>
+  <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 ml-7" onClick={(e) => e.stopPropagation()}>
+    
+    {/* Score Badge */}
+    {bid.scoreDetails && (
+      <div className="flex items-center gap-2">
+        <label className="text-xs font-semibold text-gray-600">Score:</label>
+        <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+          parseFloat(bid.scoreDetails) >= 9 ? 'bg-green-100 text-green-800'
+            : parseFloat(bid.scoreDetails) >= 6 ? 'bg-yellow-100 text-yellow-800'
+            : 'bg-gray-100 text-gray-800'
+        }`}>
+          {bid.scoreDetails}
+        </span>
+      </div>
+    )}
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
-            <p className="text-sm text-gray-700 mt-1">{bid.reasoning}</p>
-          </div>
+    {/* AI Email Summary */}
+    <div>
+      <label className="text-xs font-semibold text-gray-600">Email Summary:</label>
+      <p className="text-sm text-gray-700 mt-1 leading-relaxed">{bid.aiSummary || bid.emailSummary || 'No summary available'}</p>
+    </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Relevance:</label>
-              <p className="text-sm text-gray-700">
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  bid.relevance === 'High' ? 'bg-green-100 text-green-800'
-                    : bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {bid.relevance || 'Unknown'}
-                </span>
-              </p>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Bid System:</label>
-              <p className="text-sm text-gray-700">{bid.bidSystem || 'Unknown'}</p>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Due Date:</label>
-              <p className="text-sm text-gray-700">{bid.dueDate}</p>
-            </div>
-          </div>
+    {/* AI Reasoning */}
+    <div>
+      <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
+      <p className="text-sm text-gray-700 mt-1 leading-relaxed">{bid.aiReasoning || bid.reasoning || 'No reasoning available'}</p>
+    </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600">From:</label>
-              <p className="text-sm text-gray-700 break-words">{bid.emailFrom}</p>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Entity/Agency:</label>
-              <p className="text-sm text-gray-700 break-words">{bid.entity || 'Unknown'}</p>
-            </div>
-          </div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div>
+        <label className="text-xs font-semibold text-gray-600">Relevance:</label>
+        <p className="text-sm text-gray-700">
+          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+            bid.relevance === 'High' ? 'bg-green-100 text-green-800'
+              : bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800'
+              : 'bg-gray-100 text-gray-800'
+          }`}>
+            {bid.relevance || 'Unknown'}
+          </span>
+        </p>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-gray-600">Bid System:</label>
+        {bid.bidSystem && bid.bidSystem !== 'Unknown' ? (
+          <button
+            onClick={() => onSystemClick && onSystemClick(bid.bidSystem)}
+            className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
+          >
+            <Database size={14} />
+            {bid.bidSystem}
+          </button>
+        ) : (
+          <p className="text-sm text-gray-700">{bid.bidSystem || 'Unknown'}</p>
+        )}
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-gray-600">Due Date:</label>
+        <p className="text-sm text-gray-700">{bid.dueDate}</p>
+      </div>
+    </div>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
-            <p className="text-sm text-gray-700 break-words">{bid.keywordsFound}</p>
-          </div>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label className="text-xs font-semibold text-gray-600">From:</label>
+        <p className="text-sm text-gray-700 break-words">{bid.emailFrom}</p>
+      </div>
+      <div>
+        <label className="text-xs font-semibold text-gray-600">Entity/Agency:</label>
+        <p className="text-sm text-gray-700 break-words">{bid.entity || 'Unknown'}</p>
+      </div>
+    </div>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Categories:</label>
-            <p className="text-sm text-gray-700 break-words">{bid.keywordsCategory}</p>
-          </div>
+    <div>
+      <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
+      <p className="text-sm text-gray-700 break-words">{bid.keywordsFound}</p>
+    </div>
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
-            <p className="text-sm text-gray-700 italic break-words">"{bid.significantSnippet}"</p>
-          </div>
+    <div>
+      <label className="text-xs font-semibold text-gray-600">Categories:</label>
+      <p className="text-sm text-gray-700 break-words">{bid.keywordsCategory}</p>
+    </div>
 
-          {bid.url && bid.url !== 'Not provided' && (
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Original Source:</label>
-              <a
-                href={bid.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all"
-              >
-                {bid.url} <ExternalLink size={14} className="flex-shrink-0" />
-              </a>
-            </div>
-          )}
+    <div>
+      <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
+      <p className="text-sm text-gray-700 italic break-words">"{bid.significantSnippet}"</p>
+    </div>
 
-          <details className="border border-gray-200 rounded-lg">
-            <summary className="cursor-pointer px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600">
-              Full Email Body
-            </summary>
-            <div className="p-3 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
-              {bid.emailBody || 'No email body available'}
-            </div>
-          </details>
+    {bid.url && bid.url !== 'Not provided' && (
+      <div>
+        <label className="text-xs font-semibold text-gray-600">Original Source:</label>
+        <a href={bid.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all"
+        >
+          {bid.url} <ExternalLink size={14} className="flex-shrink-0" />
+        </a>
+      </div>
+    )}
 
-          <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-gray-200">
-            {!isRespond && (
-              <button
-                onClick={() => onStatusChange(bid.id, 'respond')}
-                className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium transition-colors"
-              >
-                Move to Respond
-              </button>
-            )}
-            <button
-              onClick={() => onStatusChange(bid.id, 'submitted')}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium transition-colors"
-            >
-              Mark as Submitted
-            </button>
-            <button
-              onClick={() => onStatusChange(bid.id, 'disregard')}
-              className="px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 text-xs font-medium transition-colors"
-            >
-              Disregard
-            </button>
-          </div>
-        </div>
+    <details className="border border-gray-200 rounded-lg">
+      <summary className="cursor-pointer px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600">
+        Full Email Body
+      </summary>
+      <div className="p-3 text-sm text-gray-700 whitespace-pre-wrap break-words max-h-96 overflow-y-auto">
+        {bid.emailBody || 'No email body available'}
+      </div>
+    </details>
+
+    <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-gray-200">
+      {!isRespond && (
+        <button
+          onClick={() => onStatusChange(bid.id, 'respond')}
+          className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium transition-colors"
+        >
+          Move to Respond
+        </button>
       )}
+      <button
+        onClick={() => onStatusChange(bid.id, 'submitted')}
+        className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium transition-colors"
+      >
+        Mark as Submitted
+      </button>
+      <button
+        onClick={() => onStatusChange(bid.id, 'disregard')}
+        className="px-3 py-1.5 bg-gray-400 text-white rounded hover:bg-gray-500 text-xs font-medium transition-colors"
+      >
+        Disregard
+      </button>
+    </div>
+  </div>
+)}
     </div>
   );
 };

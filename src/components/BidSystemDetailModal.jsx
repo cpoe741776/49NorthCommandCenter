@@ -1,8 +1,30 @@
-import React, { useState } from 'react';
-import { X, ExternalLink, Globe, Key, Eye, EyeOff, Calendar, DollarSign, Mail, CheckCircle, Clock, AlertCircle, Tag, Hash, Shield } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, ExternalLink, Globe, Key, Eye, EyeOff, Calendar, DollarSign, Mail, CheckCircle, Clock, AlertCircle, Tag, Hash, Shield, FileText, TrendingUp } from 'lucide-react';
 
-const BidSystemDetailModal = ({ system, onClose }) => {
+const BidSystemDetailModal = ({ system, allBids, onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
+
+  // Calculate bids related to this system
+  const relatedBids = useMemo(() => {
+    if (!allBids || !Array.isArray(allBids)) return [];
+    return allBids.filter(bid => 
+      bid.bidSystem && bid.bidSystem.toLowerCase() === system.systemName.toLowerCase()
+    );
+  }, [allBids, system.systemName]);
+
+  const bidStats = useMemo(() => {
+    const respond = relatedBids.filter(b => b.recommendation === 'Respond').length;
+    const gatherInfo = relatedBids.filter(b => b.recommendation === 'Gather More Information').length;
+    const submitted = relatedBids.filter(b => b.status === 'Submitted' || b.recommendation === 'Submitted').length;
+    
+    return {
+      total: relatedBids.length,
+      respond,
+      gatherInfo,
+      submitted,
+      active: respond + gatherInfo
+    };
+  }, [relatedBids]);
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -67,7 +89,7 @@ const BidSystemDetailModal = ({ system, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
           <div className="flex items-start justify-between">
@@ -86,6 +108,12 @@ const BidSystemDetailModal = ({ system, onClose }) => {
                 {system.systemId && (
                   <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded">
                     ID: {system.systemId}
+                  </span>
+                )}
+                {bidStats.total > 0 && (
+                  <span className="flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-semibold">
+                    <FileText size={14} />
+                    {bidStats.total} Bid{bidStats.total > 1 ? 's' : ''}
                   </span>
                 )}
               </div>
@@ -137,6 +165,34 @@ const BidSystemDetailModal = ({ system, onClose }) => {
               </a>
             )}
           </div>
+
+          {/* Bid Performance Stats */}
+          {bidStats.total > 0 && (
+            <div className="mb-6 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-5 border border-indigo-200">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <TrendingUp size={20} className="text-indigo-600" />
+                Bid Performance from This System
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-indigo-600">{bidStats.total}</p>
+                  <p className="text-xs text-gray-600 mt-1">Total Bids</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-green-600">{bidStats.respond}</p>
+                  <p className="text-xs text-gray-600 mt-1">Respond</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-yellow-600">{bidStats.gatherInfo}</p>
+                  <p className="text-xs text-gray-600 mt-1">Need Info</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-blue-600">{bidStats.submitted}</p>
+                  <p className="text-xs text-gray-600 mt-1">Submitted</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Details Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -330,6 +386,46 @@ const BidSystemDetailModal = ({ system, onClose }) => {
               )}
             </div>
           </div>
+
+          {/* Recent Bids Section */}
+          {relatedBids.length > 0 && (
+            <div className="mt-6 bg-white rounded-lg border border-gray-300 p-5">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <FileText size={20} className="text-indigo-600" />
+                Recent Bids from This System ({relatedBids.length})
+              </h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {relatedBids.slice(0, 10).map((bid) => (
+                  <div key={bid.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-indigo-300 transition-colors">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            bid.recommendation === 'Respond' ? 'bg-green-600 text-white'
+                              : bid.recommendation === 'Submitted' ? 'bg-blue-600 text-white'
+                              : 'bg-yellow-600 text-white'
+                          }`}>
+                            {bid.recommendation}
+                          </span>
+                          <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
+                        </div>
+                        <h4 className="font-semibold text-gray-900 text-sm truncate">{bid.emailSubject}</h4>
+                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{bid.emailSummary}</p>
+                        {bid.dueDate && bid.dueDate !== 'Not specified' && (
+                          <p className="text-xs text-gray-500 mt-1">Due: {bid.dueDate}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {relatedBids.length > 10 && (
+                  <p className="text-xs text-gray-500 text-center pt-2">
+                    Showing 10 of {relatedBids.length} bids. View all in Bid Operations.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Notes Section - Full Width */}
           {system.notes && (

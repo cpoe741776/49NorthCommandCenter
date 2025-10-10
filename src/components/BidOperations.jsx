@@ -1,10 +1,12 @@
+//BidOperations.jsx //
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { Archive, RefreshCw } from 'lucide-react';
 import BidCard from './BidCard';
 
 const ITEMS_PER_PAGE = 10;
 
-const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefresh }) => {
+const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefresh, onNavigate }) => {
   const [showArchive, setShowArchive] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
@@ -23,6 +25,15 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
     setGatherInfoPage(1);
     setSubmittedPage(1);
   }, [onRefresh]);
+
+  const handleSystemClick = useCallback((systemName) => {
+    // Store the system name to filter by
+    localStorage.setItem('filterBySystem', systemName);
+    // Navigate to bid-systems page
+    if (onNavigate) {
+      onNavigate('bid-systems');
+    }
+  }, [onNavigate]);
 
   const handleStatusChange = useCallback(async (bidId, status) => {
     try {
@@ -261,6 +272,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                     onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
+                    onSystemClick={handleSystemClick}
                   />
                 ))}
                 {hasMoreRespond && (
@@ -301,6 +313,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                     onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
+                    onSystemClick={handleSystemClick}
                   />
                 ))}
                 {hasMoreGatherInfo && (
@@ -333,6 +346,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                     onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
+                    onSystemClick={handleSystemClick}
                   />
                 ))}
                 {hasMoreSubmitted && (

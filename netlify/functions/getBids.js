@@ -30,10 +30,10 @@ exports.handler = async (event, context) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch Active_Bids
+    // Fetch Active_Bids (now A2:U to include new columns)
     const activeBidsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Active_Bids!A2:T',
+      range: 'Active_Bids!A2:U',
     });
 
     const activeBidsRows = activeBidsResponse.data.values || [];
@@ -41,28 +41,33 @@ exports.handler = async (event, context) => {
     const activeBids = activeBidsRows.map((row, index) => ({
       id: index + 2,
       recommendation: row[0] || '',
-      reasoning: row[1] || '',
-      emailSummary: row[2] || '',
-      emailDateReceived: row[3] || '',
-      emailFrom: row[4] || '',
-      keywordsCategory: row[5] || '',
-      keywordsFound: row[6] || '',
-      relevance: row[7] || '',
-      emailSubject: row[8] || '',
-      emailBody: row[9] || '',
-      url: row[10] || '',
-      dueDate: row[11] || '',
-      significantSnippet: row[12] || '',
-      emailDomain: row[13] || '',
-      bidSystem: row[14] || '',
-      country: row[15] || '',
-      entity: row[16] || '',
-      status: row[17] || 'New',
-      dateAdded: row[18] || '',
-      sourceEmailId: row[19] || ''
+      scoreDetails: row[1] || '',          // NEW
+      aiReasoning: row[2] || '',           // NEW
+      aiSummary: row[3] || '',             // NEW
+      emailDateReceived: row[4] || '',
+      emailFrom: row[5] || '',
+      keywordsCategory: row[6] || '',
+      keywordsFound: row[7] || '',
+      relevance: row[8] || '',
+      emailSubject: row[9] || '',
+      emailBody: row[10] || '',
+      url: row[11] || '',
+      dueDate: row[12] || '',
+      significantSnippet: row[13] || '',
+      emailDomain: row[14] || '',
+      bidSystem: row[15] || '',
+      country: row[16] || '',
+      entity: row[17] || '',
+      status: row[18] || 'New',
+      dateAdded: row[19] || '',
+      sourceEmailId: row[20] || '',
+      
+      // Backwards compatibility - keep old field name for existing components
+      emailSummary: row[3] || '',          // Maps to aiSummary
+      reasoning: row[2] || ''              // Maps to aiReasoning
     }));
 
-    // Fetch Disregarded
+    // Fetch Disregarded (unchanged)
     const disregardedResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Disregarded!A2:H',
@@ -81,36 +86,41 @@ exports.handler = async (event, context) => {
       sourceEmailId: row[7] || ''
     }));
 
-    // Fetch Submitted
+    // Fetch Submitted (now A2:V to include new columns)
     const submittedResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Submitted!A2:U',
+      range: 'Submitted!A2:V',
     });
 
     const submittedRows = submittedResponse.data.values || [];
     const submittedBids = submittedRows.map((row, index) => ({
       id: index + 2,
       recommendation: row[0] || '',
-      reasoning: row[1] || '',
-      emailSummary: row[2] || '',
-      emailDateReceived: row[3] || '',
-      emailFrom: row[4] || '',
-      keywordsCategory: row[5] || '',
-      keywordsFound: row[6] || '',
-      relevance: row[7] || '',
-      emailSubject: row[8] || '',
-      emailBody: row[9] || '',
-      url: row[10] || '',
-      dueDate: row[11] || '',
-      significantSnippet: row[12] || '',
-      emailDomain: row[13] || '',
-      bidSystem: row[14] || '',
-      country: row[15] || '',
-      entity: row[16] || '',
-      status: row[17] || 'Submitted',
-      dateAdded: row[18] || '',
-      sourceEmailId: row[19] || '',
-      submissionDate: row[20] || ''
+      scoreDetails: row[1] || '',          // NEW
+      aiReasoning: row[2] || '',           // NEW
+      aiSummary: row[3] || '',             // NEW
+      emailDateReceived: row[4] || '',
+      emailFrom: row[5] || '',
+      keywordsCategory: row[6] || '',
+      keywordsFound: row[7] || '',
+      relevance: row[8] || '',
+      emailSubject: row[9] || '',
+      emailBody: row[10] || '',
+      url: row[11] || '',
+      dueDate: row[12] || '',
+      significantSnippet: row[13] || '',
+      emailDomain: row[14] || '',
+      bidSystem: row[15] || '',
+      country: row[16] || '',
+      entity: row[17] || '',
+      status: row[18] || 'Submitted',
+      dateAdded: row[19] || '',
+      sourceEmailId: row[20] || '',
+      submissionDate: row[21] || '',
+      
+      // Backwards compatibility
+      emailSummary: row[3] || '',
+      reasoning: row[2] || ''
     }));
 
     return {

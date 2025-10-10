@@ -1,11 +1,11 @@
 // BidSystemsManager.jsx //
 
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff } from 'lucide-react';
+import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff, FileText } from 'lucide-react';
 import AddBidSystemForm from './AddBidSystemForm';
 import BidSystemDetailModal from './BidSystemDetailModal';
 
-const BidSystemsManager = () => {
+const BidSystemsManager = ({ allBids }) => {
   const [systems, setSystems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -18,6 +18,13 @@ const BidSystemsManager = () => {
 
   useEffect(() => {
     loadSystems();
+    
+    // Check if we should filter by a specific system
+    const filterBySystem = localStorage.getItem('filterBySystem');
+    if (filterBySystem) {
+      setSearchTerm(filterBySystem);
+      localStorage.removeItem('filterBySystem'); // Clear after using
+    }
   }, []);
 
   const loadSystems = async () => {
@@ -27,7 +34,6 @@ const BidSystemsManager = () => {
       const data = await response.json();
       
       if (data.success) {
-        // Filter out empty rows (where systemName is empty)
         const validSystems = data.systems.filter(s => s.systemName && s.systemName.trim() !== '');
         setSystems(validSystems);
       } else {
@@ -56,6 +62,14 @@ const BidSystemsManager = () => {
     setShowAddForm(false);
     loadSystems();
     alert('System added successfully!');
+  };
+
+  // Count bids per system
+  const getBidCountForSystem = (systemName) => {
+    if (!allBids || !Array.isArray(allBids)) return 0;
+    return allBids.filter(bid => 
+      bid.bidSystem && bid.bidSystem.toLowerCase() === systemName.toLowerCase()
+    ).length;
   };
 
   const filteredSystems = systems.filter(system => {
@@ -203,103 +217,117 @@ const BidSystemsManager = () => {
 
       {/* Systems List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filteredSystems.map(system => (
-          <div 
-            key={system.id} 
-            onClick={() => setSelectedSystem(system)}
-            className="bg-white p-5 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 text-lg">{system.systemName}</h3>
-                <p className="text-sm text-gray-600">{system.geographicCoverage}</p>
-              </div>
-              {getStatusIcon(system.status)}
-            </div>
-
-            {/* Status Badge */}
-            <div className="mb-3">
-              <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(system.status)}`}>
-                {system.status}
-              </span>
-              <span className="ml-2 text-xs text-gray-500">{system.category}</span>
-            </div>
-
-            {/* Credentials */}
-            {system.username && (
-              <div className="bg-gray-50 rounded p-3 mb-3 text-sm space-y-2">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Key size={16} />
-                  <span className="font-semibold text-xs text-gray-500">Username:</span>
-                  <span className="font-mono">{system.username}</span>
+        {filteredSystems.map(system => {
+          const bidCount = getBidCountForSystem(system.systemName);
+          
+          return (
+            <div 
+              key={system.id} 
+              onClick={() => setSelectedSystem(system)}
+              className="bg-white p-5 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-gray-900 text-lg">{system.systemName}</h3>
+                    {bidCount > 0 && (
+                      <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                        <FileText size={12} />
+                        {bidCount}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600">{system.geographicCoverage}</p>
                 </div>
-                {system.password && (
+                {getStatusIcon(system.status)}
+              </div>
+
+              {/* Status Badge */}
+              <div className="mb-3">
+                <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(system.status)}`}>
+                  {system.status}
+                </span>
+                <span className="ml-2 text-xs text-gray-500">{system.category}</span>
+              </div>
+
+              {/* Credentials */}
+              {system.username && (
+                <div className="bg-gray-50 rounded p-3 mb-3 text-sm space-y-2">
                   <div className="flex items-center gap-2 text-gray-700">
                     <Key size={16} />
-                    <span className="font-semibold text-xs text-gray-500">Password:</span>
-                    <span className="font-mono flex-1">
-                      {showPasswords[system.systemId] ? system.password : '••••••••'}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePasswordVisibility(system.systemId);
-                      }}
-                      className="p-1 hover:bg-gray-200 rounded transition-colors"
-                      title={showPasswords[system.systemId] ? 'Hide password' : 'Show password'}
-                    >
-                      {showPasswords[system.systemId] ? (
-                        <EyeOff size={16} className="text-gray-600" />
-                      ) : (
-                        <Eye size={16} className="text-gray-600" />
-                      )}
-                    </button>
+                    <span className="font-semibold text-xs text-gray-500">Username:</span>
+                    <span className="font-mono">{system.username}</span>
                   </div>
+                  {system.password && (
+                    <div className="flex items-center gap-2 text-gray-700">
+                      <Key size={16} />
+                      <span className="font-semibold text-xs text-gray-500">Password:</span>
+                      <span className="font-mono flex-1">
+                        {showPasswords[system.systemId] ? system.password : '••••••••'}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePasswordVisibility(system.systemId);
+                        }}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        title={showPasswords[system.systemId] ? 'Hide password' : 'Show password'}
+                      >
+                        {showPasswords[system.systemId] ? (
+                          <EyeOff size={16} className="text-gray-600" />
+                        ) : (
+                          <Eye size={16} className="text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  {system.notes && !system.notes.includes('Vendor') && (
+                    <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200">{system.notes}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                {system.loginUrl && (
+                  
+                    <a href={system.loginUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    <ExternalLink size={16} />
+                    Login
+                  </a>
                 )}
-                {system.notes && !system.notes.includes('Vendor') && (
-                  <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-gray-200">{system.notes}</p>
+                {system.websiteUrl && !system.loginUrl && (
+                  
+                    <a href={system.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
+                  >
+                    <Globe size={16} />
+                    Visit Site
+                  </a>
                 )}
               </div>
-            )}
 
-            {/* Actions */}
-            <div className="flex gap-2">
-              {system.loginUrl && (
-                
-                  <a href={system.loginUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm"
-                >
-                  <ExternalLink size={16} />
-                  Login
-                </a>
+              {/* Vendor Number */}
+              {system.notes && system.notes.includes('Vendor') && (
+                <p className="text-xs text-gray-600 mt-2 text-center bg-blue-50 py-1 px-2 rounded">{system.notes}</p>
               )}
-              {system.websiteUrl && !system.loginUrl && (
-                
-                  <a href={system.websiteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm"
-                >
-                  <Globe size={16} />
-                  Visit Site
-                </a>
-              )}
+
+              {/* Click to view details hint */}
+              <p className="text-xs text-gray-400 text-center mt-3 italic">
+                Click card for full details{bidCount > 0 && ` • ${bidCount} active bid${bidCount > 1 ? 's' : ''}`}
+              </p>
             </div>
-
-            {/* Vendor Number */}
-            {system.notes && system.notes.includes('Vendor') && (
-              <p className="text-xs text-gray-600 mt-2 text-center bg-blue-50 py-1 px-2 rounded">{system.notes}</p>
-            )}
-
-            {/* Click to view details hint */}
-            <p className="text-xs text-gray-400 text-center mt-3 italic">Click card for full details</p>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredSystems.length === 0 && (
@@ -319,6 +347,7 @@ const BidSystemsManager = () => {
       {selectedSystem && (
         <BidSystemDetailModal
           system={selectedSystem}
+          allBids={allBids}
           onClose={() => setSelectedSystem(null)}
         />
       )}
