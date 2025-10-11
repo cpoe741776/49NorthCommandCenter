@@ -231,88 +231,96 @@ const CompanyDataVault = () => {
         </p>
       </div>
 
-      {/* Documents Section - STANDALONE */}
-      {(
-        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <File className="text-purple-600" size={28} />
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Company Documents</h2>
-                <p className="text-sm text-gray-600">Store and access important company files</p>
-              </div>
-            </div>
+      {/* Documents Section - ALWAYS SHOW */}
+<div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200">
+  <div className="flex items-center justify-between mb-6">
+    <div className="flex items-center gap-3">
+      <File className="text-purple-600" size={28} />
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Company Documents</h2>
+        <p className="text-sm text-gray-600">Store and access important company files</p>
+      </div>
+    </div>
 
-            {/* Upload Button */}
-            <div className="flex items-center gap-3">
-              <select
-                value={uploadCategory}
-                onChange={(e) => setUploadCategory(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              >
-                <option>Tax Documents</option>
-                <option>Certifications</option>
-                <option>Insurance</option>
-                <option>Contracts</option>
-                <option>Licenses</option>
-                <option>Other</option>
-              </select>
-              <label className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer">
-                <Upload size={18} />
-                {uploading ? 'Uploading...' : 'Upload Document'}
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-              </label>
-            </div>
+    {/* Upload Button */}
+    <div className="flex items-center gap-3">
+      <select
+        value={uploadCategory}
+        onChange={(e) => setUploadCategory(e.target.value)}
+        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+      >
+        <option>Tax Documents</option>
+        <option>Certifications</option>
+        <option>Insurance</option>
+        <option>Contracts</option>
+        <option>Licenses</option>
+        <option>Other</option>
+      </select>
+      <label className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer">
+        <Upload size={18} />
+        {uploading ? 'Uploading...' : 'Upload Document'}
+        <input
+          type="file"
+          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+          onChange={handleFileUpload}
+          disabled={uploading}
+          className="hidden"
+        />
+      </label>
+    </div>
+  </div>
+
+  {/* Documents by Category OR Empty State */}
+  {Object.keys(documents).length > 0 ? (
+    <div className="space-y-4">
+      {Object.keys(documents).sort().map(category => (
+        <div key={category} className="bg-white rounded-lg border border-purple-200 overflow-hidden">
+          <div className="bg-purple-50 px-4 py-3 border-b border-purple-200">
+            <h3 className="font-semibold text-gray-900">{category}</h3>
+            <p className="text-xs text-gray-600">{documents[category].length} document{documents[category].length !== 1 ? 's' : ''}</p>
           </div>
-
-          {/* Documents by Category */}
-          <div className="space-y-4">
-            {Object.keys(documents).sort().map(category => (
-              <div key={category} className="bg-white rounded-lg border border-purple-200 overflow-hidden">
-                <div className="bg-purple-50 px-4 py-3 border-b border-purple-200">
-                  <h3 className="font-semibold text-gray-900">{category}</h3>
-                  <p className="text-xs text-gray-600">{documents[category].length} document{documents[category].length !== 1 ? 's' : ''}</p>
-                </div>
-                <div className="p-4">
-                  <div className="space-y-2">
-                    {documents[category].map(doc => (
-                      <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-purple-50 transition-colors">
-                        <div className="flex items-center gap-3 flex-1">
-                          <File size={20} className="text-purple-600" />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-gray-900">{doc.documentName}</p>
-                            <p className="text-xs text-gray-500">
-                              {doc.fileType} • {doc.fileSize} • Uploaded {doc.uploadDate}
-                            </p>
-                            {doc.notes && (
-                              <p className="text-xs text-gray-600 italic mt-1">{doc.notes}</p>
-                            )}
-                          </div>
-                        </div>
-                        
-                          <a href={doc.driveLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-                        >
-                          <Download size={16} />
-                          Download
-                        </a>
-                      </div>
-                    ))}
+          <div className="p-4">
+            <div className="space-y-2">
+              {documents[category].map(doc => (
+                <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-purple-50 transition-colors">
+                  <div className="flex items-center gap-3 flex-1">
+                    <File size={20} className="text-purple-600" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900">{doc.documentName}</p>
+                      <p className="text-xs text-gray-500">
+                        {doc.fileType} • {doc.fileSize} • Uploaded {doc.uploadDate}
+                      </p>
+                      {doc.notes && (
+                        <p className="text-xs text-gray-600 italic mt-1">{doc.notes}</p>
+                      )}
+                    </div>
                   </div>
+                  
+                    <a href={doc.driveLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Download
+                  </a>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
-      )}
+      ))}
+    </div>
+  ) : (
+    <div className="bg-white rounded-lg border-2 border-dashed border-purple-300 p-8 text-center">
+      <File size={48} className="text-purple-300 mx-auto mb-4" />
+      <p className="text-gray-600 mb-2">No documents yet</p>
+      <p className="text-sm text-gray-500">
+        Upload your first document using the button above, or add documents manually to the CompanyDocuments sheet
+      </p>
+    </div>
+  )}
+</div>
 
       {/* Company Data by Category */}
       <div className="space-y-4">
