@@ -1,7 +1,7 @@
 // CompanyDataVault.jsx //
 
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, FileText, Building, MapPin, Phone, CreditCard, Tag, Users, Award, Package, ChevronDown, ChevronUp, Upload, Download, File } from 'lucide-react';
+import { Copy, Check, FileText, Building, MapPin, Phone, CreditCard, Tag, Users, Award, Package, ChevronDown, ChevronUp, Upload, Download, File, Trash2 } from 'lucide-react';
 
 const CompanyDataVault = () => {
   const [groupedData, setGroupedData] = useState({});
@@ -99,6 +99,35 @@ const CompanyDataVault = () => {
       setUploading(false);
     }
   };
+
+  const handleDeleteDocument = async (doc) => {
+  if (!window.confirm(`Are you sure you want to delete "${doc.documentName}"?\n\nThis will permanently delete:\n• The file from Google Drive\n• The metadata from the sheet\n\nThis action cannot be undone.`)) {
+    return;
+  }
+
+  try {
+    const response = await fetch('/.netlify/functions/deleteDocument', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        documentId: doc.id,
+        driveFileId: doc.driveFileId
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('Document deleted successfully!');
+      loadAllData(); // Reload to remove from display
+    } else {
+      alert('Delete failed: ' + result.error);
+    }
+  } catch (err) {
+    console.error('Delete error:', err);
+    alert('Delete failed: ' + err.message);
+  }
+};
 
   const copyToClipboard = async (text, fieldId) => {
     try {
@@ -296,14 +325,25 @@ const CompanyDataVault = () => {
                     </div>
                   </div>
                   
-                    <a href={doc.driveLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-                  >
-                    <Download size={16} />
-                    Download
-                  </a>
+                   <div className="flex items-center gap-2">
+  
+    <a href={doc.driveLink}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
+  >
+    <Download size={16} />
+    View
+  </a>
+  
+  <button
+    onClick={() => handleDeleteDocument(doc)}
+    className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
+  >
+    <Trash2 size={16} />
+    Delete
+  </button>
+</div>
                 </div>
               ))}
             </div>
