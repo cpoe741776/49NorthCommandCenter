@@ -36,16 +36,23 @@ exports.handler = async (event, context) => {
     const { documentId, driveFileId } = JSON.parse(event.body);
 
     // Delete from Google Drive
-    try {
-      await drive.files.delete({
-        fileId: driveFileId,
-        supportsAllDrives: true
-      });
-      console.log('File deleted from Drive:', driveFileId);
-    } catch (driveError) {
-      console.warn('Drive delete failed (file may already be deleted):', driveError.message);
-      // Continue to delete from sheet even if Drive delete fails
-    }
+    // Delete from Google Drive
+let driveDeleteSuccess = false;
+let driveError = null;
+
+try {
+  await drive.files.delete({
+    fileId: driveFileId,
+    supportsAllDrives: true
+  });
+  driveDeleteSuccess = true;
+  console.log('✅ File deleted from Drive:', driveFileId);
+} catch (error) {
+  driveError = error.message;
+  console.error('❌ Drive delete failed:', error.message);
+  console.error('Error details:', JSON.stringify(error, null, 2));
+  // Continue to delete from sheet even if Drive delete fails
+}
 
     // Find and delete row from sheet
     const response = await sheets.spreadsheets.values.get({
@@ -98,13 +105,17 @@ exports.handler = async (event, context) => {
     }
 
     return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        message: 'Document deleted from both Drive and sheet'
-      })
-    };
+  statusCode: 200,
+  headers,
+  body: JSON.stringify({
+    success: true,
+    message: driveDeleteSuccess 
+      ? 'Document deleted from both Drive and sheet'
+      : 'Metadata deleted from sheet, but Drive file deletion failed',
+    driveDeleted: driveDeleteSuccess,
+    driveError: driveError
+  })
+};
 
   } catch (error) {
     console.error('Error deleting document:', error);
