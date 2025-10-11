@@ -3,6 +3,31 @@
 import React, { useState, useEffect } from 'react';
 import { Copy, Check, FileText, Building, MapPin, Phone, CreditCard, Tag, Users, Award, Package, ChevronDown, ChevronUp, Upload, Download, File, Trash2 } from 'lucide-react';
 
+// Loading Spinner Component
+const LoadingSpinner = ({ size = 16 }) => (
+  <svg 
+    className="animate-spin" 
+    width={size} 
+    height={size} 
+    viewBox="0 0 24 24" 
+    fill="none"
+  >
+    <circle 
+      className="opacity-25" 
+      cx="12" 
+      cy="12" 
+      r="10" 
+      stroke="currentColor" 
+      strokeWidth="4"
+    />
+    <path 
+      className="opacity-75" 
+      fill="currentColor" 
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
+  </svg>
+);
+
 const CompanyDataVault = () => {
   const [groupedData, setGroupedData] = useState({});
   const [commodityCodes, setCommodityCodes] = useState({});
@@ -13,6 +38,7 @@ const CompanyDataVault = () => {
   const [expandedCodeTypes, setExpandedCodeTypes] = useState({});
   const [uploading, setUploading] = useState(false);
   const [uploadCategory, setUploadCategory] = useState('Tax Documents');
+  const [deleting, setDeleting] = useState(null);
 
   useEffect(() => {
     loadAllData();
@@ -84,50 +110,54 @@ const CompanyDataVault = () => {
         const result = await response.json();
 
         if (result.success) {
-          alert('Document uploaded successfully!');
-          loadAllData();
+          await loadAllData();
+          alert('✅ Document uploaded successfully!');
         } else {
-          alert('Upload failed: ' + result.error);
+          alert('❌ Upload failed: ' + result.error);
         }
       };
 
       reader.readAsDataURL(file);
     } catch (err) {
       console.error('Upload error:', err);
-      alert('Upload failed');
+      alert('❌ Upload failed: ' + err.message);
     } finally {
       setUploading(false);
     }
   };
 
   const handleDeleteDocument = async (doc) => {
-  if (!window.confirm(`Are you sure you want to delete "${doc.documentName}"?\n\nThis will permanently delete:\n• The file from Google Drive\n• The metadata from the sheet\n\nThis action cannot be undone.`)) {
-    return;
-  }
-
-  try {
-    const response = await fetch('/.netlify/functions/deleteDocument', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        documentId: doc.id,
-        driveFileId: doc.driveFileId
-      })
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      alert('Document deleted successfully!');
-      loadAllData(); // Reload to remove from display
-    } else {
-      alert('Delete failed: ' + result.error);
+    if (!window.confirm(`Are you sure you want to delete "${doc.documentName}"?\n\nThis will permanently delete:\n• The file from Google Drive\n• The metadata from the sheet\n\nThis action cannot be undone.`)) {
+      return;
     }
-  } catch (err) {
-    console.error('Delete error:', err);
-    alert('Delete failed: ' + err.message);
-  }
-};
+
+    try {
+      setDeleting(doc.id);
+
+      const response = await fetch('/.netlify/functions/deleteDocument', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: doc.id,
+          driveFileId: doc.driveFileId
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        await loadAllData();
+        alert('✅ Document deleted successfully!');
+      } else {
+        alert('❌ Delete failed: ' + result.error);
+        setDeleting(null);
+      }
+    } catch (err) {
+      console.error('Delete error:', err);
+      alert('❌ Delete failed: ' + err.message);
+      setDeleting(null);
+    }
+  };
 
   const copyToClipboard = async (text, fieldId) => {
     try {
@@ -260,107 +290,134 @@ const CompanyDataVault = () => {
         </p>
       </div>
 
-      {/* Documents Section - ALWAYS SHOW */}
-<div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200">
-  <div className="flex items-center justify-between mb-6">
-    <div className="flex items-center gap-3">
-      <File className="text-purple-600" size={28} />
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Company Documents</h2>
-        <p className="text-sm text-gray-600">Store and access important company files</p>
-      </div>
-    </div>
-
-    {/* Upload Button */}
-    <div className="flex items-center gap-3">
-      <select
-        value={uploadCategory}
-        onChange={(e) => setUploadCategory(e.target.value)}
-        className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-      >
-        <option>Tax Documents</option>
-        <option>Certifications</option>
-        <option>Insurance</option>
-        <option>Contracts</option>
-        <option>Licenses</option>
-        <option>Other</option>
-      </select>
-      <label className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer">
-        <Upload size={18} />
-        {uploading ? 'Uploading...' : 'Upload Document'}
-        <input
-          type="file"
-          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-          onChange={handleFileUpload}
-          disabled={uploading}
-          className="hidden"
-        />
-      </label>
-    </div>
-  </div>
-
-  {/* Documents by Category OR Empty State */}
-  {Object.keys(documents).length > 0 ? (
-    <div className="space-y-4">
-      {Object.keys(documents).sort().map(category => (
-        <div key={category} className="bg-white rounded-lg border border-purple-200 overflow-hidden">
-          <div className="bg-purple-50 px-4 py-3 border-b border-purple-200">
-            <h3 className="font-semibold text-gray-900">{category}</h3>
-            <p className="text-xs text-gray-600">{documents[category].length} document{documents[category].length !== 1 ? 's' : ''}</p>
+      {/* Documents Section */}
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200 relative">
+        {uploading && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-purple-200 rounded-t-lg overflow-hidden">
+            <div className="h-full bg-purple-600 animate-pulse w-full"></div>
           </div>
-          <div className="p-4">
-            <div className="space-y-2">
-              {documents[category].map(doc => (
-                <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-purple-50 transition-colors">
-                  <div className="flex items-center gap-3 flex-1">
-                    <File size={20} className="text-purple-600" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900">{doc.documentName}</p>
-                      <p className="text-xs text-gray-500">
-                        {doc.fileType} • {doc.fileSize} • Uploaded {doc.uploadDate}
-                      </p>
-                      {doc.notes && (
-                        <p className="text-xs text-gray-600 italic mt-1">{doc.notes}</p>
-                      )}
-                    </div>
-                  </div>
-                  
-                   <div className="flex items-center gap-2">
-  
-    <a href={doc.driveLink}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
-  >
-    <Download size={16} />
-    View
-  </a>
-  
-  <button
-    onClick={() => handleDeleteDocument(doc)}
-    className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm"
-  >
-    <Trash2 size={16} />
-    Delete
-  </button>
-</div>
-                </div>
-              ))}
+        )}
+        
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <File className="text-purple-600" size={28} />
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Company Documents</h2>
+              <p className="text-sm text-gray-600">Store and access important company files</p>
             </div>
           </div>
+
+          <div className="flex items-center gap-3">
+            <select
+              value={uploadCategory}
+              onChange={(e) => setUploadCategory(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              disabled={uploading}
+            >
+              <option>Tax Documents</option>
+              <option>Certifications</option>
+              <option>Insurance</option>
+              <option>Contracts</option>
+              <option>Licenses</option>
+              <option>Other</option>
+            </select>
+            
+            <label className={`flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploading ? (
+                <>
+                  <LoadingSpinner size={18} />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload size={18} />
+                  Upload Document
+                </>
+              )}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="hidden"
+              />
+            </label>
+          </div>
         </div>
-      ))}
-    </div>
-  ) : (
-    <div className="bg-white rounded-lg border-2 border-dashed border-purple-300 p-8 text-center">
-      <File size={48} className="text-purple-300 mx-auto mb-4" />
-      <p className="text-gray-600 mb-2">No documents yet</p>
-      <p className="text-sm text-gray-500">
-        Upload your first document using the button above, or add documents manually to the CompanyDocuments sheet
-      </p>
-    </div>
-  )}
-</div>
+
+        {Object.keys(documents).length > 0 ? (
+          <div className="space-y-4">
+            {Object.keys(documents).sort().map(category => (
+              <div key={category} className="bg-white rounded-lg border border-purple-200 overflow-hidden">
+                <div className="bg-purple-50 px-4 py-3 border-b border-purple-200">
+                  <h3 className="font-semibold text-gray-900">{category}</h3>
+                  <p className="text-xs text-gray-600">{documents[category].length} document{documents[category].length !== 1 ? 's' : ''}</p>
+                </div>
+                <div className="p-4">
+                  <div className="space-y-2">
+                    {documents[category].map(doc => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-purple-50 transition-colors">
+                        <div className="flex items-center gap-3 flex-1">
+                          <File size={20} className="text-purple-600" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900">{doc.documentName}</p>
+                            <p className="text-xs text-gray-500">
+                              {doc.fileType} • {doc.fileSize} • Uploaded {doc.uploadDate}
+                            </p>
+                            {doc.notes && (
+                              <p className="text-xs text-gray-600 italic mt-1">{doc.notes}</p>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          
+                            <a href={doc.driveLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm ${
+                              deleting === doc.id ? 'opacity-50 pointer-events-none' : ''
+                            }`}
+                          >
+                            <Download size={16} />
+                            View
+                          </a>
+                          
+                          <button
+                            onClick={() => handleDeleteDocument(doc)}
+                            disabled={deleting === doc.id}
+                            className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {deleting === doc.id ? (
+                              <>
+                                <LoadingSpinner size={16} />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 size={16} />
+                                Delete
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border-2 border-dashed border-purple-300 p-8 text-center">
+            <File size={48} className="text-purple-300 mx-auto mb-4" />
+            <p className="text-gray-600 mb-2">No documents yet</p>
+            <p className="text-sm text-gray-500">
+              Upload your first document using the button above
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Company Data by Category */}
       <div className="space-y-4">
@@ -436,7 +493,7 @@ const CompanyDataVault = () => {
           ))}
       </div>
 
-      {/* Classifications Section - MOVED TO BOTTOM */}
+      {/* Classifications Section */}
       {Object.keys(commodityCodes).length > 0 && (
         <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg shadow-lg p-6 border-2 border-indigo-200">
           <div className="flex items-center gap-3 mb-6">
@@ -549,7 +606,6 @@ const CompanyDataVault = () => {
             })}
           </div>
 
-          {/* Quick Copy Summary */}
           <div className="mt-6 p-4 bg-white rounded-lg border border-indigo-200">
             <p className="text-sm text-gray-700 mb-3 font-semibold">Quick Copy Summary:</p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
@@ -570,7 +626,7 @@ const CompanyDataVault = () => {
         </div>
       )}
 
-      {/* Company Descriptions Section - MOVED TO VERY BOTTOM */}
+      {/* Company Descriptions Section */}
       {groupedData['Company Descriptions'] && (
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg p-6 border border-blue-200">
           <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
