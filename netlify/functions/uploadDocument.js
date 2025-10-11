@@ -1,7 +1,9 @@
+// uploadDocument.js //
+
 const { google } = require('googleapis');
 const { Readable } = require('stream');
 
-const SHEET_ID = process.env.BID_SYSTEMS_SHEET_ID;
+const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID;
 const FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
 exports.handler = async (event, context) => {

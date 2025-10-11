@@ -1,6 +1,8 @@
+// getCompanyDocuments.js //
+
 const { google } = require('googleapis');
 
-const SHEET_ID = process.env.BID_SYSTEMS_SHEET_ID;
+const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID;
 
 exports.handler = async (event, context) => {
   const headers = {
