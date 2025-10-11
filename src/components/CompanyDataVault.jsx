@@ -232,7 +232,7 @@ const CompanyDataVault = () => {
       </div>
 
       {/* Documents Section - STANDALONE */}
-      {Object.keys(documents).length > 0 && (
+      {(
         <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
