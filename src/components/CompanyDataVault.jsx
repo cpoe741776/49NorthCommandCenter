@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Copy, Check, FileText, Building, MapPin, Phone, CreditCard, Tag, Users, Award, Package, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, Download, File } from 'lucide-react';
 
 const CompanyDataVault = () => {
   const [groupedData, setGroupedData] = useState({});
@@ -10,41 +11,99 @@ const CompanyDataVault = () => {
   const [error, setError] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
   const [expandedCodeTypes, setExpandedCodeTypes] = useState({});
+  const [documents, setDocuments] = useState({});
+const [uploading, setUploading] = useState(false);
+const [uploadCategory, setUploadCategory] = useState('Tax Documents');
 
   useEffect(() => {
     loadAllData();
   }, []);
 
   const loadAllData = async () => {
-    try {
-      setLoading(true);
-      
-      // Load company data
-      const companyResponse = await fetch('/.netlify/functions/getCompanyData');
-      const companyResult = await companyResponse.json();
-      
-      // Load commodity codes
-      const codesResponse = await fetch('/.netlify/functions/getCommodityCodes');
-      const codesResult = await codesResponse.json();
-      
-      if (companyResult.success) {
-        setGroupedData(companyResult.grouped);
-      }
-      
-      if (codesResult.success) {
-        setCommodityCodes(codesResult.grouped);
-      }
-      
-      if (!companyResult.success || !codesResult.success) {
-        setError(companyResult.error || codesResult.error);
-      }
-    } catch (err) {
-      setError('Failed to load data');
-      console.error(err);
-    } finally {
-      setLoading(false);
+  try {
+    setLoading(true);
+    
+    // Load company data
+    const companyResponse = await fetch('/.netlify/functions/getCompanyData');
+    const companyResult = await companyResponse.json();
+    
+    // Load commodity codes
+    const codesResponse = await fetch('/.netlify/functions/getCommodityCodes');
+    const codesResult = await codesResponse.json();
+    
+    // Load documents
+    const docsResponse = await fetch('/.netlify/functions/getCompanyDocuments');
+    const docsResult = await docsResponse.json();
+    
+    if (companyResult.success) {
+      setGroupedData(companyResult.grouped);
     }
-  };
+    
+    if (codesResult.success) {
+      setCommodityCodes(codesResult.grouped);
+    }
+    
+    if (docsResult.success) {
+      setDocuments(docsResult.grouped);
+    }
+    
+    if (!companyResult.success || !codesResult.success) {
+      setError(companyResult.error || codesResult.error);
+    }
+  } catch (err) {
+    setError('Failed to load data');
+    console.error(err);
+  } finally {
+    setLoading(false);
+  }
+};
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (file.size > 10 * 1024 * 1024) { // 10MB limit
+    alert('File size must be less than 10MB');
+    return;
+  }
+
+  try {
+    setUploading(true);
+
+    // Convert file to base64
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target.result.split(',')[1];
+
+      const response = await fetch('/.netlify/functions/uploadDocument', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileData: base64Data,
+          category: uploadCategory,
+          notes: ''
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('Document uploaded successfully!');
+        loadAllData(); // Reload to show new document
+      } else {
+        alert('Upload failed: ' + result.error);
+      }
+    };
+
+    reader.readAsDataURL(file);
+  } catch (err) {
+    console.error('Upload error:', err);
+    alert('Upload failed');
+  } finally {
+    setUploading(false);
+  }
+};
 
   const copyToClipboard = async (text, fieldId) => {
     try {
@@ -291,6 +350,89 @@ const CompanyDataVault = () => {
               );
             })}
           </div>
+
+          {/* Documents Section */}
+{Object.keys(documents).length > 0 && (
+  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg shadow-lg p-6 border-2 border-purple-200">
+    <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center gap-3">
+        <File className="text-purple-600" size={28} />
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Company Documents</h2>
+          <p className="text-sm text-gray-600">Store and access important company files</p>
+        </div>
+      </div>
+
+      {/* Upload Button */}
+      <div className="flex items-center gap-3">
+        <select
+          value={uploadCategory}
+          onChange={(e) => setUploadCategory(e.target.value)}
+          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+        >
+          <option>Tax Documents</option>
+          <option>Certifications</option>
+          <option>Insurance</option>
+          <option>Contracts</option>
+          <option>Licenses</option>
+          <option>Other</option>
+        </select>
+        <label className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer">
+          <Upload size={18} />
+          {uploading ? 'Uploading...' : 'Upload Document'}
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            onChange={handleFileUpload}
+            disabled={uploading}
+            className="hidden"
+          />
+        </label>
+      </div>
+    </div>
+
+    {/* Documents by Category */}
+    <div className="space-y-4">
+      {Object.keys(documents).sort().map(category => (
+        <div key={category} className="bg-white rounded-lg border border-purple-200 overflow-hidden">
+          <div className="bg-purple-50 px-4 py-3 border-b border-purple-200">
+            <h3 className="font-semibold text-gray-900">{category}</h3>
+            <p className="text-xs text-gray-600">{documents[category].length} document{documents[category].length !== 1 ? 's' : ''}</p>
+          </div>
+          <div className="p-4">
+            <div className="space-y-2">
+              {documents[category].map(doc => (
+                <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-purple-50 transition-colors">
+                  <div className="flex items-center gap-3 flex-1">
+                    <File size={20} className="text-purple-600" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900">{doc.documentName}</p>
+                      <p className="text-xs text-gray-500">
+                        {doc.fileType} • {doc.fileSize} • Uploaded {doc.uploadDate}
+                      </p>
+                      {doc.notes && (
+                        <p className="text-xs text-gray-600 italic mt-1">{doc.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                    <a href={doc.driveLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm"
+                  >
+                    <Download size={16} />
+                    Download
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
 
           {/* Quick Copy Summary */}
           <div className="mt-6 p-4 bg-white rounded-lg border border-indigo-200">
