@@ -39,48 +39,45 @@ exports.handler = async (event, context) => {
     const drive = google.drive({ version: 'v3', auth });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Parse request body
     const { fileName, fileData, category, notes } = JSON.parse(event.body);
 
-    // Decode base64 file data
     const buffer = Buffer.from(fileData, 'base64');
     const fileStream = Readable.from(buffer);
 
-    // Upload to Google Drive
     const fileMetadata = {
       name: fileName,
-      parents: [FOLDER_ID]
+      parents: [FOLDER_ID],
+      supportsAllDrives: true
     };
 
     const media = {
-      mimeType: 'application/pdf', // Adjust based on file type
+      mimeType: 'application/pdf',
       body: fileStream
     };
 
     const driveResponse = await drive.files.create({
       resource: fileMetadata,
       media: media,
-      fields: 'id, name, size, webViewLink'
+      fields: 'id, name, size, webViewLink',
+      supportsAllDrives: true
     });
 
     const fileId = driveResponse.data.id;
     const fileSize = driveResponse.data.size;
     const webLink = driveResponse.data.webViewLink;
 
-    // Make file accessible (anyone with link can view)
     await drive.permissions.create({
       fileId: fileId,
       requestBody: {
         role: 'reader',
         type: 'anyone'
-      }
+      },
+      supportsAllDrives: true
     });
 
-    // Generate document ID
     const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const docId = `DOC-${timestamp}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-    // Add to Google Sheet
     const fileType = fileName.split('.').pop().toUpperCase();
     const uploadDate = new Date().toISOString().slice(0, 10);
     const fileSizeFormatted = `${(fileSize / 1024).toFixed(0)} KB`;
