@@ -1,37 +1,50 @@
 // CompanyDataVault.jsx //
 
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, FileText, Building, MapPin, Phone, CreditCard, Tag, Users, Award } from 'lucide-react';
+import { Copy, Check, FileText, Building, MapPin, Phone, CreditCard, Tag, Users, Award, Package, ChevronDown, ChevronUp } from 'lucide-react';
 
 const CompanyDataVault = () => {
-
   const [groupedData, setGroupedData] = useState({});
+  const [commodityCodes, setCommodityCodes] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
+  const [expandedCodeTypes, setExpandedCodeTypes] = useState({});
 
   useEffect(() => {
-    loadCompanyData();
+    loadAllData();
   }, []);
 
-  const loadCompanyData = async () => {
-  try {
-    setLoading(true);
-    const response = await fetch('/.netlify/functions/getCompanyData');
-    const result = await response.json();
-    
-    if (result.success) {
-      setGroupedData(result.grouped);  // Keep only this line
-    } else {
-      setError(result.error);
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load company data
+      const companyResponse = await fetch('/.netlify/functions/getCompanyData');
+      const companyResult = await companyResponse.json();
+      
+      // Load commodity codes
+      const codesResponse = await fetch('/.netlify/functions/getCommodityCodes');
+      const codesResult = await codesResponse.json();
+      
+      if (companyResult.success) {
+        setGroupedData(companyResult.grouped);
+      }
+      
+      if (codesResult.success) {
+        setCommodityCodes(codesResult.grouped);
+      }
+      
+      if (!companyResult.success || !codesResult.success) {
+        setError(companyResult.error || codesResult.error);
+      }
+    } catch (err) {
+      setError('Failed to load data');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    setError('Failed to load company data');
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const copyToClipboard = async (text, fieldId) => {
     try {
@@ -58,6 +71,38 @@ const CompanyDataVault = () => {
     }
   };
 
+  const copyAllCodesOfType = async (codeType) => {
+    const codes = commodityCodes[codeType] || [];
+    const activeOnly = codes.filter(c => c.active === 'Yes');
+    const codeNumbers = activeOnly.map(c => c.codeNumber).join(', ');
+    
+    try {
+      await navigator.clipboard.writeText(codeNumbers);
+      setCopiedField(`codes-${codeType}`);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const copyCodeWithDescription = async (code) => {
+    const text = `${code.codeNumber} - ${code.description}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(`code-${code.id}`);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const toggleCodeType = (codeType) => {
+    setExpandedCodeTypes(prev => ({
+      ...prev,
+      [codeType]: !prev[codeType]
+    }));
+  };
+
   const getCategoryIcon = (category) => {
     const icons = {
       'Company Info': Building,
@@ -77,6 +122,18 @@ const CompanyDataVault = () => {
     return <Icon size={20} className="text-blue-600" />;
   };
 
+  const getCodeTypeColor = (codeType) => {
+    const colors = {
+      'NAICS': 'bg-blue-100 text-blue-800 border-blue-300',
+      'NIGP': 'bg-green-100 text-green-800 border-green-300',
+      'PSC': 'bg-purple-100 text-purple-800 border-purple-300',
+      'UNSPSC': 'bg-orange-100 text-orange-800 border-orange-300',
+      'CPV': 'bg-pink-100 text-pink-800 border-pink-300',
+      'SIC': 'bg-gray-100 text-gray-800 border-gray-300'
+    };
+    return colors[codeType] || 'bg-gray-100 text-gray-800 border-gray-300';
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -89,12 +146,21 @@ const CompanyDataVault = () => {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-800">{error}</p>
-        <button onClick={loadCompanyData} className="mt-2 text-red-600 hover:text-red-800">
+        <button onClick={loadAllData} className="mt-2 text-red-600 hover:text-red-800">
           Try Again
         </button>
       </div>
     );
   }
+
+  const codeTypeOrder = ['NAICS', 'NIGP', 'PSC', 'UNSPSC', 'CPV', 'SIC'];
+  const sortedCodeTypes = Object.keys(commodityCodes).sort((a, b) => {
+    const aIndex = codeTypeOrder.indexOf(a);
+    const bIndex = codeTypeOrder.indexOf(b);
+    if (aIndex === -1) return 1;
+    if (bIndex === -1) return -1;
+    return aIndex - bIndex;
+  });
 
   return (
     <div className="space-y-6">
@@ -111,9 +177,148 @@ const CompanyDataVault = () => {
         </p>
       </div>
 
-      {/* Data by Category */}
+      {/* Classifications Section - FEATURED */}
+      {Object.keys(commodityCodes).length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg shadow-lg p-6 border-2 border-indigo-200">
+          <div className="flex items-center gap-3 mb-6">
+            <Package className="text-indigo-600" size={28} />
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Commodity & Classification Codes</h2>
+              <p className="text-sm text-gray-600">Copy codes by type for bid system registrations</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {sortedCodeTypes.map(codeType => {
+              const codes = commodityCodes[codeType] || [];
+              const activeCodes = codes.filter(c => c.active === 'Yes');
+              const isExpanded = expandedCodeTypes[codeType];
+              const primaryCode = codes.find(c => c.priority === 'Primary');
+
+              return (
+                <div key={codeType} className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden">
+                  {/* Code Type Header */}
+                  <div className="p-4 bg-gray-50 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1">
+                        <button
+                          onClick={() => toggleCodeType(codeType)}
+                          className="flex items-center gap-2 hover:bg-gray-100 rounded p-1 transition-colors"
+                        >
+                          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                        </button>
+                        
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-3 py-1 rounded-full text-sm font-bold border-2 ${getCodeTypeColor(codeType)}`}>
+                              {codeType}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              {activeCodes.length} active code{activeCodes.length !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          {primaryCode && (
+                            <p className="text-xs text-gray-500 mt-1 ml-1">
+                              Primary: {primaryCode.codeNumber} - {primaryCode.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => copyAllCodesOfType(codeType)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                      >
+                        {copiedField === `codes-${codeType}` ? (
+                          <>
+                            <Check size={16} />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={16} />
+                            Copy All Codes
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Code List */}
+                  {isExpanded && (
+                    <div className="p-4 max-h-96 overflow-y-auto">
+                      <div className="space-y-2">
+                        {activeCodes.map(code => (
+                          <div
+                            key={code.id}
+                            onClick={() => copyCodeWithDescription(code)}
+                            className="group flex items-start justify-between p-3 border border-gray-200 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 cursor-pointer transition-all"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono font-bold text-indigo-700">
+                                  {code.codeNumber}
+                                </span>
+                                {code.priority === 'Primary' && (
+                                  <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-bold rounded-full border border-yellow-300">
+                                    PRIMARY
+                                  </span>
+                                )}
+                                {code.category && (
+                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
+                                    {code.category}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-700">{code.description}</p>
+                              {code.notes && (
+                                <p className="text-xs text-gray-500 mt-1 italic">{code.notes}</p>
+                              )}
+                            </div>
+                            <div className="ml-3">
+                              {copiedField === `code-${code.id}` ? (
+                                <Check size={18} className="text-green-600" />
+                              ) : (
+                                <Copy size={18} className="text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Quick Copy Summary */}
+          <div className="mt-6 p-4 bg-white rounded-lg border border-indigo-200">
+            <p className="text-sm text-gray-700 mb-3 font-semibold">Quick Copy Summary:</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {sortedCodeTypes.map(codeType => {
+                const activeCodes = (commodityCodes[codeType] || []).filter(c => c.active === 'Yes');
+                return (
+                  <button
+                    key={codeType}
+                    onClick={() => copyAllCodesOfType(codeType)}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium border-2 hover:scale-105 transition-transform ${getCodeTypeColor(codeType)}`}
+                  >
+                    {codeType} ({activeCodes.length})
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Company Data by Category */}
       <div className="space-y-4">
-        {Object.keys(groupedData).sort().map(category => (
+        {Object.keys(groupedData)
+          .filter(cat => cat !== 'Classifications') // Exclude old Classifications if exists
+          .sort()
+          .map(category => (
           <div key={category} className="bg-white rounded-lg shadow overflow-hidden">
             {/* Category Header */}
             <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
@@ -184,7 +389,7 @@ const CompanyDataVault = () => {
         ))}
       </div>
 
-      {/* Company Descriptions Section - Special Formatting */}
+      {/* Company Descriptions Section */}
       {groupedData['Company Descriptions'] && (
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-lg p-6 border border-blue-200">
           <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
