@@ -85,7 +85,46 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
         <p className="text-gray-600 mt-1">49 North Business Operations Dashboard</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* System Admin Alerts Card - NEW */}
+        <div 
+          onClick={() => onNavigate('bid-systems')} 
+          className={`p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow ${
+            aiInsights?.aggregatedData?.summary?.newAdminEmailsCount > 0 
+              ? 'bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-400' 
+              : 'bg-white'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">System Admin</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">
+                {aiInsights?.aggregatedData?.summary?.adminEmailsCount || 0}
+              </p>
+            </div>
+            <div className="relative">
+              <Mail className="text-purple-600" size={40} />
+              {aiInsights?.aggregatedData?.summary?.newAdminEmailsCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
+                  {aiInsights.aggregatedData.summary.newAdminEmailsCount}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 text-sm">
+            {aiInsights?.aggregatedData?.summary?.newAdminEmailsCount > 0 ? (
+              <span className="text-red-600 font-semibold">
+                {aiInsights.aggregatedData.summary.newAdminEmailsCount} New Alert{aiInsights.aggregatedData.summary.newAdminEmailsCount > 1 ? 's' : ''}
+              </span>
+            ) : (
+              <span className="text-gray-600">No new alerts</span>
+            )}
+            <span className="text-gray-400 mx-2">•</span>
+            <span className="text-gray-600">Click to view</span>
+          </div>
+        </div>
+
+        {/* Active Bids Card */}
         <div onClick={() => onNavigate('bids')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
@@ -101,6 +140,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
           </div>
         </div>
 
+        {/* Webinars Card */}
         <div onClick={() => onNavigate('webinars')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
@@ -112,6 +152,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
           <div className="mt-4 text-sm text-gray-600">Next: Oct 30, 2025</div>
         </div>
 
+        {/* Social Posts Card */}
         <div onClick={() => onNavigate('social')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
