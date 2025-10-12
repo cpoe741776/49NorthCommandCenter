@@ -1,10 +1,11 @@
 // BidSystemsManager.jsx //
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff, FileText, MapPin } from 'lucide-react';
+import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff, FileText, MapPin, Mail } from 'lucide-react';
 import AddBidSystemForm from './AddBidSystemForm';
 import BidSystemDetailModal from './BidSystemDetailModal';
 import USStateMap from './USStateMap';
+import SystemsCorrespondenceModal from './SystemsCorrespondenceModal';
 
 const BidSystemsManager = ({ allBids }) => {
   const [systems, setSystems] = useState([]);
@@ -18,9 +19,16 @@ const BidSystemsManager = ({ allBids }) => {
   const [selectedSystem, setSelectedSystem] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
   const [hoveredCountry, setHoveredCountry] = useState(null);
+  
+  // Systems Administration state
+  const [showSystemsCorrespondence, setShowSystemsCorrespondence] = useState(false);
+  const [adminEmails, setAdminEmails] = useState([]);
+  const [adminEmailCount, setAdminEmailCount] = useState(0);
+  const [loadingAdmin, setLoadingAdmin] = useState(false);
 
   useEffect(() => {
     loadSystems();
+    loadAdminEmails();
     
     const filterBySystem = localStorage.getItem('filterBySystem');
     if (filterBySystem) {
@@ -49,73 +57,111 @@ const BidSystemsManager = ({ allBids }) => {
     }
   };
 
+  const loadAdminEmails = async () => {
+    try {
+      setLoadingAdmin(true);
+      const response = await fetch('/.netlify/functions/getSystemAdminEmails');
+      const data = await response.json();
+      
+      if (data.success) {
+        setAdminEmails(data.emails || []);
+        setAdminEmailCount(data.newCount || 0);
+      }
+    } catch (err) {
+      console.error('Failed to load admin emails:', err);
+    } finally {
+      setLoadingAdmin(false);
+    }
+  };
+
+  const handleArchiveAdminEmail = async (email) => {
+    try {
+      const response = await fetch('/.netlify/functions/updateSystemAdminStatus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceEmailId: email.sourceEmailId,
+          status: 'Archived'
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        await loadAdminEmails();
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      console.error('Failed to archive email:', err);
+      throw err;
+    }
+  };
+
   // Parse state and country coverage
   const coverageData = useMemo(() => {
-  const states = new Set();
-  const countries = new Set();
-  const stateSystemsMap = {};
-  const countrySystemsMap = {};
+    const states = new Set();
+    const countries = new Set();
+    const stateSystemsMap = {};
+    const countrySystemsMap = {};
 
-  const stateAbbreviations = {
-    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
-    'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
-    'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
-    'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
-    'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
-    'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
-    'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
-    'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
-    'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
-  };
+    const stateAbbreviations = {
+      'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+      'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+      'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+      'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+      'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO',
+      'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+      'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND', 'ohio': 'OH',
+      'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA', 'rhode island': 'RI', 'south carolina': 'SC',
+      'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX', 'utah': 'UT', 'vermont': 'VT',
+      'virginia': 'VA', 'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
+    };
 
-  systems.forEach(system => {
-    const geo = (system.geographicCoverage || '').toLowerCase();
-    const category = (system.category || '').toLowerCase();
+    systems.forEach(system => {
+      const geo = (system.geographicCoverage || '').toLowerCase();
+      const category = (system.category || '').toLowerCase();
 
-    // ONLY detect US states from "US State" category
-    if (category === 'us state') {
-      Object.entries(stateAbbreviations).forEach(([fullName, abbr]) => {
-        if (geo.includes(fullName)) {
-          states.add(abbr);
-          if (!stateSystemsMap[abbr]) stateSystemsMap[abbr] = [];
-          stateSystemsMap[abbr].push(system.systemName);
-        }
-      });
-    }
+      if (category === 'us state') {
+        Object.entries(stateAbbreviations).forEach(([fullName, abbr]) => {
+          if (geo.includes(fullName)) {
+            states.add(abbr);
+            if (!stateSystemsMap[abbr]) stateSystemsMap[abbr] = [];
+            stateSystemsMap[abbr].push(system.systemName);
+          }
+        });
+      }
 
-    // Detect countries
-    if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') || 
-        geo.includes('united kingdom') || geo.includes('uk')) {
-      countries.add('UK');
-      if (!countrySystemsMap['UK']) countrySystemsMap['UK'] = [];
-      countrySystemsMap['UK'].push(system.systemName);
-    } else if (geo.includes('united states') || geo.includes('usa') || category === 'us state') {
-      countries.add('USA');
-      if (!countrySystemsMap['USA']) countrySystemsMap['USA'] = [];
-      countrySystemsMap['USA'].push(system.systemName);
-    } else if (geo.includes('canada')) {
-      countries.add('Canada');
-      if (!countrySystemsMap['Canada']) countrySystemsMap['Canada'] = [];
-      countrySystemsMap['Canada'].push(system.systemName);
-    } else if (geo.includes('australia')) {
-      countries.add('Australia');
-      if (!countrySystemsMap['Australia']) countrySystemsMap['Australia'] = [];
-      countrySystemsMap['Australia'].push(system.systemName);
-    } else if (geo.includes('international') || geo.includes('global')) {
-      countries.add('International');
-      if (!countrySystemsMap['International']) countrySystemsMap['International'] = [];
-      countrySystemsMap['International'].push(system.systemName);
-    }
-  });
+      if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') || 
+          geo.includes('united kingdom') || geo.includes('uk')) {
+        countries.add('UK');
+        if (!countrySystemsMap['UK']) countrySystemsMap['UK'] = [];
+        countrySystemsMap['UK'].push(system.systemName);
+      } else if (geo.includes('united states') || geo.includes('usa') || category === 'us state') {
+        countries.add('USA');
+        if (!countrySystemsMap['USA']) countrySystemsMap['USA'] = [];
+        countrySystemsMap['USA'].push(system.systemName);
+      } else if (geo.includes('canada')) {
+        countries.add('Canada');
+        if (!countrySystemsMap['Canada']) countrySystemsMap['Canada'] = [];
+        countrySystemsMap['Canada'].push(system.systemName);
+      } else if (geo.includes('australia')) {
+        countries.add('Australia');
+        if (!countrySystemsMap['Australia']) countrySystemsMap['Australia'] = [];
+        countrySystemsMap['Australia'].push(system.systemName);
+      } else if (geo.includes('international') || geo.includes('global')) {
+        countries.add('International');
+        if (!countrySystemsMap['International']) countrySystemsMap['International'] = [];
+        countrySystemsMap['International'].push(system.systemName);
+      }
+    });
 
-  return { 
-    states: Array.from(states), 
-    countries: Array.from(countries),
-    stateSystemsMap,
-    countrySystemsMap
-  };
-}, [systems]);
+    return { 
+      states: Array.from(states), 
+      countries: Array.from(countries),
+      stateSystemsMap,
+      countrySystemsMap
+    };
+  }, [systems]);
 
   const togglePasswordVisibility = (systemId) => {
     setShowPasswords(prev => ({
@@ -206,57 +252,75 @@ const BidSystemsManager = ({ allBids }) => {
           <h1 className="text-3xl font-bold text-gray-900">Bid Systems Registry</h1>
           <p className="text-gray-600 mt-1">Manage your {systems.length} registered procurement systems</p>
         </div>
-        <button
-          onClick={handleAddNewSystem}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} />
-          Add New System
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+  onClick={() => {
+    loadAdminEmails();
+    setShowSystemsCorrespondence(true);
+  }}
+  disabled={loadingAdmin}
+  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors relative disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <Mail size={20} />
+  {loadingAdmin ? 'Loading...' : 'View Systems Correspondence'}
+  {adminEmailCount > 0 && !loadingAdmin && (
+    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+      {adminEmailCount}
+    </span>
+  )}
+</button>
+          <button
+            onClick={handleAddNewSystem}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={20} />
+            Add New System
+          </button>
+        </div>
       </div>
 
       {/* Maps Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-       {/* US State Map - Using Custom SVG */}
-<div className="bg-white p-6 rounded-lg shadow">
-  <div className="flex items-center gap-2 mb-4">
-    <MapPin className="text-blue-600" size={24} />
-    <h2 className="text-xl font-bold text-gray-900">US State Coverage</h2>
-  </div>
-  <div className="bg-gray-50 rounded-lg p-4 relative">
-    <USStateMap
-  registeredStates={coverageData.states}
-  stateSystemsMap={coverageData.stateSystemsMap}
-  onStateHover={setHoveredState}
-  hoveredState={hoveredState}
-  allSystems={systems}
-/>
-    
-    {hoveredState && coverageData.stateSystemsMap[hoveredState] && (
-      <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs z-10">
-        <p className="font-semibold text-gray-900 mb-1">{hoveredState}</p>
-        <p className="text-xs text-gray-600">
-          {coverageData.stateSystemsMap[hoveredState].join(', ')}
-        </p>
-      </div>
-    )}
-  </div>
-  <div className="mt-4 flex items-center justify-between text-sm">
-    <div className="flex items-center gap-4">
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 bg-blue-400 rounded"></div>
-        <span className="text-gray-600">Registered ({coverageData.states.length})</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 bg-gray-200 rounded"></div>
-        <span className="text-gray-600">Not Registered ({50 - coverageData.states.length})</span>
-      </div>
-    </div>
-    <span className="text-gray-500 font-semibold">
-      {Math.round((coverageData.states.length / 50) * 100)}% Coverage
-    </span>
-  </div>
-</div>
+        {/* US State Map */}
+        <div className="bg-white p-6 rounded-lg shadow">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin className="text-blue-600" size={24} />
+            <h2 className="text-xl font-bold text-gray-900">US State Coverage</h2>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-4 relative">
+            <USStateMap
+              registeredStates={coverageData.states}
+              stateSystemsMap={coverageData.stateSystemsMap}
+              onStateHover={setHoveredState}
+              hoveredState={hoveredState}
+              allSystems={systems}
+            />
+            
+            {hoveredState && coverageData.stateSystemsMap[hoveredState] && (
+              <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs z-10">
+                <p className="font-semibold text-gray-900 mb-1">{hoveredState}</p>
+                <p className="text-xs text-gray-600">
+                  {coverageData.stateSystemsMap[hoveredState].join(', ')}
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="mt-4 flex items-center justify-between text-sm">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-blue-400 rounded"></div>
+                <span className="text-gray-600">Registered ({coverageData.states.length})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                <span className="text-gray-600">Not Registered ({50 - coverageData.states.length})</span>
+              </div>
+            </div>
+            <span className="text-gray-500 font-semibold">
+              {Math.round((coverageData.states.length / 50) * 100)}% Coverage
+            </span>
+          </div>
+        </div>
 
         {/* World Map */}
         <div className="bg-white p-6 rounded-lg shadow">
@@ -496,6 +560,17 @@ const BidSystemsManager = ({ allBids }) => {
           system={selectedSystem}
           allBids={allBids}
           onClose={() => setSelectedSystem(null)}
+        />
+      )}
+
+      {/* System Correspondence Modal */}
+      {showSystemsCorrespondence && (
+        <SystemsCorrespondenceModal
+          isOpen={showSystemsCorrespondence}
+          onClose={() => setShowSystemsCorrespondence(false)}
+          emails={adminEmails}
+          onArchive={handleArchiveAdminEmail}
+          onRefresh={loadAdminEmails}
         />
       )}
     </div>

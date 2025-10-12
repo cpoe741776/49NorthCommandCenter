@@ -3,7 +3,7 @@ import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Bu
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 import { fetchBids } from './services/bidService';
-import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems } from './services/tickerService';
+import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, generateSystemAdminTickerItems } from './services/tickerService';
 import RadioPlayer from './components/RadioPlayer';
 import Dashboard from './components/Dashboard';
 import BidOperations from './components/BidOperations';
@@ -12,13 +12,12 @@ import SocialMediaOperations from './components/SocialMediaOperations';
 import BidSystemsManager from './components/BidSystemsManager';
 import CompanyDataVault from './components/CompanyDataVault';
 
-
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'bids', label: 'Bid Operations', icon: FileText },
   { id: 'webinars', label: 'Webinar Operations', icon: Video },
   { id: 'social', label: 'Social Media', icon: Share2 },
-  { id: 'bid-systems', label: 'Bid Systems', icon: Database },      // ADD THIS
+  { id: 'bid-systems', label: 'Bid Systems', icon: Database },
   { id: 'company-data', label: 'Company Data', icon: Building2 },
 ];
 
@@ -36,7 +35,7 @@ const App = () => {
   const [tickerItems, setTickerItems] = useState([]);
   const tickerRef = useRef(null);
 
-  // ticker styles once
+  // Ticker styles once
   useEffect(() => {
     const styleId = 'ticker-animation-styles';
     if (!document.getElementById(styleId)) {
@@ -53,18 +52,42 @@ const App = () => {
   }, []);
 
   const loadTickerFeed = useCallback(async () => {
+    try {
+      console.log('🎯 Loading ticker feed...');
+      const items = await fetchTickerItems();
+      console.log('✅ Ticker items loaded:', items.length, 'items');
+      console.log('📋 Items:', items);
+      setTickerItems(items);
+    } catch (error) {
+      console.error('❌ Ticker feed error:', error);
+      setTickerItems([
+        { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
+        { message: '📊 Loading latest updates...', priority: 'medium' }
+      ]);
+    }
+  }, []);
+
+  const loadAdminEmails = useCallback(async () => {
   try {
-    console.log('🎯 Loading ticker feed...');
-    const items = await fetchTickerItems();
-    console.log('✅ Ticker items loaded:', items.length, 'items');
-    console.log('📋 Items:', items);
-    setTickerItems(items);
-  } catch (error) {
-    console.error('❌ Ticker feed error:', error);
-    setTickerItems([
-      { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
-      { message: '📊 Loading latest updates...', priority: 'medium' }
-    ]);
+    const response = await fetch('/.netlify/functions/getSystemAdminEmails');
+    const data = await response.json();
+    if (data.success) {
+      // Don't store in state - just use for ticker generation
+      const adminTickerItems = generateSystemAdminTickerItems(data.emails || []);
+      if (adminTickerItems.length > 0) {
+        try {
+          await fetch('/.netlify/functions/refreshAutoTickerItems', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: adminTickerItems, source: 'admin' })
+          });
+        } catch (err) {
+          console.error('Failed to refresh admin ticker items:', err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load admin emails:', err);
   }
 }, []);
 
@@ -77,6 +100,7 @@ const App = () => {
       setDisregardedBids(data.disregardedBids || []);
       setSubmittedBids(data.submittedBids || []);
       setSummary(data.summary || {});
+      
       const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
       const submittedTickerItems = generateSubmittedBidItems(data.submittedBids || []);
 
@@ -84,8 +108,9 @@ const App = () => {
         await fetch('/.netlify/functions/refreshAutoTickerItems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [...autoTickerItems, ...submittedTickerItems],
-          source: 'auto-bid'  // ADD THIS
+          body: JSON.stringify({ 
+            items: [...autoTickerItems, ...submittedTickerItems],
+            source: 'auto-bid'
           })
         });
       } catch {
@@ -104,8 +129,9 @@ const App = () => {
     if (user) {
       loadBids();
       loadTickerFeed();
+      loadAdminEmails();
     }
-  }, [user, loadBids, loadTickerFeed]);
+  }, [user, loadBids, loadTickerFeed, loadAdminEmails]);
 
   const displayItems = useMemo(() => {
     const normalized = (tickerItems || [])
@@ -160,7 +186,7 @@ const App = () => {
 
   const navigateFromTicker = useCallback((item) => {
     const explicit = (item?.target || '').toLowerCase();
-    if (['bids', 'webinars', 'social', 'dashboard'].includes(explicit)) {
+    if (['bids', 'webinars', 'social', 'dashboard', 'bid-systems'].includes(explicit)) {
       setCurrentPage(explicit);
       return;
     }
@@ -168,6 +194,7 @@ const App = () => {
     if (/webinar|zoom|event|session/.test(msg)) setCurrentPage('webinars');
     else if (/social|post|linkedin|facebook|\bx\b|twitter/.test(msg)) setCurrentPage('social');
     else if (/bid|rfp|tender|proposal|submission/.test(msg)) setCurrentPage('bids');
+    else if (/system|admin|notification|correspondence/.test(msg)) setCurrentPage('bid-systems');
     else setCurrentPage('dashboard');
   }, []);
 
@@ -185,117 +212,118 @@ const App = () => {
       </div>
     );
   }
+  
   if (!user) return <LoginPage onLogin={login} />;
 
   const renderPage = () => {
-  switch (currentPage) {
-    case 'dashboard': 
-      return (
-        <Dashboard 
-          summary={summary} 
-          loading={loading} 
-          onNavigate={setCurrentPage}
-          onTickerUpdate={loadTickerFeed}
-        />
-      );
-    case 'bids': 
-      return (
-        <BidOperations
-          bids={bids}
-          disregardedBids={disregardedBids}
-          submittedBids={submittedBids}
-          loading={loading}
-          onRefresh={loadBids}
-          onNavigate={setCurrentPage}
-        />
-      );
-    case 'webinars': 
-      return <WebinarOperations />;
-    case 'social': 
-      return <SocialMediaOperations />;
-    case 'bid-systems':
-      return <BidSystemsManager allBids={[...bids, ...submittedBids]} />;  // ADD THIS LINE
-    case 'company-data':
-      return <CompanyDataVault />;
-    default: 
-      return (
-        <Dashboard 
-          summary={summary} 
-          loading={loading} 
-          onNavigate={setCurrentPage}
-          onTickerUpdate={loadTickerFeed}
-        />
-      );
-  }
-};
+    switch (currentPage) {
+      case 'dashboard': 
+        return (
+          <Dashboard 
+            summary={summary} 
+            loading={loading} 
+            onNavigate={setCurrentPage}
+            onTickerUpdate={loadTickerFeed}
+          />
+        );
+      case 'bids': 
+        return (
+          <BidOperations
+            bids={bids}
+            disregardedBids={disregardedBids}
+            submittedBids={submittedBids}
+            loading={loading}
+            onRefresh={loadBids}
+            onNavigate={setCurrentPage}
+          />
+        );
+      case 'webinars': 
+        return <WebinarOperations />;
+      case 'social': 
+        return <SocialMediaOperations />;
+      case 'bid-systems':
+        return <BidSystemsManager allBids={[...bids, ...submittedBids]} />;
+      case 'company-data':
+        return <CompanyDataVault />;
+      default: 
+        return (
+          <Dashboard 
+            summary={summary} 
+            loading={loading} 
+            onNavigate={setCurrentPage}
+            onTickerUpdate={loadTickerFeed}
+          />
+        );
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-<div className={`bg-brand-blue text-white transition-all duration-300 relative flex flex-col h-screen pb-16 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
-  {/* Logo */}
-  <div className="p-4 flex items-center justify-between border-b border-blue-800">
-    {sidebarOpen ? (
-      <div className="flex-1 pr-2">
-        <img 
-          src="/images/49NLogo.png" 
-          alt="49 North Logo" 
-          className="w-full h-auto max-w-[240px]"
-        />
+      <div className={`bg-brand-blue text-white transition-all duration-300 relative flex flex-col h-screen pb-16 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
+        {/* Logo */}
+        <div className="p-4 flex items-center justify-between border-b border-blue-800">
+          {sidebarOpen ? (
+            <div className="flex-1 pr-2">
+              <img 
+                src="/images/49NLogo.png" 
+                alt="49 North Logo" 
+                className="w-full h-auto max-w-[240px]"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center w-full">
+              <img 
+                src="/images/49NLogo.png" 
+                alt="49 North" 
+                className="w-8 h-8 object-contain"
+              />
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarOpen(v => !v)}
+            className="p-2 hover:bg-blue-800 rounded transition-colors shrink-0"
+            aria-label="Toggle sidebar"
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+          {navItems.map(item => {
+            const Icon = item.icon;
+            const active = currentPage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setCurrentPage(item.id)}
+                className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
+                  active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
+                }`}
+                aria-current={active ? 'page' : undefined}
+              >
+                <Icon size={20} />
+                {sidebarOpen && <span>{item.label}</span>}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Radio Player */}
+        {sidebarOpen && <RadioPlayer />}
+
+        {/* Sign Out */}
+        <div className="p-4 border-t border-blue-800 mt-auto">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
+          >
+            <LogOut size={20} />
+            {sidebarOpen && <span>Sign Out</span>}
+          </button>
+        </div>
       </div>
-    ) : (
-      <div className="flex items-center justify-center w-full">
-        <img 
-          src="/images/49NLogo.png" 
-          alt="49 North" 
-          className="w-8 h-8 object-contain"
-        />
-      </div>
-    )}
-    <button
-      onClick={() => setSidebarOpen(v => !v)}
-      className="p-2 hover:bg-blue-800 rounded transition-colors shrink-0"
-      aria-label="Toggle sidebar"
-    >
-      {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-    </button>
-  </div>
-
-  {/* Navigation */}
-  <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
-    {navItems.map(item => {
-      const Icon = item.icon;
-      const active = currentPage === item.id;
-      return (
-        <button
-          key={item.id}
-          onClick={() => setCurrentPage(item.id)}
-          className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${
-            active ? 'bg-blue-700 text-white' : 'text-blue-100 hover:bg-blue-800'
-          }`}
-          aria-current={active ? 'page' : undefined}
-        >
-          <Icon size={20} />
-          {sidebarOpen && <span>{item.label}</span>}
-        </button>
-      );
-    })}
-  </nav>
-
-  {/* Radio Player */}
-  {sidebarOpen && <RadioPlayer />}
-
-  {/* Sign Out */}
-  <div className="p-4 border-t border-blue-800 mt-auto">
-    <button
-      onClick={logout}
-      className="w-full flex items-center gap-3 p-3 rounded text-blue-100 hover:bg-blue-800 transition-colors"
-    >
-      <LogOut size={20} />
-      {sidebarOpen && <span>Sign Out</span>}
-    </button>
-  </div>
-</div>
 
       {/* Main */}
       <div className="flex-1 overflow-auto">

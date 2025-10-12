@@ -1,3 +1,5 @@
+// refreshAutoTickerItems.js //
+
 const { google } = require('googleapis');
 
 exports.handler = async (event) => {
