@@ -1,25 +1,25 @@
 // SystemsCorrespondenceModal.jsx //
 
 import React, { useState } from 'react';
-import { X, Mail, Calendar, Building2, Eye, Archive } from 'lucide-react';
+import { X, Mail, Calendar, Building2, Eye, Trash2 } from 'lucide-react';
 
 const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefresh }) => {
   const [selectedEmail, setSelectedEmail] = useState(null);
-  const [archiving, setArchiving] = useState(null);
+  const [deleting, setDeleting] = useState(null);
 
   if (!isOpen) return null;
 
-  const handleArchive = async (email) => {
-    if (!window.confirm(`Archive this message from ${email.bidSystem}?`)) return;
+  const handleDelete = async (email) => {
+    if (!window.confirm(`Delete this message from ${email.bidSystem}? This action cannot be undone.`)) return;
     
-    setArchiving(email.id);
+    setDeleting(email.id);
     try {
-      await onArchive(email);
+      await onArchive(email); // Still uses onArchive prop for backend compatibility
       onRefresh();
     } catch (err) {
-      alert('Failed to archive: ' + err.message);
+      alert('Failed to delete: ' + err.message);
     } finally {
-      setArchiving(null);
+      setDeleting(null);
     }
   };
 
@@ -131,12 +131,12 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
                       </div>
                     </div>
                     <button
-                      onClick={() => handleArchive(selectedEmail)}
-                      disabled={archiving === selectedEmail.id}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+                      onClick={() => handleDelete(selectedEmail)}
+                      disabled={deleting === selectedEmail.id}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Archive size={16} />
-                      {archiving === selectedEmail.id ? 'Archiving...' : 'Archive'}
+                      <Trash2 size={16} />
+                      {deleting === selectedEmail.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
                 </div>
