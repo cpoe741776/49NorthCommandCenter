@@ -98,6 +98,10 @@ exports.handler = async (event, context) => {
     const respondBids = activeBids.filter((b) => b.recommendation === 'Respond');
     const gatherInfoBids = activeBids.filter((b) => b.recommendation === 'Gather More Information');
     const newsArticles = await fetchRelevantNews(CFG.NEWS_QUERY, CFG.NEWS_MAX);
+console.log('[Insights] News articles fetched:', newsArticles.length);
+if (newsArticles.length > 0) {
+  console.log('[Insights] Sample news:', newsArticles[0].title);
+}
 
     const bidUrgency = computeBidUrgencyBuckets(activeBids);
     const bidSystemDistribution = countByField(activeBids, (b) => b.bidSystem, 'Unknown');
@@ -276,7 +280,7 @@ CONTEXT:
 - System administrative correspondence tracking
 - Disregarded opportunities archive (for potential revival)
 - Webinar engagement and survey data
-- News intelligence on sector trends (last 60 days)
+- News intelligence on sector trends (last 90 days)
 
 CRITICAL RULES:
 - Bids are separate from webinars. Do NOT conflate these datasets.
@@ -615,8 +619,13 @@ function findRevivalCandidates(disregarded) {
 // Keep existing functions
 // ==================
 async function fetchRelevantNews(query, limit) {
+  console.log('[News] Starting fetch with query:', query);
+  console.log('[News] Limit:', limit);
+  
   try {
     const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+    console.log('[News] URL:', url);
+    
     const controller = new AbortController();
     const t = setTimeout(() => controller.abort(), CFG.NEWS_TIMEOUT_MS);
     const res = await fetch(url, { signal: controller.signal });
@@ -626,12 +635,16 @@ async function fetchRelevantNews(query, limit) {
       console.log(`[News] HTTP ${res.status}`);
       return [];
     }
+    
     const xml = await res.text();
+    console.log('[News] XML response length:', xml.length, 'characters');
+    
     const items = [];
     const regexes = [
       /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g,
       /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g
     ];
+    
     for (const rx of regexes) {
       let m;
       while ((m = rx.exec(xml)) && items.length < limit * 2) {
@@ -645,18 +658,25 @@ async function fetchRelevantNews(query, limit) {
       if (items.length) break;
     }
     
-    // NEW: Filter to last 60 days
+    console.log('[News] Parsed', items.length, 'total items from XML');
+    
+    // Filter to last 60 days
     const sixtyDaysAgo = new Date();
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 90);
     const sixtyDaysAgoMs = sixtyDaysAgo.getTime();
     
+    console.log('[News] Filtering for articles after:', sixtyDaysAgo.toISOString());
+    
     const seen = new Map();
+    let filtered = 0;
+    
     for (const it of items) {
       const key = (it.link || it.title).trim();
       const ts = Date.parse(it.pubDate || '') || 0;
       
       // Skip articles older than 60 days
       if (ts > 0 && ts < sixtyDaysAgoMs) {
+        filtered++;
         continue;
       }
       
@@ -666,14 +686,26 @@ async function fetchRelevantNews(query, limit) {
       }
     }
     
+    console.log('[News] Filtered out', filtered, 'articles older than 60 days');
+    
     const deduped = Array.from(seen.values())
       .sort((a, b) => Date.parse(b.pubDate || '') - Date.parse(a.pubDate || ''))
       .slice(0, limit);
     
-    console.log(`[News] Returning ${deduped.length} articles from last 60 days (filtered from ${items.length} total)`);
+    console.log(`[News] Returning ${deduped.length} articles from last 60 days`);
+    
+    if (deduped.length > 0) {
+      console.log('[News] Sample article:', {
+        title: deduped[0].title.substring(0, 80),
+        pubDate: deduped[0].pubDate,
+        daysAgo: Math.floor((Date.now() - Date.parse(deduped[0].pubDate)) / (1000 * 60 * 60 * 24))
+      });
+    }
+    
     return deduped;
   } catch (e) {
-    console.error('[News] fetch error:', e?.message);
+    console.error('[News] Fetch error:', e?.message);
+    console.error('[News] Full error:', e);
     return [];
   }
 }
