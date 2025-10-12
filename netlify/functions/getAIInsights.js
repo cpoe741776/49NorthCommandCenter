@@ -6,10 +6,10 @@ const OpenAI = require('openai');
 // Config (env-overridable)
 // =======================
 const CFG = {
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o', // FIXED: was 'gpt-4.1'
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '6000', 10),
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '60000', 10),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '8000', 10), // INCREASED
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '90000', 10), // INCREASED to 90s
 
   GOOGLE_SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '30000', 10),
@@ -169,17 +169,19 @@ exports.handler = async (event, context) => {
       },
 
       priorityBids: respondBids.map((bid) => ({
-        recommendation: bid.recommendation,
-        score: bid.scoreDetails,
-        subject: bid.emailSubject,
-        entity: bid.entity,
-        bidSystem: bid.bidSystem,
-        dueDate: bid.dueDate,
-        daysUntilDue: daysUntil(bestDate(bid.dueDate)),
-        relevance: bid.relevance,
-        keywords: bid.keywordsFound,
-        url: bid.url
-      })),
+  recommendation: bid.recommendation,
+  score: bid.scoreDetails,
+  subject: bid.emailSubject || 'No Subject',
+  summary: bid.aiSummary || bid.significantSnippet || bid.emailSubject || 'No summary available',
+  entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null,
+  bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null,
+  dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null,
+  daysUntilDue: daysUntil(bestDate(bid.dueDate)),
+  relevance: bid.relevance,
+  keywords: bid.keywordsFound,
+  emailFrom: bid.emailFrom,
+  url: bid.url
+})),
 
       contactLeads,
       newsArticles,
@@ -257,7 +259,14 @@ exports.handler = async (event, context) => {
 // OpenAI helper
 // ==================
 async function getAIInsights(aiPayload, { model, temperature, max_tokens, timeoutMs }) {
-  console.log('[OpenAI] start with model:', model);
+  console.log('[OpenAI] Starting analysis with model:', model);
+  console.log('[OpenAI] Payload summary:', {
+    activeBids: aiPayload.bids?.priority?.length || 0,
+    contactLeads: aiPayload.contacts?.count || 0,
+    newsArticles: aiPayload.news?.length || 0,
+    webinars: aiPayload.webinars?.recent?.length || 0
+  });
+
   const systemPrompt = `
 You are a strategic business analyst for 49 North (Mental Armor™), specializing in government procurement intelligence and resilience training market analysis.
 
@@ -267,7 +276,7 @@ CONTEXT:
 - System administrative correspondence tracking
 - Disregarded opportunities archive (for potential revival)
 - Webinar engagement and survey data
-- News intelligence on sector trends
+- News intelligence on sector trends (last 60 days)
 
 CRITICAL RULES:
 - Bids are separate from webinars. Do NOT conflate these datasets.
@@ -275,6 +284,7 @@ CRITICAL RULES:
 - Disregarded bids may contain revival candidates if circumstances changed.
 - Focus on actionable insights with owner + timeline.
 - Use specific numbers and dates.
+- Be concise but specific in all recommendations.
 
 DELIVERABLE: Return valid JSON with this exact structure:
 {
@@ -329,6 +339,8 @@ DELIVERABLE: Return valid JSON with this exact structure:
     }
   ]
 }
+
+IMPORTANT: Return ONLY valid JSON. No markdown, no explanations, just the JSON object.
 `.trim();
 
   const userPrompt = `
@@ -337,13 +349,20 @@ CURRENT_DATE: ${new Date().toISOString().split('T')[0]}
 BUSINESS INTELLIGENCE DATA:
 ${JSON.stringify(aiPayload, null, 2)}
 
-Analyze and provide strategic insights.
+Analyze and provide strategic insights. Return ONLY the JSON object with no additional text.
 `.trim();
 
   const callOnce = async () => {
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const t = setTimeout(() => {
+      console.log('[OpenAI] Request timeout triggered');
+      controller.abort();
+    }, timeoutMs);
+    
     try {
+      console.log('[OpenAI] Making API call...');
+      const startTime = Date.now();
+      
       const completion = await openai.chat.completions.create({
         model,
         temperature,
@@ -352,11 +371,27 @@ Analyze and provide strategic insights.
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
-        ],
-        signal: controller.signal
+        ]
       });
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`[OpenAI] Response received in ${elapsed}ms`);
+      
       const txt = completion.choices?.[0]?.message?.content || '{}';
-      return JSON.parse(txt);
+      console.log('[OpenAI] Response length:', txt.length, 'chars');
+      
+      const parsed = JSON.parse(txt);
+      console.log('[OpenAI] Successfully parsed JSON response');
+      return parsed;
+      
+    } catch (err) {
+      console.error('[OpenAI] API call failed:', {
+        message: err.message,
+        code: err.code,
+        type: err.type,
+        status: err.status
+      });
+      throw err;
     } finally {
       clearTimeout(t);
     }
@@ -365,25 +400,39 @@ Analyze and provide strategic insights.
   try {
     return await callOnce();
   } catch (e1) {
-    console.warn('[OpenAI] first attempt failed, retrying once...', e1?.message);
-    await sleep(1000);
+    console.warn('[OpenAI] First attempt failed:', e1.message);
+    console.log('[OpenAI] Retrying in 2 seconds...');
+    await sleep(2000);
+    
     try {
       return await callOnce();
     } catch (e2) {
-      console.error('[OpenAI] failed after retry:', e2);
+      console.error('[OpenAI] Second attempt failed:', e2.message);
+      console.error('[OpenAI] Full error:', e2);
+      
+      // Return more helpful fallback
       return {
         executiveSummary:
-          'AI analysis temporarily unavailable. Manual review recommended: Check high-urgency bids (0-7 days), system admin alerts, and top-scoring contact leads. Recent webinar KPIs and news items available in data sections.',
-        topPriorities: [],
+          `Analysis engine temporarily unavailable. Current snapshot: ${aiPayload.summary?.activeBidsCount || 0} active bids, ${aiPayload.summary?.respondBidsCount || 0} requiring response, ${aiPayload.contacts?.count || 0} contact leads pending. Review priority bids with due dates in next 7 days. Check system admin alerts for any urgent notifications.`,
+        topPriorities: [
+          {
+            title: 'Review Priority Bids',
+            description: `${aiPayload.summary?.respondBidsCount || 0} bids marked as "Respond" require immediate attention`,
+            action: 'Navigate to Bid Operations and review all "Respond" category bids',
+            urgency: 'high'
+          }
+        ],
         bidRecommendations: [],
         systemInsights: {
-          bidSystems: 'Data available in System Distribution section',
-          adminAlerts: 'Check Active_Admin for pending notifications',
-          suggestions: 'Review bid system performance metrics'
+          bidSystems: `${aiPayload.summary?.registeredSystemsCount || 0} active bid systems registered. Check distribution in data section.`,
+          adminAlerts: aiPayload.summary?.newAdminEmailsCount > 0 
+            ? `${aiPayload.summary.newAdminEmailsCount} new system admin notifications require review`
+            : 'No pending system admin alerts',
+          suggestions: 'Monitor bid system performance metrics in aggregated data section'
         },
         contentInsights: {
-          topPerforming: 'Review KPIs section for attendance data',
-          suggestions: 'Align topics with public-sector trends in news'
+          topPerforming: 'Review webinar KPIs section for attendance trends',
+          suggestions: 'Align content topics with procurement trends visible in bid keywords'
         },
         newsOpportunities: [],
         riskAlerts: [],
@@ -595,19 +644,33 @@ async function fetchRelevantNews(query, limit) {
       }
       if (items.length) break;
     }
+    
+    // NEW: Filter to last 60 days
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const sixtyDaysAgoMs = sixtyDaysAgo.getTime();
+    
     const seen = new Map();
     for (const it of items) {
       const key = (it.link || it.title).trim();
       const ts = Date.parse(it.pubDate || '') || 0;
+      
+      // Skip articles older than 60 days
+      if (ts > 0 && ts < sixtyDaysAgoMs) {
+        continue;
+      }
+      
       const prev = seen.get(key);
       if (!prev || ts > (Date.parse(prev.pubDate || '') || 0)) {
         seen.set(key, it);
       }
     }
+    
     const deduped = Array.from(seen.values())
       .sort((a, b) => Date.parse(b.pubDate || '') - Date.parse(a.pubDate || ''))
       .slice(0, limit);
-    console.log(`[News] returning ${deduped.length} items`);
+    
+    console.log(`[News] Returning ${deduped.length} articles from last 60 days (filtered from ${items.length} total)`);
     return deduped;
   } catch (e) {
     console.error('[News] fetch error:', e?.message);

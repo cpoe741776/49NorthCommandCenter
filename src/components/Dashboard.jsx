@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
 
-const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // ADD onTickerUpdate
+const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
@@ -43,7 +43,6 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
           source: 'auto-ai'
         });
         
-        // RELOAD TICKER DISPLAY - ADD THIS
         if (onTickerUpdate) {
           await onTickerUpdate();
         }
@@ -76,17 +75,17 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
     }
   };
 
-  
-
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Command Center</h1>
         <p className="text-gray-600 mt-1">49 North Business Operations Dashboard</p>
       </div>
 
+      {/* Top Stats Cards - 4 Column Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* System Admin Alerts Card - NEW */}
+        {/* System Admin Alerts Card */}
         <div 
           onClick={() => onNavigate('bid-systems')} 
           className={`p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow ${
@@ -182,6 +181,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
           </button>
         </div>
 
+        {/* Empty State */}
         {!aiLoading && !aiError && !aiInsights && (
           <div className="text-center py-12">
             <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
@@ -190,17 +190,19 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
           </div>
         )}
 
+        {/* Loading State */}
         {aiLoading && (
-  <div className="flex items-center justify-center py-12">
-    <div className="text-center">
-      <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
-      <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
-      <p className="text-sm text-gray-500 mt-1">This may take 60 seconds for detailed insights</p>
-      <p className="text-xs text-gray-400 mt-2">Analyzing bids, leads, webinars, and market opportunities</p>
-    </div>
-  </div>
-)}
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
+              <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
+              <p className="text-sm text-gray-500 mt-1">This may take 60 seconds for detailed insights</p>
+              <p className="text-xs text-gray-400 mt-2">Analyzing bids, leads, webinars, and market opportunities</p>
+            </div>
+          </div>
+        )}
 
+        {/* Error State */}
         {aiError && (
           <div className="bg-red-50 border border-red-200 rounded p-4">
             <p className="text-red-700">Error loading insights: {aiError}</p>
@@ -213,6 +215,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
           </div>
         )}
 
+        {/* AI Insights Content */}
         {!aiLoading && !aiError && aiInsights?.insights && (
           <div className="space-y-6">
             {/* Executive Summary */}
@@ -253,7 +256,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
               </div>
             )}
 
-            {/* Priority Bids - NEW */}
+            {/* Priority Bids */}
             {aiInsights.priorityBids && aiInsights.priorityBids.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -262,26 +265,78 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
                 </h3>
                 <div className="space-y-2">
                   {aiInsights.priorityBids.slice(0, 5).map((bid, idx) => (
-                    <div 
-                      key={idx} 
-                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-                      onClick={() => onNavigate('bids')}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">{bid.agency}</h4>
-                          <p className="text-xs text-gray-500">{bid.solicitation}</p>
-                          <p className="text-sm text-gray-600 mt-1">{bid.title}</p>
-                          <div className="flex gap-3 mt-2 text-xs text-gray-600">
-                            <span>Due: {bid.dueDate}</span>
-                            {bid.setAside && <span>Set-Aside: {bid.setAside}</span>}
-                            {bid.naics && <span>NAICS: {bid.naics}</span>}
-                          </div>
-                        </div>
-                        <ChevronRight size={20} className="text-gray-400" />
-                      </div>
-                    </div>
-                  ))}
+  <div 
+    key={idx} 
+    className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
+    onClick={() => onNavigate('bids')}
+  >
+    <div className="flex items-start justify-between">
+      <div className="flex-1">
+        {/* Show Entity or Email From */}
+        {bid.entity && (
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
+              {bid.entity}
+            </span>
+          </div>
+        )}
+        
+        {/* Show Email Subject */}
+        <h4 className="font-semibold text-gray-900">{bid.subject}</h4>
+        
+        {/* Show AI Summary/Snippet */}
+        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+          {bid.summary}
+        </p>
+        
+        {/* Show metadata */}
+        <div className="flex flex-wrap gap-2 mt-2 text-xs">
+          {bid.dueDate && (
+            <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
+              📅 Due: {bid.dueDate}
+            </span>
+          )}
+          {bid.daysUntilDue !== null && bid.daysUntilDue >= 0 && (
+            <span className={`px-2 py-1 rounded font-medium ${
+              bid.daysUntilDue <= 3 ? 'bg-red-100 text-red-800' :
+              bid.daysUntilDue <= 7 ? 'bg-orange-100 text-orange-800' :
+              'bg-yellow-100 text-yellow-800'
+            }`}>
+              ⏰ {bid.daysUntilDue} days left
+            </span>
+          )}
+          {bid.score && (
+            <span className="px-2 py-1 bg-green-50 text-green-700 rounded font-medium">
+              ⭐ Score: {bid.score}
+            </span>
+          )}
+          {bid.bidSystem && (
+            <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
+              🏢 {bid.bidSystem}
+            </span>
+          )}
+          {bid.emailFrom && !bid.entity && (
+            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+              From: {bid.emailFrom}
+            </span>
+          )}
+        </div>
+        
+        {/* Show keywords if available */}
+        {bid.keywords && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {bid.keywords.split(',').slice(0, 5).map((kw, i) => (
+              <span key={i} className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs">
+                {kw.trim()}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
+    </div>
+  </div>
+))}
                 </div>
                 {aiInsights.insights.bidRecommendations && aiInsights.insights.bidRecommendations.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
@@ -289,7 +344,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
                     <div className="space-y-2">
                       {aiInsights.insights.bidRecommendations.slice(0, 3).map((rec, idx) => (
                         <div key={idx} className="text-sm bg-blue-50 p-2 rounded">
-                          <p className="font-medium text-gray-900">{rec.agency} - {rec.solicitation}</p>
+                          <p className="font-medium text-gray-900">{rec.entity} - {rec.subject}</p>
                           <p className="text-gray-600 text-xs mt-1">{rec.reason}</p>
                           <p className="text-blue-600 text-xs mt-1">→ {rec.action}</p>
                         </div>
@@ -300,7 +355,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
               </div>
             )}
 
-            {/* Hot Contact Leads - NEW */}
+            {/* Hot Contact Leads */}
             {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -347,6 +402,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
               </div>
             )}
 
+            {/* Two Column Grid: Content Insights & Risk Alerts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Content Insights */}
               {aiInsights.insights.contentInsights && (
@@ -385,12 +441,12 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
               )}
             </div>
 
-            {/* News Opportunities - NEW */}
+            {/* News Opportunities */}
             {aiInsights.newsArticles && aiInsights.newsArticles.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Newspaper size={18} className="text-blue-600" />
-                  Market Opportunities from News
+                  Market Opportunities from News (Last 60 Days)
                 </h3>
                 <div className="space-y-2">
                   {aiInsights.newsArticles.map((article, idx) => (
@@ -404,9 +460,19 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
                         <h4 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
                           {article.title}
                         </h4>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {article.source} • {new Date(article.pubDate).toLocaleDateString()}
-                        </p>
+                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+                          <span>{article.source}</span>
+                          <span>•</span>
+                          <span>Published: {new Date(article.pubDate).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}</span>
+                          <span>•</span>
+                          <span className="text-blue-600">
+                            {Math.floor((Date.now() - Date.parse(article.pubDate)) / (1000 * 60 * 60 * 24))} days ago
+                          </span>
+                        </div>
                       </a>
                     </div>
                   ))}
@@ -443,17 +509,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {  // AD
             <h3 className="font-semibold text-gray-900">Check Webinar Registrations</h3>
             <p className="text-sm text-gray-600 mt-1">Track attendance and survey responses</p>
           </div>
-          
-
-<div onClick={() => onNavigate('bid-systems')} className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
-  <h3 className="font-semibold text-gray-900">Bid Systems Registry</h3>
-  <p className="text-sm text-gray-600 mt-1">Manage your 25 procurement system registrations</p>
-</div>
-
-<div onClick={() => onNavigate('company-data')} className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
-  <h3 className="font-semibold text-gray-900">Company Data Vault</h3>
-  <p className="text-sm text-gray-600 mt-1">Quick copy/paste access to all company information</p>
-</div>
+          <div onClick={() => onNavigate('bid-systems')} className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
+            <h3 className="font-semibold text-gray-900">Bid Systems Registry</h3>
+            <p className="text-sm text-gray-600 mt-1">Manage your 25 procurement system registrations</p>
+          </div>
+          <div onClick={() => onNavigate('company-data')} className="border border-gray-200 rounded p-4 hover:border-blue-600 cursor-pointer transition-colors">
+            <h3 className="font-semibold text-gray-900">Company Data Vault</h3>
+            <p className="text-sm text-gray-600 mt-1">Quick copy/paste access to all company information</p>
+          </div>
         </div>
       </div>
     </div>
