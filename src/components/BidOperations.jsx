@@ -3,18 +3,23 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Archive, RefreshCw } from 'lucide-react';
 import BidCard from './BidCard';
+import DisregardedArchiveModal from './DisregardedArchiveModal';
 
 const ITEMS_PER_PAGE = 10;
 
 const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefresh, onNavigate }) => {
-  const [showArchive, setShowArchive] = useState(false);
+  
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [respondPage, setRespondPage] = useState(1);
   const [gatherInfoPage, setGatherInfoPage] = useState(1);
   const [submittedPage, setSubmittedPage] = useState(1);
-  const [archivePage, setArchivePage] = useState(1);
+  
+  // NEW: Disregarded Archive Modal State
+  const [showDisregardedModal, setShowDisregardedModal] = useState(false);
+  const [disregardedEmails, setDisregardedEmails] = useState([]);
+  const [loadingDisregarded, setLoadingDisregarded] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -27,9 +32,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
   }, [onRefresh]);
 
   const handleSystemClick = useCallback((systemName) => {
-    // Store the system name to filter by
     localStorage.setItem('filterBySystem', systemName);
-    // Navigate to bid-systems page
     if (onNavigate) {
       onNavigate('bid-systems');
     }
@@ -120,6 +123,71 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
     await onRefresh();
   }, [selectedBids, onRefresh]);
 
+  // NEW: Load Disregarded Emails
+  const loadDisregardedEmails = useCallback(async () => {
+    try {
+      setLoadingDisregarded(true);
+      const response = await fetch('/.netlify/functions/getDisregardedEmails');
+      const data = await response.json();
+      
+      if (data.success) {
+        setDisregardedEmails(data.emails || []);
+      } else {
+        console.error('Failed to load disregarded emails:', data.error);
+      }
+    } catch (err) {
+      console.error('Failed to load disregarded emails:', err);
+    } finally {
+      setLoadingDisregarded(false);
+    }
+  }, []);
+
+  // NEW: Revive Disregarded Email
+  const handleReviveEmail = useCallback(async (email, newRecommendation) => {
+    try {
+      const response = await fetch('/.netlify/functions/reviveDisregardedEmail', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rowNumber: email.rowNumber,
+          newRecommendation: newRecommendation,
+          emailData: {
+            scoreDetails: email.scoreDetails,
+            aiReasoning: email.aiReasoning,
+            aiSummary: email.aiSummary,
+            emailDateReceived: email.emailDateReceived,
+            emailFrom: email.emailFrom,
+            keywordsCategory: email.keywordsCategory,
+            keywordsFound: email.keywordsFound,
+            relevance: email.relevance,
+            emailSubject: email.emailSubject,
+            emailBody: email.emailBody,
+            url: email.url,
+            dueDate: email.dueDate,
+            significantSnippet: email.significantSnippet,
+            emailDomain: email.emailDomain,
+            bidSystem: email.bidSystem,
+            country: email.country,
+            entity: email.entity,
+            sourceEmailId: email.sourceEmailId
+          }
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        alert(`Success! Email revived as "${newRecommendation}"`);
+        await loadDisregardedEmails(); // Refresh disregarded list
+        await onRefresh(); // Refresh active bids
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      console.error('Failed to revive email:', err);
+      throw err;
+    }
+  }, [loadDisregardedEmails, onRefresh]);
+
   const respondBids = useMemo(
     () =>
       bids
@@ -147,12 +215,10 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
   const paginatedRespondBids = respondBids.slice(0, respondPage * ITEMS_PER_PAGE);
   const paginatedGatherInfoBids = gatherInfoBids.slice(0, gatherInfoPage * ITEMS_PER_PAGE);
   const paginatedSubmittedBids = submittedBids.slice(0, submittedPage * ITEMS_PER_PAGE);
-  const paginatedArchiveBids = disregardedBids.slice(0, archivePage * ITEMS_PER_PAGE);
 
   const hasMoreRespond = paginatedRespondBids.length < respondBids.length;
   const hasMoreGatherInfo = paginatedGatherInfoBids.length < gatherInfoBids.length;
   const hasMoreSubmitted = paginatedSubmittedBids.length < submittedBids.length;
-  const hasMoreArchive = paginatedArchiveBids.length < disregardedBids.length;
 
   return (
     <div className="space-y-6">
@@ -172,13 +238,19 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </button>
           <button
             onClick={() => {
-              setShowArchive(v => !v);
-              setArchivePage(1);
+              loadDisregardedEmails();
+              setShowDisregardedModal(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+            disabled={loadingDisregarded}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors relative disabled:opacity-50"
           >
             <Archive size={18} />
-            {showArchive ? 'Hide Archive' : 'View Archive'}
+            {loadingDisregarded ? 'Loading...' : 'View Archive'}
+            {disregardedBids.length > 0 && !loadingDisregarded && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                {disregardedBids.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -209,39 +281,6 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
             >
               Clear Selection
             </button>
-          </div>
-        </div>
-      )}
-
-      {showArchive && (
-        <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Disregarded Bids ({disregardedBids.length})</h2>
-          <div className="space-y-2">
-            {disregardedBids.length === 0 ? (
-              <p className="text-gray-500 text-sm">No disregarded bids</p>
-            ) : (
-              <>
-                {paginatedArchiveBids.map((bid) => (
-                  <div key={bid.id} className="bg-white p-4 rounded border border-gray-200">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{bid.reasoning}</p>
-                        <p className="text-xs text-gray-500 mt-2">From: {bid.emailFrom} • {bid.emailDateReceived}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {hasMoreArchive && (
-                  <button
-                    onClick={() => setArchivePage(p => p + 1)}
-                    className="w-full mt-4 px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
-                  >
-                    Load More ({paginatedArchiveBids.length} of {disregardedBids.length} shown)
-                  </button>
-                )}
-              </>
-            )}
           </div>
         </div>
       )}
@@ -367,6 +406,17 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
         <h2 className="text-xl font-bold text-gray-900 mb-2">Proposal Workspace</h2>
         <p className="text-gray-600">Document library, templates, and proposal writing tools coming soon...</p>
       </div>
+
+      {/* Disregarded Archive Modal */}
+      {showDisregardedModal && (
+        <DisregardedArchiveModal
+          isOpen={showDisregardedModal}
+          onClose={() => setShowDisregardedModal(false)}
+          emails={disregardedEmails}
+          onRevive={handleReviveEmail}
+          onRefresh={loadDisregardedEmails}
+        />
+      )}
     </div>
   );
 };
