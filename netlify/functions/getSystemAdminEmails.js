@@ -1,3 +1,5 @@
+// getSystemAdminEmails.js //
+
 const { google } = require('googleapis');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;

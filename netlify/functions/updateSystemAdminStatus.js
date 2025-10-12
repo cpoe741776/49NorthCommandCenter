@@ -1,3 +1,4 @@
+// updateSystemAdminStatus.js //
 const { google } = require('googleapis');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
@@ -60,24 +61,33 @@ exports.handler = async (event, context) => {
       };
     }
 
-    // Update status (column J)
-    await sheets.spreadsheets.values.update({
+    // DELETE the row instead of updating status
+    await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SHEET_ID,
-      range: `Active_Admin!J${targetRow}`,
-      valueInputOption: 'USER_ENTERED',
       resource: {
-        values: [[status]]
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: await getSheetId(sheets, SHEET_ID, 'Active_Admin'),
+                dimension: 'ROWS',
+                startIndex: targetRow - 1, // 0-indexed for API
+                endIndex: targetRow         // exclusive end
+              }
+            }
+          }
+        ]
       }
     });
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true })
+      body: JSON.stringify({ success: true, deleted: true })
     };
 
   } catch (error) {
-    console.error('Error updating admin email status:', error);
+    console.error('Error archiving admin email:', error);
     return {
       statusCode: 500,
       headers,
@@ -88,3 +98,13 @@ exports.handler = async (event, context) => {
     };
   }
 };
+
+// Helper function to get sheet ID by name
+async function getSheetId(sheets, spreadsheetId, sheetName) {
+  const metadata = await sheets.spreadsheets.get({
+    spreadsheetId: spreadsheetId
+  });
+  
+  const sheet = metadata.data.sheets.find(s => s.properties.title === sheetName);
+  return sheet ? sheet.properties.sheetId : 0;
+}

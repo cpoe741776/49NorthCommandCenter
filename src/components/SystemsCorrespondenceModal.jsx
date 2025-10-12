@@ -1,3 +1,5 @@
+// SystemsCorrespondenceModal.jsx //
+
 import React, { useState } from 'react';
 import { X, Mail, Calendar, Building2, Eye, Archive } from 'lucide-react';
 
