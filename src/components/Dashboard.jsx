@@ -1,5 +1,5 @@
 // Dashboard.jsx
-// FIXED: Implements smart local caching, resolves initial load race condition, and maintains ESLint compliance.
+// FINAL VERSION with Smart Caching and Logic Fixes
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
@@ -10,8 +10,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
-  // 1. Wrap loadAIInsights in useCallback to create a stable, hook-friendly function.
-  // It now accepts a 'bypassCache' argument.
+  // 1. Wrap loadAIInsights in useCallback. It handles both cache and fetch logic.
   const loadAIInsights = useCallback(async (bypassCache = false) => {
     try {
       setAiLoading(true);
@@ -27,7 +26,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               const fiveMinutes = 5 * 60 * 1000;
               
               if (Date.now() - entry.timestamp < fiveMinutes) {
-                  console.log('[Dashboard] Using fresh local cache from loadAIInsights check.');
+                  console.log('[Dashboard] Using fresh local cache from loadAIInsights check. Exiting fetch.');
                   setAiInsights(entry.data);
                   setAiLoading(false);
                   return; // Exit early using cache
@@ -93,7 +92,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   }, [setAiError, setAiInsights, onTickerUpdate]); 
 
 
-  // 2. Initial load check (runs only once on mount)
+  // 2. Initial load check (runs only once on mount) - Replaces the old useEffect
   useEffect(() => {
     const cachedInsights = localStorage.getItem('aiInsightsCache');
     let shouldFetch = true;
@@ -120,9 +119,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     
     // Only run loadAIInsights if cache was missing or stale
     if (shouldFetch) {
-        // Pass 'true' to loadAIInsights to make it bypass its own internal cache check
-        // (This is cleaner than double-checking the timestamp logic)
-        loadAIInsights(true); 
+        loadAIInsights(true); // Pass true to force the fetch (bypass internal cache check just in case)
     }
     
   }, [loadAIInsights]); // Only depends on the stable function reference
@@ -324,7 +321,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                   Top Priorities
                 </h3>
                 <div className="space-y-3">
-                  {aiInsights.insights.topPriorities.slice(0, 3).map((priority, idx) => (
+                  {aiInsights.insights.topPriorities.map((priority, idx) => (
                     <div key={idx} className={`border rounded-lg p-3 ${getUrgencyColor(priority.urgency)}`}>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
