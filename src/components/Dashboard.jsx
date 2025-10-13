@@ -1,5 +1,5 @@
 // Dashboard.jsx
-// FINAL VERSION with Smart Caching and Logic Fixes
+// FINAL VERSION: Corrects data paths, implements smart local caching, and maintains ESLint compliance.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
@@ -64,9 +64,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       }
       
       // --- Ticker Update Logic ---
-      const insightsToProcess = data.insights || {};
-      
-      if (data.summary || insightsToProcess.executiveSummary) {
+      if (data.summary || data.executiveSummary) {
         const { generateAIInsightsTickerItems } = await import('../services/tickerService');
         const aiTickerItems = generateAIInsightsTickerItems(data);
         
@@ -92,7 +90,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   }, [setAiError, setAiInsights, onTickerUpdate]); 
 
 
-  // 2. Initial load check (runs only once on mount) - Replaces the old useEffect
+  // 2. Initial load check (runs only once on mount)
   useEffect(() => {
     const cachedInsights = localStorage.getItem('aiInsightsCache');
     let shouldFetch = true;
@@ -117,7 +115,6 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         }
     }
     
-    // Only run loadAIInsights if cache was missing or stale
     if (shouldFetch) {
         loadAIInsights(true); // Pass true to force the fetch (bypass internal cache check just in case)
     }
@@ -156,11 +153,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
 
       {/* Top Stats Cards - 4 Column Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* System Admin Alerts Card */}
+        {/* System Admin Alerts Card - DATA PATH FIX */}
         <div 
           onClick={() => onNavigate('bid-systems')} 
           className={`p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow ${
-            aiInsights?.aggregatedData?.summary?.newAdminEmailsCount > 0 
+            aiInsights?.summary?.newAdminEmailsCount > 0 
               ? 'bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-400' 
               : 'bg-white'
           }`}
@@ -169,22 +166,25 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <div>
               <p className="text-sm text-gray-600">System Admin</p>
               <p className="text-3xl font-bold text-gray-900 mt-1">
-                {aiInsights?.aggregatedData?.summary?.adminEmailsCount || 0}
+                {/* FIX: Use aiInsights.summary.adminEmailsCount */}
+                {aiInsights?.summary?.adminEmailsCount || 0}
               </p>
             </div>
             <div className="relative">
               <Mail className="text-purple-600" size={40} />
-              {aiInsights?.aggregatedData?.summary?.newAdminEmailsCount > 0 && (
+              {/* FIX: Use aiInsights.summary.newAdminEmailsCount */}
+              {aiInsights?.summary?.newAdminEmailsCount > 0 && (
                 <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center animate-pulse">
-                  {aiInsights.aggregatedData.summary.newAdminEmailsCount}
+                  {aiInsights.summary.newAdminEmailsCount}
                 </span>
               )}
             </div>
           </div>
           <div className="mt-4 text-sm">
-            {aiInsights?.aggregatedData?.summary?.newAdminEmailsCount > 0 ? (
+             {/* FIX: Use aiInsights.summary.newAdminEmailsCount */}
+            {aiInsights?.summary?.newAdminEmailsCount > 0 ? (
               <span className="text-red-600 font-semibold">
-                {aiInsights.aggregatedData.summary.newAdminEmailsCount} New Alert{aiInsights.aggregatedData.summary.newAdminEmailsCount > 1 ? 's' : ''}
+                {aiInsights.summary.newAdminEmailsCount} New Alert{aiInsights.summary.newAdminEmailsCount > 1 ? 's' : ''}
               </span>
             ) : (
               <span className="text-gray-600">No new alerts</span>
@@ -222,24 +222,27 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="mt-4 text-sm text-gray-600">Next: Oct 30, 2025</div>
         </div>
 
-        {/* Social Posts Card */}
+        {/* Social Posts Card - DATA PATH FIX */}
         <div onClick={() => onNavigate('social')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Social Posts</p>
               <p className="text-3xl font-bold text-gray-900 mt-1">
-                {aiInsights?.aggregatedData?.summary?.socialPostsTotal || 0}
+                {/* FIX: Use aiInsights.summary.socialPostsTotal */}
+                {aiInsights?.summary?.socialPostsTotal || 0}
               </p>
             </div>
             <Share2 className="text-blue-600" size={40} />
           </div>
           <div className="mt-4 text-sm">
             <span className="text-green-600 font-semibold">
-              {aiInsights?.aggregatedData?.summary?.socialPostsPublished || 0} Published
+              {/* FIX: Use aiInsights.summary.socialPostsPublished */}
+              {aiInsights?.summary?.socialPostsPublished || 0} Published
             </span>
             <span className="text-gray-400 mx-2">•</span>
             <span className="text-yellow-600 font-semibold">
-              {aiInsights?.aggregatedData?.summary?.socialPostsDrafts || 0} Drafts
+              {/* FIX: Use aiInsights.summary.socialPostsDrafts */}
+              {aiInsights?.summary?.socialPostsDrafts || 0} Drafts
             </span>
           </div>
         </div>
@@ -262,8 +265,9 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </button>
         </div>
 
-        {/* Empty State */}
-        {!aiLoading && !aiError && (!aiInsights || !aiInsights.insights) && (
+        {/* Empty State - FIX APPLIED HERE */}
+        {/* Check if aiInsights is null OR if aiInsights has no top-level executiveSummary */}
+        {!aiLoading && !aiError && (!aiInsights || !aiInsights.executiveSummary) && (
           <div className="text-center py-12">
             <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
             <p className="text-gray-600 mb-2">No analysis loaded</p>
@@ -298,30 +302,31 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </div>
         )}
 
-        {/* AI Insights Content */}
-        {!aiLoading && !aiError && aiInsights?.insights && (
+        {/* AI Insights Content - FIX APPLIED HERE */}
+        {/* Render if NOT loading, NO error, AND executiveSummary is present */}
+        {!aiLoading && !aiError && aiInsights?.executiveSummary && (
           <div className="space-y-6">
-            {/* Executive Summary */}
+            {/* Executive Summary - FIX APPLIED HERE */}
             <div className="bg-white rounded-lg p-4 border border-blue-200">
               <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
                 <TrendingUp size={18} className="text-blue-600" />
                 Executive Summary
               </h3>
-              <p className="text-gray-700">{aiInsights.insights.executiveSummary}</p>
+              <p className="text-gray-700">{aiInsights.executiveSummary}</p>
               <p className="text-xs text-gray-500 mt-2">
-                Generated: {new Date(aiInsights.generatedAt).toLocaleString()}
+                Generated: {new Date(aiInsights.timestamp || Date.now()).toLocaleString()}
               </p>
             </div>
 
-            {/* Top Priorities */}
-            {aiInsights.insights.topPriorities && aiInsights.insights.topPriorities.length > 0 && (
+            {/* Top Priorities - FIX APPLIED HERE */}
+            {aiInsights.topPriorities && aiInsights.topPriorities.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Target size={18} className="text-blue-600" />
                   Top Priorities
                 </h3>
                 <div className="space-y-3">
-                  {aiInsights.insights.topPriorities.map((priority, idx) => (
+                  {aiInsights.topPriorities.map((priority, idx) => (
                     <div key={idx} className={`border rounded-lg p-3 ${getUrgencyColor(priority.urgency)}`}>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -339,7 +344,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               </div>
             )}
 
-            {/* Priority Bids */}
+            {/* Priority Bids - FIX APPLIED HERE */}
             {aiInsights.priorityBids && aiInsights.priorityBids.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -421,11 +426,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                     </div>
                   ))}
                 </div>
-                {aiInsights.insights.bidRecommendations && aiInsights.insights.bidRecommendations.length > 0 && (
+                {aiInsights.bidRecommendations && aiInsights.bidRecommendations.length > 0 && ( // FIX: Removed .insights
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Recommendations:</h4>
                     <div className="space-y-2">
-                      {aiInsights.insights.bidRecommendations.map((rec, idx) => (
+                      {aiInsights.bidRecommendations.map((rec, idx) => ( // FIX: Removed .insights
                         <div key={idx} className="text-sm bg-blue-50 p-2 rounded">
                           <p className="font-medium text-gray-900">{rec.entity} - {rec.subject}</p>
                           <p className="text-gray-600 text-xs mt-1">{rec.reason}</p>
@@ -437,7 +442,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 )}
               </div>
             )}
-            {/* Social Media Activity */}
+            {/* Social Media Activity - FIX APPLIED HERE */}
             {aiInsights?.socialPosts && aiInsights.socialPosts.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -476,14 +481,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               </div>
             )}
             {/* Hot Contact Leads */}
-            {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && (
+            {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && ( // FIX: aiInsights.contactLeads is a top-level property
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Mail size={18} className="text-blue-600" />
-                  Hot Contact Leads ({aiInsights.contactLeads.length})
+                  Hot Contact Leads ({aiInsights.contactLeads.length}) // FIX: aiInsights.contactLeads
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.contactLeads.slice(0, 8).map((lead, idx) => (
+                  {aiInsights.contactLeads.slice(0, 8).map((lead, idx) => ( // FIX: aiInsights.contactLeads
                     <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -522,34 +527,34 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               </div>
             )}
 
-            {/* Two Column Grid: Content Insights & Risk Alerts */}
+            {/* Two Column Grid: Content Insights & Risk Alerts - FIX APPLIED HERE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Content Insights */}
-              {aiInsights.insights.contentInsights && (
+              {aiInsights.contentInsights && ( // FIX: Removed .insights
                 <div className="bg-white rounded-lg p-4 border border-blue-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Content Strategy</h3>
                   <div className="space-y-2">
                     <div>
                       <p className="text-xs text-gray-600 uppercase font-semibold">Top Performing</p>
-                      <p className="text-sm text-gray-700 mt-1">{aiInsights.insights.contentInsights.topPerforming}</p>
+                      <p className="text-sm text-gray-700 mt-1">{aiInsights.contentInsights.topPerforming}</p> // FIX: Removed .insights
                     </div>
                     <div>
                       <p className="text-xs text-gray-600 uppercase font-semibold mt-3">Suggestions</p>
-                      <p className="text-sm text-gray-700 mt-1">{aiInsights.insights.contentInsights.suggestions}</p>
+                      <p className="text-sm text-gray-700 mt-1">{aiInsights.contentInsights.suggestions}</p> // FIX: Removed .insights
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Risk Alerts */}
-              {aiInsights.insights.riskAlerts && aiInsights.insights.riskAlerts.length > 0 && (
+              {aiInsights.riskAlerts && aiInsights.riskAlerts.length > 0 && ( // FIX: Removed .insights
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <AlertTriangle size={18} className="text-orange-600" />
                     Risk Alerts
                   </h3>
                   <div className="space-y-2">
-                    {aiInsights.insights.riskAlerts.map((risk, idx) => (
+                    {aiInsights.riskAlerts.map((risk, idx) => ( // FIX: Removed .insights
                       <div key={idx} className="border-l-4 border-orange-400 pl-3 py-1">
                         <p className="text-sm font-semibold text-gray-900">{risk.issue}</p>
                         <p className="text-xs text-gray-600 mt-1">{risk.impact}</p>
@@ -562,14 +567,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             </div>
 
             {/* News Opportunities */}
-            {aiInsights.newsArticles && aiInsights.newsArticles.length > 0 && (
+            {aiInsights.newsArticles && aiInsights.newsArticles.length > 0 && ( // FIX: aiInsights.newsArticles is a top-level property
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Newspaper size={18} className="text-blue-600" />
                   Market Opportunities from News (Last 60 Days)
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.newsArticles.map((article, idx) => (
+                  {aiInsights.newsArticles.map((article, idx) => ( // FIX: aiInsights.newsArticles
                     <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
                       <a href={article.link} 
                         target="_blank" 
@@ -596,11 +601,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                     </div>
                   ))}
                 </div>
-                {aiInsights.insights.newsOpportunities && aiInsights.insights.newsOpportunities.length > 0 && (
+                {aiInsights.newsOpportunities && aiInsights.newsOpportunities.length > 0 && ( // FIX: Removed .insights
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Analysis:</h4>
                     <div className="space-y-2">
-                      {aiInsights.insights.newsOpportunities.map((opp, idx) => (
+                      {aiInsights.newsOpportunities.map((opp, idx) => ( // FIX: Removed .insights
                         <div key={idx} className="text-sm bg-green-50 p-2 rounded">
                           <p className="font-medium text-gray-900">{opp.headline}</p>
                           <p className="text-gray-600 text-xs mt-1">{opp.relevance}</p>
