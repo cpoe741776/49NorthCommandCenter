@@ -1,6 +1,7 @@
-// Dashboard.jsx //
+// Dashboard.jsx
+// FIXED: Implements useCallback for loadAIInsights to clear ESLint dependency warning
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
 
@@ -9,50 +10,63 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
-  // Load cached insights on mount
-  useEffect(() => {
-    const cachedInsights = localStorage.getItem('aiInsights');
-    if (cachedInsights) {
-      try {
-        const parsed = JSON.parse(cachedInsights);
-        setAiInsights(parsed);
-      } catch (err) {
-        console.error('Error parsing cached insights:', err);
-        localStorage.removeItem('aiInsights');
-      }
-    }
-  }, []);
-
-  const loadAIInsights = async () => {
+  // 1. Wrap loadAIInsights in useCallback to create a stable, hook-friendly function.
+  // Dependencies: setAiError, setAiInsights, and onTickerUpdate (a prop) must be included.
+  const loadAIInsights = useCallback(async () => {
     try {
       setAiLoading(true);
       setAiError(null);
+      
       const data = await fetchAIInsights();
-      setAiInsights(data);
-      localStorage.setItem('aiInsights', JSON.stringify(data));
       
-      // Update ticker with AI insights
-      const { generateAIInsightsTickerItems } = await import('../services/tickerService');
-      const aiTickerItems = generateAIInsightsTickerItems(data);
+      // --- AI Timeout/Fallback Logic ---
+      const analysisSkipped = data.note && data.note.includes('Full AI analysis unavailable');
+
+      if (analysisSkipped) {
+        // Non-fatal error: Show the warning message but keep the basic stats (bids, KPIs)
+        setAiInsights(data); 
+        setAiError(data.note); // Set the error state to display the user-friendly warning
+        console.warn('[Dashboard] AI Analysis skipped due to timeout:', data.note);
+      } else {
+        // Full, successful AI analysis received
+        setAiInsights(data);
+        setAiError(null); // Clear any previous error/warning
+        console.log('[Dashboard] Full AI Analysis successful.');
+      }
       
-      if (aiTickerItems.length > 0) {
-        await fetch('/.netlify/functions/refreshAutoTickerItems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: aiTickerItems }),
-          source: 'auto-ai'
-        });
+      // --- Ticker Update Logic ---
+      const insightsToProcess = data.insights || {};
+      
+      if (data.summary || insightsToProcess.executiveSummary) {
+        const { generateAIInsightsTickerItems } = await import('../services/tickerService');
+        const aiTickerItems = generateAIInsightsTickerItems(data);
         
-        if (onTickerUpdate) {
-          await onTickerUpdate();
+        if (aiTickerItems.length > 0) {
+          await fetch('/.netlify/functions/refreshAutoTickerItems', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: aiTickerItems, source: 'auto-ai' })
+          });
+          
+          if (onTickerUpdate) {
+            await onTickerUpdate();
+          }
         }
       }
+      
     } catch (err) {
-      setAiError(err.message);
+      // Fatal network/API error
+      setAiError(err.message || 'A network error occurred.');
+      setAiInsights(null); 
     } finally {
       setAiLoading(false);
     }
-  };
+  }, [setAiError, setAiInsights, onTickerUpdate]); // <-- Dependencies for loadAIInsights
+
+  // 2. Add loadAIInsights to the dependency array to satisfy ESLint
+  useEffect(() => {
+    loadAIInsights();
+  }, [loadAIInsights]); // <-- Clears the ESLint warning
 
   if (loading) {
     return (
@@ -75,6 +89,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     }
   };
 
+  // --- Main Render ---
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -122,7 +137,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <span className="text-gray-600">Click to view</span>
           </div>
         </div>
-</div>
+        
         {/* Active Bids Card */}
         <div onClick={() => onNavigate('bids')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
@@ -152,26 +167,27 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         </div>
 
         {/* Social Posts Card */}
-<div onClick={() => onNavigate('social')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
-  <div className="flex items-center justify-between">
-    <div>
-      <p className="text-sm text-gray-600">Social Posts</p>
-      <p className="text-3xl font-bold text-gray-900 mt-1">
-        {aiInsights?.aggregatedData?.summary?.socialPostsTotal || 0}
-      </p>
-    </div>
-    <Share2 className="text-blue-600" size={40} />
-  </div>
-  <div className="mt-4 text-sm">
-    <span className="text-green-600 font-semibold">
-      {aiInsights?.aggregatedData?.summary?.socialPostsPublished || 0} Published
-    </span>
-    <span className="text-gray-400 mx-2">•</span>
-    <span className="text-yellow-600 font-semibold">
-      {aiInsights?.aggregatedData?.summary?.socialPostsDrafts || 0} Drafts
-    </span>
-  </div>
-</div>
+        <div onClick={() => onNavigate('social')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Social Posts</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">
+                {aiInsights?.aggregatedData?.summary?.socialPostsTotal || 0}
+              </p>
+            </div>
+            <Share2 className="text-blue-600" size={40} />
+          </div>
+          <div className="mt-4 text-sm">
+            <span className="text-green-600 font-semibold">
+              {aiInsights?.aggregatedData?.summary?.socialPostsPublished || 0} Published
+            </span>
+            <span className="text-gray-400 mx-2">•</span>
+            <span className="text-yellow-600 font-semibold">
+              {aiInsights?.aggregatedData?.summary?.socialPostsDrafts || 0} Drafts
+            </span>
+          </div>
+        </div>
+      </div>
 
       {/* AI Strategic Insights Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
@@ -205,13 +221,15 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <div className="text-center">
               <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
               <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
-              <p className="text-sm text-gray-500 mt-1">This may take 60 seconds for detailed insights</p>
+              <p className="text-sm text-gray-500 mt-1">
+                This may take up to **20 seconds** for detailed insights
+              </p>
               <p className="text-xs text-gray-400 mt-2">Analyzing bids, leads, webinars, and market opportunities</p>
             </div>
           </div>
         )}
 
-        {/* Error State */}
+        {/* Error/Warning State */}
         {aiError && (
           <div className="bg-red-50 border border-red-200 rounded p-4">
             <p className="text-red-700">Error loading insights: {aiError}</p>
@@ -274,78 +292,78 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 </h3>
                 <div className="space-y-2">
                   {aiInsights.priorityBids.slice(0, 5).map((bid, idx) => (
-  <div 
-    key={idx} 
-    className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-    onClick={() => onNavigate('bids')}
-  >
-    <div className="flex items-start justify-between">
-      <div className="flex-1">
-        {/* Show Entity or Email From */}
-        {bid.entity && (
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-              {bid.entity}
-            </span>
-          </div>
-        )}
-        
-        {/* Show Email Subject */}
-        <h4 className="font-semibold text-gray-900">{bid.subject}</h4>
-        
-        {/* Show AI Summary/Snippet */}
-        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-          {bid.summary}
-        </p>
-        
-        {/* Show metadata */}
-        <div className="flex flex-wrap gap-2 mt-2 text-xs">
-          {bid.dueDate && (
-            <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
-              📅 Due: {bid.dueDate}
-            </span>
-          )}
-          {bid.daysUntilDue !== null && bid.daysUntilDue >= 0 && (
-            <span className={`px-2 py-1 rounded font-medium ${
-              bid.daysUntilDue <= 3 ? 'bg-red-100 text-red-800' :
-              bid.daysUntilDue <= 7 ? 'bg-orange-100 text-orange-800' :
-              'bg-yellow-100 text-yellow-800'
-            }`}>
-              ⏰ {bid.daysUntilDue} days left
-            </span>
-          )}
-          {bid.score && (
-            <span className="px-2 py-1 bg-green-50 text-green-700 rounded font-medium">
-              ⭐ Score: {bid.score}
-            </span>
-          )}
-          {bid.bidSystem && (
-            <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
-              🏢 {bid.bidSystem}
-            </span>
-          )}
-          {bid.emailFrom && !bid.entity && (
-            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-              From: {bid.emailFrom}
-            </span>
-          )}
-        </div>
-        
-        {/* Show keywords if available */}
-        {bid.keywords && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {bid.keywords.split(',').slice(0, 5).map((kw, i) => (
-              <span key={i} className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs">
-                {kw.trim()}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
-    </div>
-  </div>
-))}
+                    <div 
+                      key={idx} 
+                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
+                      onClick={() => onNavigate('bids')}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          {/* Show Entity or Email From */}
+                          {bid.entity && (
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
+                                {bid.entity}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {/* Show Email Subject */}
+                          <h4 className="font-semibold text-gray-900">{bid.subject}</h4>
+                          
+                          {/* Show AI Summary/Snippet */}
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            {bid.summary}
+                          </p>
+                          
+                          {/* Show metadata */}
+                          <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                            {bid.dueDate && (
+                              <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
+                                📅 Due: {bid.dueDate}
+                              </span>
+                            )}
+                            {bid.daysUntilDue !== null && bid.daysUntilDue >= 0 && (
+                              <span className={`px-2 py-1 rounded font-medium ${
+                                bid.daysUntilDue <= 3 ? 'bg-red-100 text-red-800' :
+                                bid.daysUntilDue <= 7 ? 'bg-orange-100 text-orange-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                ⏰ {bid.daysUntilDue} days left
+                              </span>
+                            )}
+                            {bid.score && (
+                              <span className="px-2 py-1 bg-green-50 text-green-700 rounded font-medium">
+                                ⭐ Score: {bid.score}
+                              </span>
+                            )}
+                            {bid.bidSystem && (
+                              <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
+                                🏢 {bid.bidSystem}
+                              </span>
+                            )}
+                            {bid.emailFrom && !bid.entity && (
+                              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                                From: {bid.emailFrom}
+                              </span>
+                            )}
+                          </div>
+                          
+                          {/* Show keywords if available */}
+                          {bid.keywords && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {bid.keywords.split(',').slice(0, 5).map((kw, i) => (
+                                <span key={i} className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs">
+                                  {kw.trim()}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 {aiInsights.insights.bidRecommendations && aiInsights.insights.bidRecommendations.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
@@ -363,44 +381,44 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 )}
               </div>
             )}
-{/* Social Media Activity */}
-{aiInsights?.socialPosts && aiInsights.socialPosts.length > 0 && (
-  <div className="bg-white rounded-lg p-4 border border-blue-200">
-    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-      <Share2 size={18} className="text-blue-600" />
-      Recent Social Media Activity
-    </h3>
-    <div className="space-y-2">
-      {aiInsights.socialPosts.filter(p => p.status === 'Published').slice(0, 5).map((post, idx) => (
-        <div 
-          key={idx} 
-          className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-          onClick={() => onNavigate('social')}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h4 className="font-semibold text-gray-900">{post.title}</h4>
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{post.body}</p>
-              <div className="flex gap-2 mt-2">
-                {post.platforms?.split(',').map(p => (
-                  <span key={p} className="text-xs bg-blue-50 px-2 py-1 rounded">
-                    {p.trim()}
-                  </span>
-                ))}
+            {/* Social Media Activity */}
+            {aiInsights?.socialPosts && aiInsights.socialPosts.length > 0 && (
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
+                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Share2 size={18} className="text-blue-600" />
+                  Recent Social Media Activity
+                </h3>
+                <div className="space-y-2">
+                  {aiInsights.socialPosts.filter(p => p.status === 'Published').slice(0, 5).map((post, idx) => (
+                    <div 
+                      key={idx} 
+                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
+                      onClick={() => onNavigate('social')}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">{post.title}</h4>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{post.body}</p>
+                          <div className="flex gap-2 mt-2">
+                            {post.platforms?.split(',').map(p => (
+                              <span key={p} className="text-xs bg-blue-50 px-2 py-1 rounded">
+                                {p.trim()}
+                              </span>
+                            ))}
+                          </div>
+                          {post.publishedDate && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Published: {new Date(post.publishedDate).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                        <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              {post.publishedDate && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Published: {new Date(post.publishedDate).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-            <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+            )}
             {/* Hot Contact Leads */}
             {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
