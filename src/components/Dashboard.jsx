@@ -426,11 +426,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                     </div>
                   ))}
                 </div>
-                {aiInsights.bidRecommendations && aiInsights.bidRecommendations.length > 0 && ( // FIX: Removed .insights
+                {aiInsights.bidRecommendations && aiInsights.bidRecommendations.length > 0 && ( 
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Recommendations:</h4>
                     <div className="space-y-2">
-                      {aiInsights.bidRecommendations.map((rec, idx) => ( // FIX: Removed .insights
+                      {aiInsights.bidRecommendations.map((rec, idx) => ( 
                         <div key={idx} className="text-sm bg-blue-50 p-2 rounded">
                           <p className="font-medium text-gray-900">{rec.entity} - {rec.subject}</p>
                           <p className="text-gray-600 text-xs mt-1">{rec.reason}</p>
@@ -481,14 +481,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               </div>
             )}
             {/* Hot Contact Leads */}
-            {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && ( // FIX: aiInsights.contactLeads is a top-level property
+            {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && ( 
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Mail size={18} className="text-blue-600" />
-                  Hot Contact Leads ({aiInsights.contactLeads.length}) // FIX: aiInsights.contactLeads
+                  Hot Contact Leads ({aiInsights.contactLeads.length}) 
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.contactLeads.slice(0, 8).map((lead, idx) => ( // FIX: aiInsights.contactLeads
+                  {aiInsights.contactLeads.slice(0, 8).map((lead, idx) => ( 
                     <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -530,31 +530,31 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             {/* Two Column Grid: Content Insights & Risk Alerts - FIX APPLIED HERE */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Content Insights */}
-              {aiInsights.contentInsights && ( // FIX: Removed .insights
+              {aiInsights.contentInsights && ( 
                 <div className="bg-white rounded-lg p-4 border border-blue-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Content Strategy</h3>
                   <div className="space-y-2">
                     <div>
                       <p className="text-xs text-gray-600 uppercase font-semibold">Top Performing</p>
-                      <p className="text-sm text-gray-700 mt-1">{aiInsights.contentInsights.topPerforming}</p> // FIX: Removed .insights
+                      <p className="text-sm text-gray-700 mt-1">{aiInsights.contentInsights.topPerforming}</p> 
                     </div>
                     <div>
                       <p className="text-xs text-gray-600 uppercase font-semibold mt-3">Suggestions</p>
-                      <p className="text-sm text-gray-700 mt-1">{aiInsights.contentInsights.suggestions}</p> // FIX: Removed .insights
+                      <p className="text-sm text-gray-700 mt-1">{aiInsights.contentInsights.suggestions}</p> 
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Risk Alerts */}
-              {aiInsights.riskAlerts && aiInsights.riskAlerts.length > 0 && ( // FIX: Removed .insights
+              {aiInsights.riskAlerts && aiInsights.riskAlerts.length > 0 && ( 
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <AlertTriangle size={18} className="text-orange-600" />
                     Risk Alerts
                   </h3>
                   <div className="space-y-2">
-                    {aiInsights.riskAlerts.map((risk, idx) => ( // FIX: Removed .insights
+                    {aiInsights.riskAlerts.map((risk, idx) => ( 
                       <div key={idx} className="border-l-4 border-orange-400 pl-3 py-1">
                         <p className="text-sm font-semibold text-gray-900">{risk.issue}</p>
                         <p className="text-xs text-gray-600 mt-1">{risk.impact}</p>
@@ -567,14 +567,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             </div>
 
             {/* News Opportunities */}
-            {aiInsights.newsArticles && aiInsights.newsArticles.length > 0 && ( // FIX: aiInsights.newsArticles is a top-level property
+            {aiInsights.newsArticles && aiInsights.newsArticles.length > 0 && ( 
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Newspaper size={18} className="text-blue-600" />
                   Market Opportunities from News (Last 60 Days)
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.newsArticles.map((article, idx) => ( // FIX: aiInsights.newsArticles
+                  {aiInsights.newsArticles.map((article, idx) => ( 
                     <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
                       <a href={article.link} 
                         target="_blank" 
@@ -601,11 +601,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                     </div>
                   ))}
                 </div>
-                {aiInsights.newsOpportunities && aiInsights.newsOpportunities.length > 0 && ( // FIX: Removed .insights
+                {aiInsights.newsOpportunities && aiInsights.newsOpportunities.length > 0 && ( 
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Analysis:</h4>
                     <div className="space-y-2">
-                      {aiInsights.newsOpportunities.map((opp, idx) => ( // FIX: Removed .insights
+                      {aiInsights.newsOpportunities.map((opp, idx) => ( 
                         <div key={idx} className="text-sm bg-green-50 p-2 rounded">
                           <p className="font-medium text-gray-900">{opp.headline}</p>
                           <p className="text-gray-600 text-xs mt-1">{opp.relevance}</p>
