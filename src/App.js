@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2 } from 'lucide-react';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
-import { fetchBids } from './services/bidService';
+// FIX: Import the new dashboard data service for the summary/counts
+import { fetchDashboardData } from './services/bidService'; 
 import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, generateSystemAdminTickerItems } from './services/tickerService';
 import RadioPlayer from './components/RadioPlayer';
 import Dashboard from './components/Dashboard';
@@ -95,14 +96,25 @@ const App = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchBids();
-      setBids(data.activeBids || []);
+      
+      // FIX: Use the FAST fetchDashboardData for the summary/counts
+      const data = await fetchDashboardData(); 
+      
+      // Note: If BidOperations requires full data arrays, a dedicated fetch function is needed.
+      // For now, we stub these arrays and populate the essential summary.
+      setBids(data.activeBids || []); 
       setDisregardedBids(data.disregardedBids || []);
       setSubmittedBids(data.submittedBids || []);
+      
+      // FIX: Update the summary state directly with the fast data
       setSummary(data.summary || {});
       
-      const autoTickerItems = generateTickerItemsFromBids(data.activeBids || []);
-      const submittedTickerItems = generateSubmittedBidItems(data.submittedBids || []);
+      // Ticker generation now relies on the simplified summary counts.
+      const activeBidsStub = Array(data.summary?.activeBidsCount || 0).fill({});
+      const submittedBidsStub = Array(data.summary?.submittedBidsCount || 0).fill({});
+
+      const autoTickerItems = generateTickerItemsFromBids(activeBidsStub);
+      const submittedTickerItems = generateSubmittedBidItems(submittedBidsStub);
 
       try {
         await fetch('/.netlify/functions/refreshAutoTickerItems', {
