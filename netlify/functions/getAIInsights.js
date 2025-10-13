@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const OpenAI = require('openai');
 
 // =======================
-// Config (env-overridable) - ADJUSTED FOR PRO ACCOUNT
+// Config (env-overridable) - ADJUSTED FOR PRO ACCOUNT TIME-SPLICING
 // =======================
 const CFG = {
   // --- ADJUSTED FOR PRO ACCOUNT QUALITY/TIME ---
@@ -31,8 +31,8 @@ const CFG = {
     DISREGARDED_SAMPLE: 10 // INCREASED
   },
 
-  // NEW: Function timeout safety margin adjusted for 60s Pro limit
-  FUNCTION_TIMEOUT_MS: 50000, // 50 seconds - generous buffer for 60s limit
+  // Set aggressive internal timeout to fit standard HTTP/proxy limits
+  FUNCTION_TIMEOUT_MS: 30000, // 30 seconds max execution budget
   ENABLE_CACHING: true,
   CACHE_TTL_MS: 5 * 60 * 1000 // 5 minutes
 };
@@ -97,10 +97,15 @@ exports.handler = async (event, context) => {
   const startTime = Date.now();
   console.log('[Insights] Function start');
 
-  // Set aggressive timeout timer from File 1
+  // Set aggressive timeout timer 
   const timeoutTimer = setTimeout(() => {
-    console.warn('[Insights] Approaching timeout limit, will return partial data');
+    // This timer is a safety net but the CRITICAL_TIME_EXCEEDED check below is the real enforcer.
+    console.warn('[Insights] Approaching hard timeout limit. This should trigger CRITICAL_TIME_EXCEEDED if the handler is blocked.');
   }, CFG.FUNCTION_TIMEOUT_MS);
+
+  // Define aggregatedData early so it's available for the CRITICAL_TIME_EXCEEDED catch block
+  let activeBids = [], submittedBids = [], disregardedBids = [], webinars = [], surveys = [], registrations = [], bidSystems = [], socialPosts = [];
+  let aggregatedData = null;
 
   try {
     // -------------------------
@@ -113,7 +118,6 @@ exports.handler = async (event, context) => {
           Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
         );
       } else {
-        // Fallback for non-base64 (less secure)
         serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
       }
     } catch (parseError) {
@@ -121,7 +125,6 @@ exports.handler = async (event, context) => {
       throw new Error('Invalid service account credentials');
     }
 
-    // Use JWT constructor (modern approach) from File 1
     const auth = new google.auth.JWT({
       email: serviceAccountKey.client_email,
       key: serviceAccountKey.private_key,
@@ -153,6 +156,8 @@ exports.handler = async (event, context) => {
     // Fetch promises for non-cached data
     const fetchPromises = [];
 
+    // ... (All fetch promises remain the same as above) ...
+
     if (!bidsData) {
       fetchPromises.push(
         withTimeout(
@@ -173,7 +178,6 @@ exports.handler = async (event, context) => {
       );
     } else { console.log('[Insights] Using cached webinar data'); }
 
-    // Systems and Social data are optional, fetch with timeout but don't halt if they fail
     if (!systemsData) {
       fetchPromises.push(
         withTimeout(
@@ -193,7 +197,7 @@ exports.handler = async (event, context) => {
         ).then(data => { if (data) { setCache(socialCacheKey, data); socialData = data; } return data; })
       );
     } else { console.log('[Insights] Using cached social/skipping social data'); }
-
+    
     // Wait for all fetches
     if (fetchPromises.length > 0) {
       await Promise.all(fetchPromises);
@@ -213,18 +217,18 @@ exports.handler = async (event, context) => {
     console.log('[Insights] Data fetched successfully');
 
     // Parse sheets data (using File 2's comprehensive parsers)
-    const activeBids = parseBids(bidsData.data.valueRanges[0]?.values || []);
-    const submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
-    const disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []);
+    activeBids = parseBids(bidsData.data.valueRanges[0]?.values || []);
+    submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
+    disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []);
     const adminEmails = parseAdminEmails(bidsData.data.valueRanges[3]?.values || []);
-    const webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
-    const surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
-    const registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
-    const bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
-    const socialPosts = parseSocialPosts(socialData?.data.valueRanges[0]?.values || []);
+    webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
+    surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
+    registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
+    bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
+    socialPosts = parseSocialPosts(socialData?.data.valueRanges[0]?.values || []);
 
     // --------------------------------
-    // Build derived/aggregate metrics (from File 2 - full logic)
+    // Build derived/aggregate metrics (must run BEFORE AI call)
     // --------------------------------
     const contactLeads = extractContactLeads(surveys, registrations);
     const respondBids = activeBids.filter((b) => b.recommendation === 'Respond');
@@ -248,45 +252,39 @@ exports.handler = async (event, context) => {
 
     const { past30, past90, presenterAverages, anomalies } = computeWebinarKPIs(webinars, surveys);
 
-    // Build Aggregated Data object
-    const aggregatedData = {
+    // Build Aggregated Data object - NOW AVAILABLE IN CATCH BLOCK
+    aggregatedData = {
       timestamp: new Date().toISOString(),
       summary: {
-        activeBidsCount: activeBids.length,
-        respondBidsCount: respondBids.length,
-        submittedBidsCount: submittedBids.length,
-        disregardedBidsCount: disregardedBids.length,
-        adminEmailsCount: adminEmails.length,
-        newAdminEmailsCount: newAdminCount,
-        registeredSystemsCount: bidSystems.filter(s => s.status === 'Active').length,
-        completedWebinars: webinars.filter((w) => w.status === 'Completed').length,
-        totalSurveyResponses: surveys.length,
-        contactRequests: contactLeads.length,
-        totalRegistrations: registrations.length,
+        activeBidsCount: activeBids.length, respondBidsCount: respondBids.length, submittedBidsCount: submittedBids.length,
+        disregardedBidsCount: disregardedBids.length, adminEmailsCount: adminEmails.length, newAdminEmailsCount: newAdminCount,
+        registeredSystemsCount: bidSystems.filter(s => s.status === 'Active').length, completedWebinars: webinars.filter((w) => w.status === 'Completed').length,
+        totalSurveyResponses: surveys.length, contactRequests: contactLeads.length, totalRegistrations: registrations.length,
         socialPostsTotal: socialPosts.length,
       },
-      bidUrgency,
-      bidSystemDistribution,
-      agencyDistribution,
-      keywordDistribution,
-      scoreDistribution,
+      bidUrgency, bidSystemDistribution, agencyDistribution, keywordDistribution, scoreDistribution,
       systemAdmin: { bySystem: adminBySystem, newCount: newAdminCount },
       disregardedAnalysis: { byReason: disregardedByReason, revivedCandidates },
       webinarKPIs: { past30, past90, presenterAverages, anomalies },
       priorityBids: respondBids.map((bid) => ({
         recommendation: bid.recommendation, score: bid.scoreDetails, subject: bid.emailSubject || 'No Subject',
         summary: bid.aiSummary || bid.significantSnippet || bid.emailSubject || 'No summary available',
-        entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null,
-        bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null,
-        dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null,
-        daysUntilDue: daysUntil(bestDate(bid.dueDate)), relevance: bid.relevance, keywords: bid.keywordsFound,
-        emailFrom: bid.emailFrom, url: bid.url
+        entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null, bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null,
+        dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null, daysUntilDue: daysUntil(bestDate(bid.dueDate)), relevance: bid.relevance, 
+        keywords: bid.keywordsFound, emailFrom: bid.emailFrom, url: bid.url
       })),
-      contactLeads,
-      newsArticles,
-      bidSystems: bidSystems.slice(0, CFG.AI_LIMITS.TOP_SYSTEMS),
-      socialPosts
+      contactLeads, newsArticles, bidSystems: bidSystems.slice(0, CFG.AI_LIMITS.TOP_SYSTEMS), socialPosts
     };
+    
+    // -----------------------
+    // NEW AGGRESSIVE TIME CHECK BEFORE OPENAI (THE 504 KILLER)
+    // -----------------------
+    const elapsedBeforeAI = Date.now() - startTime;
+    // If more than 20 seconds have elapsed, we are dangerously close to the HTTP proxy timeout.
+    if (elapsedBeforeAI > 20000) { 
+        console.warn(`[Insights] Elapsed time (${elapsedBeforeAI}ms) exceeds 20s threshold. Aborting AI to prevent 504.`);
+        throw new Error('CRITICAL_TIME_EXCEEDED');
+    }
 
     // ---------------------------------
     // Build a REDACTED payload for AI
@@ -294,7 +292,7 @@ exports.handler = async (event, context) => {
     const aiPayload = buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { limits: CFG.AI_LIMITS });
 
     // -----------------------
-    // OpenAI: robust request (using File 2's helper `getAIInsights` for retry logic)
+    // OpenAI: robust request 
     // -----------------------
     let aiInsights;
     try {
@@ -309,11 +307,9 @@ exports.handler = async (event, context) => {
         // Fallback if OpenAI call fails entirely
         aiInsights = {
             executiveSummary: 'AI analysis unavailable. Data has been processed and is displayed below.',
-            topPriorities: [],
-            bidRecommendations: [],
+            topPriorities: [], bidRecommendations: [],
             contentInsights: { topPerforming: 'See webinar KPIs section', suggestions: 'Focus on high-scoring opportunities' },
-            newsOpportunities: [],
-            riskAlerts: []
+            newsOpportunities: [], riskAlerts: []
         };
     }
 
@@ -321,7 +317,7 @@ exports.handler = async (event, context) => {
     const response = {
       ...aiInsights,
       timestamp: new Date().toISOString(),
-      // Attach aggregated data to the response for display (limited)
+      // Attach aggregated data
       bids: aggregatedData.bidUrgency,
       webinarKPIs: aggregatedData.webinarKPIs,
       contactLeads: aggregatedData.contactLeads.slice(0, 50),
@@ -343,6 +339,23 @@ exports.handler = async (event, context) => {
     clearTimeout(timeoutTimer);
     console.error('[Insights] Fatal error:', error);
 
+    if (error.message === 'CRITICAL_TIME_EXCEEDED' && aggregatedData) {
+      // Use the successfully collected and aggregated data for a 200 OK fallback
+      console.warn('[Insights] Returning partial data due to CRITICAL_TIME_EXCEEDED.');
+      return {
+        statusCode: 200,
+        headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
+        body: JSON.stringify({
+          executiveSummary: 'AI Analysis skipped due to critical time limits (20s). Basic data loaded.',
+          timestamp: new Date().toISOString(),
+          bids: aggregatedData.bidUrgency,
+          webinarKPIs: aggregatedData.webinarKPIs,
+          note: 'Full AI analysis unavailable due to time constraints'
+        })
+      };
+    }
+
+    // Default 500 server error
     return {
       statusCode: 500,
       headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
