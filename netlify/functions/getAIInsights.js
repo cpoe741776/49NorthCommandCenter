@@ -3,36 +3,36 @@ const { google } = require('googleapis');
 const OpenAI = require('openai');
 
 // =======================
-// Config (env-overridable)
+// Config (env-overridable) - ADJUSTED FOR PRO ACCOUNT
 // =======================
 const CFG = {
-  // Use the faster model from Claude's update, but keep the richer token/timeout settings from original for a more comprehensive analysis
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini', // CHANGED: Use faster model
+  // --- ADJUSTED FOR PRO ACCOUNT QUALITY/TIME ---
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o', // REVERTED: Use GPT-4o for quality
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '3000', 10), // REDUCED: Faster response (from 8000)
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '15000', 10), // REDUCED: 15s max for OpenAI (from 90s)
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '8000', 10), // REVERTED: Larger payload
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '45000', 10), // INCREASED: 45s max for OpenAI 
 
   GOOGLE_SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '8000', 10), // REDUCED: 8s max for Google (from 30s)
+  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '8000', 10),
 
   NEWS_QUERY:
-    'mental health training government OR resilience training military OR law enforcement mental health programs', // Simplified query from File 1
-  NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '5', 10), // REDUCED: Fewer news items (from 10)
-  NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '5000', 10), // REDUCED: 5s max for news (from 15s)
+    'mental health training government OR resilience training military OR law enforcement mental health programs',
+  NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '8', 10), // INCREASED: More news items
+  NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '5000', 10), 
 
-  // Combined and reduced AI Limits for faster/smaller payloads
+  // Combined and increased AI Limits for larger payloads
   AI_LIMITS: {
-    PRIORITY_BIDS: 8, // REDUCED from 15/12
-    TOP_NEWS: 5, // REDUCED from 10/8
-    TOP_SYSTEMS: 10, // Added from File 2, but reduced
-    TOP_ORGS_PER_LIST: 10, // Added from File 1
-    WEBINARS_FOR_AI: 20, // REDUCED from 30
-    SURVEY_COMMENT_SNIPPET: 150, // REDUCED from 220
-    DISREGARDED_SAMPLE: 5 // Added from File 2, but reduced
+    PRIORITY_BIDS: 12, // INCREASED
+    TOP_NEWS: 8, // INCREASED
+    TOP_SYSTEMS: 15, // INCREASED
+    TOP_ORGS_PER_LIST: 15, // INCREASED
+    WEBINARS_FOR_AI: 30, // INCREASED
+    SURVEY_COMMENT_SNIPPET: 220, // INCREASED
+    DISREGARDED_SAMPLE: 10 // INCREASED
   },
 
-  // NEW: Function timeout safety margin from File 1 (CRITICAL for Netlify)
-  FUNCTION_TIMEOUT_MS: 20000, // 20 seconds - leaves a buffer for 26s limit
+  // NEW: Function timeout safety margin adjusted for 60s Pro limit
+  FUNCTION_TIMEOUT_MS: 50000, // 50 seconds - generous buffer for 60s limit
   ENABLE_CACHING: true,
   CACHE_TTL_MS: 5 * 60 * 1000 // 5 minutes
 };
@@ -223,25 +223,6 @@ exports.handler = async (event, context) => {
     const bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
     const socialPosts = parseSocialPosts(socialData?.data.valueRanges[0]?.values || []);
 
-    // Check if we're approaching timeout (from File 1)
-    const elapsed = Date.now() - startTime;
-    if (elapsed > CFG.FUNCTION_TIMEOUT_MS * 0.7) {
-      console.warn('[Insights] Running low on time, skipping AI analysis');
-      clearTimeout(timeoutTimer);
-      // Return basic data without AI analysis
-      return {
-        statusCode: 200,
-        headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
-        body: JSON.stringify({
-          executiveSummary: 'Analysis in progress. Basic data loaded successfully.',
-          timestamp: new Date().toISOString(),
-          bids: { total: activeBids.length, submitted: submittedBids.length, disregarded: disregardedBids.length },
-          webinars: { total: webinars.length, completed: webinars.filter(w => w.status === 'Completed').length },
-          note: 'Full AI analysis unavailable due to time constraints'
-        })
-      };
-    }
-
     // --------------------------------
     // Build derived/aggregate metrics (from File 2 - full logic)
     // --------------------------------
@@ -315,12 +296,26 @@ exports.handler = async (event, context) => {
     // -----------------------
     // OpenAI: robust request (using File 2's helper `getAIInsights` for retry logic)
     // -----------------------
-    const aiInsights = await getAIInsights(aiPayload, {
-      model: CFG.OPENAI_MODEL,
-      temperature: CFG.OPENAI_TEMPERATURE,
-      max_tokens: CFG.OPENAI_MAX_TOKENS,
-      timeoutMs: CFG.OPENAI_TIMEOUT_MS
-    });
+    let aiInsights;
+    try {
+        aiInsights = await getAIInsights(aiPayload, {
+            model: CFG.OPENAI_MODEL,
+            temperature: CFG.OPENAI_TEMPERATURE,
+            max_tokens: CFG.OPENAI_MAX_TOKENS,
+            timeoutMs: CFG.OPENAI_TIMEOUT_MS
+        });
+    } catch (aiErr) {
+        console.error('[Insights] OpenAI failed:', aiErr.message);
+        // Fallback if OpenAI call fails entirely
+        aiInsights = {
+            executiveSummary: 'AI analysis unavailable. Data has been processed and is displayed below.',
+            topPriorities: [],
+            bidRecommendations: [],
+            contentInsights: { topPerforming: 'See webinar KPIs section', suggestions: 'Focus on high-scoring opportunities' },
+            newsOpportunities: [],
+            riskAlerts: []
+        };
+    }
 
     // Build final response
     const response = {
@@ -361,7 +356,7 @@ exports.handler = async (event, context) => {
 };
 
 // ==================================
-// HELPER FUNCTIONS (From File 2)
+// HELPER FUNCTIONS (REMAINDER)
 // ==================================
 
 // OpenAI helper (Keeps retry logic and rich system prompt)
