@@ -1,5 +1,5 @@
 // Dashboard.jsx
-// FIXED: Implements useCallback for loadAIInsights to clear ESLint dependency warning
+// FIXED: Implements smart local caching, resolves initial load race condition, and maintains ESLint compliance.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileText, Video, Share2, TrendingUp, AlertTriangle, Sparkles, RefreshCw, ChevronRight, Mail, Target, Newspaper } from 'lucide-react';
@@ -11,27 +11,57 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiError, setAiError] = useState(null);
 
   // 1. Wrap loadAIInsights in useCallback to create a stable, hook-friendly function.
-  // Dependencies: setAiError, setAiInsights, and onTickerUpdate (a prop) must be included.
-  const loadAIInsights = useCallback(async () => {
+  // It now accepts a 'bypassCache' argument.
+  const loadAIInsights = useCallback(async (bypassCache = false) => {
     try {
       setAiLoading(true);
       setAiError(null);
+
+      let data;
+      const cachedInsights = localStorage.getItem('aiInsightsCache');
       
-      const data = await fetchAIInsights();
+      // 1. Check client-side cache first if we're not explicitly refreshing
+      if (cachedInsights && !bypassCache) {
+          try {
+              const entry = JSON.parse(cachedInsights);
+              const fiveMinutes = 5 * 60 * 1000;
+              
+              if (Date.now() - entry.timestamp < fiveMinutes) {
+                  console.log('[Dashboard] Using fresh local cache from loadAIInsights check.');
+                  setAiInsights(entry.data);
+                  setAiLoading(false);
+                  return; // Exit early using cache
+              } else {
+                  // Cache expired, remove it and proceed to fetch
+                  localStorage.removeItem('aiInsightsCache');
+              }
+          } catch (err) {
+              console.error('Error parsing local cache during check:', err);
+              localStorage.removeItem('aiInsightsCache');
+          }
+      }
+      
+      // 2. If no fresh cache or refresh requested, run network fetch
+      data = await fetchAIInsights();
       
       // --- AI Timeout/Fallback Logic ---
       const analysisSkipped = data.note && data.note.includes('Full AI analysis unavailable');
 
       if (analysisSkipped) {
-        // Non-fatal error: Show the warning message but keep the basic stats (bids, KPIs)
         setAiInsights(data); 
-        setAiError(data.note); // Set the error state to display the user-friendly warning
+        setAiError(data.note);
         console.warn('[Dashboard] AI Analysis skipped due to timeout:', data.note);
       } else {
         // Full, successful AI analysis received
         setAiInsights(data);
-        setAiError(null); // Clear any previous error/warning
+        setAiError(null); 
         console.log('[Dashboard] Full AI Analysis successful.');
+        
+        // --- SAVE NEW CACHE WITH TIMESTAMP ---
+        localStorage.setItem('aiInsightsCache', JSON.stringify({
+            data: data,
+            timestamp: Date.now()
+        }));
       }
       
       // --- Ticker Update Logic ---
@@ -55,18 +85,47 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       }
       
     } catch (err) {
-      // Fatal network/API error
       setAiError(err.message || 'A network error occurred.');
       setAiInsights(null); 
     } finally {
       setAiLoading(false);
     }
-  }, [setAiError, setAiInsights, onTickerUpdate]); // <-- Dependencies for loadAIInsights
+  }, [setAiError, setAiInsights, onTickerUpdate]); 
 
-  // 2. Add loadAIInsights to the dependency array to satisfy ESLint
+
+  // 2. Initial load check (runs only once on mount)
   useEffect(() => {
-    loadAIInsights();
-  }, [loadAIInsights]); // <-- Clears the ESLint warning
+    const cachedInsights = localStorage.getItem('aiInsightsCache');
+    let shouldFetch = true;
+
+    if (cachedInsights) {
+        try {
+            const entry = JSON.parse(cachedInsights);
+            const fiveMinutes = 5 * 60 * 1000;
+            
+            // Display cached data immediately to prevent a blank flash
+            setAiInsights(entry.data);
+
+            if (Date.now() - entry.timestamp < fiveMinutes) {
+                 console.log('[Dashboard] Using fresh local cache for initial load. Skipping fetch.');
+                 shouldFetch = false;
+            } else {
+                console.log('[Dashboard] Local cache expired. Fetching fresh analysis.');
+            }
+        } catch (err) {
+            console.error('Initial cache check failed.', err);
+            localStorage.removeItem('aiInsightsCache');
+        }
+    }
+    
+    // Only run loadAIInsights if cache was missing or stale
+    if (shouldFetch) {
+        // Pass 'true' to loadAIInsights to make it bypass its own internal cache check
+        // (This is cleaner than double-checking the timestamp logic)
+        loadAIInsights(true); 
+    }
+    
+  }, [loadAIInsights]); // Only depends on the stable function reference
 
   if (loading) {
     return (
@@ -197,7 +256,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <h2 className="text-xl font-bold text-gray-900">AI Strategic Insights</h2>
           </div>
           <button
-            onClick={loadAIInsights}
+            onClick={() => loadAIInsights(true)} // Explicitly bypass cache on button click
             disabled={aiLoading}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
           >
@@ -207,7 +266,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         </div>
 
         {/* Empty State */}
-        {!aiLoading && !aiError && !aiInsights && (
+        {!aiLoading && !aiError && (!aiInsights || !aiInsights.insights) && (
           <div className="text-center py-12">
             <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
             <p className="text-gray-600 mb-2">No analysis loaded</p>
@@ -222,7 +281,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
               <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
               <p className="text-sm text-gray-500 mt-1">
-                This may take up to **20 seconds** for detailed insights
+                This may take up to **45 seconds** for detailed insights
               </p>
               <p className="text-xs text-gray-400 mt-2">Analyzing bids, leads, webinars, and market opportunities</p>
             </div>
@@ -234,7 +293,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="bg-red-50 border border-red-200 rounded p-4">
             <p className="text-red-700">Error loading insights: {aiError}</p>
             <button 
-              onClick={loadAIInsights}
+              onClick={() => loadAIInsights(true)}
               className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
             >
               Try again
@@ -369,7 +428,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Recommendations:</h4>
                     <div className="space-y-2">
-                      {aiInsights.insights.bidRecommendations.slice(0, 3).map((rec, idx) => (
+                      {aiInsights.insights.bidRecommendations.map((rec, idx) => (
                         <div key={idx} className="text-sm bg-blue-50 p-2 rounded">
                           <p className="font-medium text-gray-900">{rec.entity} - {rec.subject}</p>
                           <p className="text-gray-600 text-xs mt-1">{rec.reason}</p>
@@ -389,7 +448,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                   Recent Social Media Activity
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.socialPosts.filter(p => p.status === 'Published').slice(0, 5).map((post, idx) => (
+                  {aiInsights.socialPosts.filter(p => p.status === 'Published').map((post, idx) => (
                     <div 
                       key={idx} 
                       className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
@@ -493,7 +552,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                     Risk Alerts
                   </h3>
                   <div className="space-y-2">
-                    {aiInsights.insights.riskAlerts.slice(0, 3).map((risk, idx) => (
+                    {aiInsights.insights.riskAlerts.map((risk, idx) => (
                       <div key={idx} className="border-l-4 border-orange-400 pl-3 py-1">
                         <p className="text-sm font-semibold text-gray-900">{risk.issue}</p>
                         <p className="text-xs text-gray-600 mt-1">{risk.impact}</p>
