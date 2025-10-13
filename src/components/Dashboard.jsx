@@ -41,7 +41,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       }
       
       // 2. If no fresh cache or refresh requested, run network fetch
-      data = await fetchAIInsights();
+      data = await fetchAIInsights(bypassCache);
       
       // --- AI Timeout/Fallback Logic ---
       const analysisSkipped = data.note && data.note.includes('Full AI analysis unavailable');

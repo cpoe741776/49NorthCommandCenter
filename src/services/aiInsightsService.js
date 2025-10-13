@@ -1,6 +1,17 @@
-export const fetchAIInsights = async () => {
+export const fetchAIInsights = async (bypassCache = false) => {
   try {
-    const response = await fetch('/.netlify/functions/getAIInsights');
+    let url = '/.netlify/functions/getAIInsights';
+    
+    if (bypassCache) {
+      
+      url += `?t=${Date.now()}`;
+      console.log('Fetching new insights:', url);
+    } else {
+      console.log('Fetching cached insights:', url);
+    }
+    
+    const response = await fetch(url); 
+    
     if (!response.ok) {
       throw new Error('Failed to fetch AI insights');
     }
