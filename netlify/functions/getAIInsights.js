@@ -53,7 +53,7 @@ exports.handler = async (event, context) => {
     console.log('[Insights] Fetching Sheets data...');
     
     // Fetch from main bid sheet
-    const [bidsData, webinarData, systemsData] = await Promise.all([
+    const [bidsData, webinarData, systemsData, socialData] = await Promise.all([
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         ranges: [
@@ -70,8 +70,12 @@ exports.handler = async (event, context) => {
       sheets.spreadsheets.values.batchGet({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         ranges: ['_BidSystemsSync!A2:O'] // NEW: Bid systems registry
-      })
-    ]);
+      }),
+      sheets.spreadsheets.values.batchGet({
+        spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID,
+        ranges: ['MainPostData!A2:R']
+     })
+]);
 
     // -------------
     // Parse rows
@@ -80,16 +84,15 @@ exports.handler = async (event, context) => {
     const submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
     const disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []); // NEW: Full structure
     const adminEmails = parseAdminEmails(bidsData.data.valueRanges[3]?.values || []); // NEW
-
     const webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
     const surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
     const registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
-
     const bidSystems = parseBidSystems(systemsData.data.valueRanges[0]?.values || []); // NEW
+    const socialPosts = parseSocialPosts(socialData.data.valueRanges[0]?.values || []);
 
-    console.log(
-      `[Insights] Parsed — active:${activeBids.length} submitted:${submittedBids.length} disregarded:${disregardedBids.length} admin:${adminEmails.length} systems:${bidSystems.length} webinars:${webinars.length}`
-    );
+console.log(
+  `[Insights] Parsed — active:${activeBids.length} submitted:${submittedBids.length} disregarded:${disregardedBids.length} admin:${adminEmails.length} systems:${bidSystems.length} webinars:${webinars.length} social:${socialPosts.length}`
+);
 
     // --------------------------------
     // Build derived/aggregate metrics
@@ -145,7 +148,16 @@ if (newsArticles.length > 0) {
         upcomingWebinars: webinars.filter((w) => w.status === 'Upcoming').length,
         totalSurveyResponses: surveys.length,
         contactRequests: contactLeads.length,
-        totalRegistrations: registrations.length
+        totalRegistrations: registrations.length,
+
+        socialPostsTotal: socialPosts.length,
+    socialPostsPublished: socialPosts.filter(p => p.status === 'Published').length,
+    socialPostsDrafts: socialPosts.filter(p => p.status === 'Draft').length,
+    socialPostsScheduled: socialPosts.filter(p => p.status === 'Scheduled').length,
+    socialPostsThisWeek: socialPosts.filter(p => {
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      return p.status === 'Published' && new Date(p.publishedDate) > weekAgo;
+    }).length
       },
 
       bidUrgency,
@@ -220,31 +232,32 @@ if (newsArticles.length > 0) {
     });
 
     return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store'
-      },
-      body: JSON.stringify({
-        success: true,
-        insights,
-        contactLeads: contactLeads.slice(0, 25),
-        priorityBids: aggregatedData.priorityBids.slice(0, 25),
-        newsArticles,
-        aggregatedData: {
-          summary: aggregatedData.summary,
-          bidUrgency: aggregatedData.bidUrgency,
-          bidSystemDistribution: aggregatedData.bidSystemDistribution.slice(0, 10),
-          agencyDistribution: aggregatedData.agencyDistribution.slice(0, 10),
-          keywordDistribution: aggregatedData.keywordDistribution,
-          scoreDistribution: aggregatedData.scoreDistribution,
-          systemAdmin: aggregatedData.systemAdmin,
-          disregardedAnalysis: aggregatedData.disregardedAnalysis,
-          webinarKPIs: aggregatedData.webinarKPIs
-        },
-        generatedAt: new Date().toISOString()
-      })
-    };
+  statusCode: 200,
+  headers: {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store'
+  },
+  body: JSON.stringify({
+    success: true,
+    insights,
+    contactLeads: contactLeads.slice(0, 25),
+    priorityBids: aggregatedData.priorityBids.slice(0, 25),
+    newsArticles,
+    socialPosts: socialPosts.slice(0, 10), // NEW
+    aggregatedData: {
+      summary: aggregatedData.summary,
+      bidUrgency: aggregatedData.bidUrgency,
+      bidSystemDistribution: aggregatedData.bidSystemDistribution.slice(0, 10),
+      agencyDistribution: aggregatedData.agencyDistribution.slice(0, 10),
+      keywordDistribution: aggregatedData.keywordDistribution,
+      scoreDistribution: aggregatedData.scoreDistribution,
+      systemAdmin: aggregatedData.systemAdmin,
+      disregardedAnalysis: aggregatedData.disregardedAnalysis,
+      webinarKPIs: aggregatedData.webinarKPIs
+    },
+    generatedAt: new Date().toISOString()
+  })
+};
   } catch (err) {
     console.error('[Insights] Fatal error:', err);
     return {
@@ -545,6 +558,19 @@ function parseRegistrations(rows) {
     email: row[3] || '',
     organization: row[4] || '',
     phone: row[5] || ''
+  }));
+}
+
+function parseSocialPosts(rows) {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    timestamp: row[0] || '',
+    status: row[1] || '',
+    contentType: row[2] || '',
+    title: row[3] || '',
+    body: row[4] || '',
+    platforms: row[7] || '',
+    publishedDate: row[9] || ''
   }));
 }
 

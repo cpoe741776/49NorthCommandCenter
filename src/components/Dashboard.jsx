@@ -122,7 +122,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <span className="text-gray-600">Click to view</span>
           </div>
         </div>
-
+</div>
         {/* Active Bids Card */}
         <div onClick={() => onNavigate('bids')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
           <div className="flex items-center justify-between">
@@ -152,17 +152,26 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         </div>
 
         {/* Social Posts Card */}
-        <div onClick={() => onNavigate('social')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Social Posts Scheduled</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">12</p>
-            </div>
-            <Share2 className="text-blue-600" size={40} />
-          </div>
-          <div className="mt-4 text-sm text-gray-600">This week: 4 posts</div>
-        </div>
-      </div>
+<div onClick={() => onNavigate('social')} className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow">
+  <div className="flex items-center justify-between">
+    <div>
+      <p className="text-sm text-gray-600">Social Posts</p>
+      <p className="text-3xl font-bold text-gray-900 mt-1">
+        {aiInsights?.aggregatedData?.summary?.socialPostsTotal || 0}
+      </p>
+    </div>
+    <Share2 className="text-blue-600" size={40} />
+  </div>
+  <div className="mt-4 text-sm">
+    <span className="text-green-600 font-semibold">
+      {aiInsights?.aggregatedData?.summary?.socialPostsPublished || 0} Published
+    </span>
+    <span className="text-gray-400 mx-2">•</span>
+    <span className="text-yellow-600 font-semibold">
+      {aiInsights?.aggregatedData?.summary?.socialPostsDrafts || 0} Drafts
+    </span>
+  </div>
+</div>
 
       {/* AI Strategic Insights Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
@@ -354,7 +363,44 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 )}
               </div>
             )}
-
+{/* Social Media Activity */}
+{aiInsights?.socialPosts && aiInsights.socialPosts.length > 0 && (
+  <div className="bg-white rounded-lg p-4 border border-blue-200">
+    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+      <Share2 size={18} className="text-blue-600" />
+      Recent Social Media Activity
+    </h3>
+    <div className="space-y-2">
+      {aiInsights.socialPosts.filter(p => p.status === 'Published').slice(0, 5).map((post, idx) => (
+        <div 
+          key={idx} 
+          className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
+          onClick={() => onNavigate('social')}
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h4 className="font-semibold text-gray-900">{post.title}</h4>
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{post.body}</p>
+              <div className="flex gap-2 mt-2">
+                {post.platforms?.split(',').map(p => (
+                  <span key={p} className="text-xs bg-blue-50 px-2 py-1 rounded">
+                    {p.trim()}
+                  </span>
+                ))}
+              </div>
+              {post.publishedDate && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Published: {new Date(post.publishedDate).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+            <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
             {/* Hot Contact Leads */}
             {aiInsights.contactLeads && aiInsights.contactLeads.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
@@ -451,8 +497,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 <div className="space-y-2">
                   {aiInsights.newsArticles.map((article, idx) => (
                     <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
-                      <a 
-                        href={article.link} 
+                      <a href={article.link} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="block"

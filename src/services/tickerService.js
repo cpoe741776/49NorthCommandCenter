@@ -250,49 +250,54 @@ export function generateWebinarTickerItems(webinarData) {
 }
 
 /**
- * Send all auto-generated items to the ticker
+ * Generate ticker items from social media posts
  */
-/**
- * Send all auto-generated items to the ticker
- */
-export async function refreshAllTickerItems(bids, webinarData, aiInsights, adminEmails) {  // ADD adminEmails parameter
-  try {
-    const allItems = [
-      ...generateTickerItemsFromBids(bids.activeBids || []),
-      ...generateSubmittedBidItems(bids.submittedBids || []),
-      ...generateWebinarTickerItems(webinarData),
-      ...generateAIInsightsTickerItems(aiInsights),
-      ...generateSystemAdminTickerItems(adminEmails || [])  // NEW
-    ];
+export function generateSocialMediaTickerItems(socialPosts) {
+  const items = [];
+  
+  if (!socialPosts || socialPosts.length === 0) return items;
 
-    if (allItems.length === 0) return;
+  // Recently published posts (last 24 hours)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recentlyPublished = socialPosts.filter(p => 
+    p.status === 'Published' && new Date(p.publishedDate) > oneDayAgo
+  );
 
-    // Send items grouped by source
-    const adminItems = allItems.filter(i => i.source === 'admin');
-    const otherItems = allItems.filter(i => i.source !== 'admin');
-
-    // Send admin items with source 'admin'
-    if (adminItems.length > 0) {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: adminItems, source: 'admin' })
-      });
-    }
-
-    // Send other items with source 'auto-bid'
-    if (otherItems.length > 0) {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: otherItems, source: 'auto-bid' })
-      });
-    }
-
-    console.log(`Refreshed ${allItems.length} ticker items (${adminItems.length} admin, ${otherItems.length} other)`);
-  } catch (error) {
-    console.error('Error refreshing ticker items:', error);
+  if (recentlyPublished.length > 0) {
+    items.push({
+      message: `📱 ${recentlyPublished.length} social media post${recentlyPublished.length > 1 ? 's' : ''} published in last 24 hours`,
+      priority: 'low',
+      target: 'social'
+    });
   }
+
+  // Scheduled posts coming up (next 3 days)
+  const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  const upcomingScheduled = socialPosts.filter(p => {
+    if (p.status !== 'Scheduled' || !p.scheduleDate) return false;
+    const scheduleDate = new Date(p.scheduleDate);
+    return scheduleDate > new Date() && scheduleDate < threeDaysFromNow;
+  });
+
+  if (upcomingScheduled.length > 0) {
+    items.push({
+      message: `📅 ${upcomingScheduled.length} post${upcomingScheduled.length > 1 ? 's' : ''} scheduled for next 3 days`,
+      priority: 'medium',
+      target: 'social'
+    });
+  }
+
+  // Drafts needing attention
+  const drafts = socialPosts.filter(p => p.status === 'Draft');
+  if (drafts.length >= 5) {
+    items.push({
+      message: `✍️ ${drafts.length} draft posts awaiting review`,
+      priority: 'low',
+      target: 'social'
+    });
+  }
+
+  return items;
 }
 
 /**
@@ -348,4 +353,48 @@ export function generateSystemAdminTickerItems(adminEmails) {
   }
 
   return items;
+}
+
+/**
+ * Send all auto-generated items to the ticker
+ */
+export async function refreshAllTickerItems(bids, webinarData, aiInsights, adminEmails, socialPosts) {
+  try {
+    const allItems = [
+      ...generateTickerItemsFromBids(bids.activeBids || []),
+      ...generateSubmittedBidItems(bids.submittedBids || []),
+      ...generateWebinarTickerItems(webinarData),
+      ...generateAIInsightsTickerItems(aiInsights),
+      ...generateSystemAdminTickerItems(adminEmails || []),
+      ...generateSocialMediaTickerItems(socialPosts || [])
+    ];
+
+    if (allItems.length === 0) return;
+
+    // Send items grouped by source
+    const adminItems = allItems.filter(i => i.source === 'admin');
+    const otherItems = allItems.filter(i => i.source !== 'admin');
+
+    // Send admin items with source 'admin'
+    if (adminItems.length > 0) {
+      await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: adminItems, source: 'admin' })
+      });
+    }
+
+    // Send other items with source 'auto-bid'
+    if (otherItems.length > 0) {
+      await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: otherItems, source: 'auto-bid' })
+      });
+    }
+
+    console.log(`Refreshed ${allItems.length} ticker items (${adminItems.length} admin, ${otherItems.length} other)`);
+  } catch (error) {
+    console.error('Error refreshing ticker items:', error);
+  }
 }

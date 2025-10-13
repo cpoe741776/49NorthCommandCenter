@@ -125,13 +125,37 @@ const App = () => {
     }
   }, [loadTickerFeed]);
 
-  useEffect(() => {
-    if (user) {
-      loadBids();
-      loadTickerFeed();
-      loadAdminEmails();
+  const loadSocialPosts = useCallback(async () => {
+  try {
+    const { fetchSocialMediaContent } = await import('./services/socialMediaService');
+    const data = await fetchSocialMediaContent();
+    
+    // Generate ticker items from social posts
+    const { generateSocialMediaTickerItems } = await import('./services/tickerService');
+    const socialTickerItems = generateSocialMediaTickerItems(data.posts);
+    
+    if (socialTickerItems.length > 0) {
+      await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: socialTickerItems, source: 'auto-social' })
+      });
     }
-  }, [user, loadBids, loadTickerFeed, loadAdminEmails]);
+    
+    await loadTickerFeed();
+  } catch (err) {
+    console.error('Failed to load social posts:', err);
+  }
+}, [loadTickerFeed]);
+
+  useEffect(() => {
+  if (user) {
+    loadBids();
+    loadSocialPosts(); // NEW
+    loadTickerFeed();
+    loadAdminEmails();
+  }
+}, [user, loadBids, loadSocialPosts, loadTickerFeed, loadAdminEmails]);
 
   const displayItems = useMemo(() => {
     const normalized = (tickerItems || [])
