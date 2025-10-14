@@ -3,7 +3,8 @@
 
 const { google } = require('googleapis');
 const OpenAI = require('openai');
-const { corsHeaders, methodGuard, ok, bad, serverErr, checkAuth, safeJson } = require('./_utils/http');
+const { corsHeaders, methodGuard, ok, bad, checkAuth, safeJson } = require('./_utils/http');
+
 const { getGoogleAuth } = require('./_utils/google');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -15,7 +16,7 @@ const CFG = {
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '6000', 10),
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
 
-  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
+  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '8000', 10),
 
   NEWS_QUERY:
     process.env.NEWS_QUERY ||
@@ -761,9 +762,19 @@ exports.handler = async (event, context) => {
     });
   } catch (e) {
     console.error('[Insights] Fatal error:', e);
-    return serverErr(headers);
+    const payload = {
+      error: 'Service temporarily unavailable',
+      message: e?.message || 'Unknown error',
+      stack: process.env.NODE_ENV !== 'production' ? e?.stack : undefined,
+      timestamp: new Date().toISOString()
+    };
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify(payload)
+    };
   }
-};
+}; // <-- important: closes exports.handler properly
 
 // ---- Contact leads (unchanged semantics) ----
 function extractContactLeads(surveys, registrations) {
