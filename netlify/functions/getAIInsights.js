@@ -1,10 +1,9 @@
 // netlify/functions/getAIInsights.js
-// Hardened: unified CORS/auth, strict timeouts, stable JSON shape
+// Hardened: unified CORS/auth, strict timeouts, stable JSON shape, fast-mode shortcut
 
 const { google } = require('googleapis');
 const OpenAI = require('openai');
 const { corsHeaders, methodGuard, ok, bad, checkAuth, safeJson } = require('./_utils/http');
-
 const { getGoogleAuth } = require('./_utils/google');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -55,7 +54,7 @@ async function withTimeoutPromise(promise, label, ms) {
     clearTimeout(t);
     if (err && String(err.message || '').includes('timeout')) {
       console.warn(`[Timeout] ${label} hit timeout`);
-      return null; // treat as soft-fail and continue
+      return null; // soft-fail
     }
     throw err;
   }
@@ -77,7 +76,7 @@ function sanitize(s) {
   return (s || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
 }
 
-// ---- Parsers (unchanged semantics) ----
+// ---- Parsers ----
 function parseBids(rows) {
   if (!rows) return [];
   return rows.map((row) => ({
@@ -217,8 +216,7 @@ function analyzeDisregardedReasons(disregarded) {
   const reasons = new Map();
   disregarded.forEach((bid) => {
     const reasoning = bid.aiReasoning || '';
-    if (reasoning.includes('no relevant keywords'))
-      reasons.set('No Keywords', (reasons.get('No Keywords') || 0) + 1);
+    if (reasoning.includes('no relevant keywords')) reasons.set('No Keywords', (reasons.get('No Keywords') || 0) + 1);
     else if (reasoning.includes('marketing') || reasoning.includes('promotional'))
       reasons.set('Marketing Noise', (reasons.get('Marketing Noise') || 0) + 1);
     else if (reasoning.includes('lacks'))
@@ -453,7 +451,6 @@ function buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { li
 
 // ---- OpenAI call (JSON only) ----
 async function getAIInsights(aiPayload, { model, temperature, max_tokens, timeoutMs }) {
-  // If OPENAI key is missing, return a structured "AI unavailable" block immediately
   if (!process.env.OPENAI_API_KEY) {
     return {
       executiveSummary: 'AI analysis unavailable (no API key configured). Data processed below.',
@@ -516,8 +513,7 @@ ${JSON.stringify(aiPayload, null, 2)}
       return await once();
     } catch (e2) {
       return {
-        executiveSummary:
-          'AI analysis unavailable. Data processed without strategic summary.',
+        executiveSummary: 'AI analysis unavailable. Data processed without strategic summary.',
         topPriorities: [],
         bidRecommendations: [],
         systemInsights: {
@@ -550,7 +546,7 @@ exports.handler = async (event, context) => {
   try {
     // Optional POST filters (ignored by default)
     if (event.httpMethod === 'POST' && event.body) {
-      const [, err] = safeJson(event.body); // ESLint-safe destructuring
+      const [, err] = safeJson(event.body);
       if (err) return bad(headers, 'Invalid JSON body');
     }
 
@@ -561,11 +557,7 @@ exports.handler = async (event, context) => {
       await auth.authorize();
     } catch (authErr) {
       console.error('[Insights] Google auth failure:', authErr?.message);
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({ error: 'Google authentication failed' })
-      };
+      return { statusCode: 503, headers, body: JSON.stringify({ error: 'Google authentication failed' }) };
     }
 
     const sheets = google.sheets({ version: 'v4', auth });
@@ -578,34 +570,22 @@ exports.handler = async (event, context) => {
 
     const [bidsData, webinarData, systemsData, socialData] = await Promise.all([
       withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          ranges: bidRanges
-        }),
+        sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.GOOGLE_SHEET_ID, ranges: bidRanges }),
         'bidsBatchGet',
         CFG.GOOGLE_TIMEOUT_MS
       ),
       withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.WEBINAR_SHEET_ID,
-          ranges: webinarRanges
-        }),
+        sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.WEBINAR_SHEET_ID, ranges: webinarRanges }),
         'webinarBatchGet',
         CFG.GOOGLE_TIMEOUT_MS
       ),
       withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          ranges: systemsRanges
-        }),
+        sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.GOOGLE_SHEET_ID, ranges: systemsRanges }),
         'systemsBatchGet',
         CFG.GOOGLE_TIMEOUT_MS
       ),
       withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID,
-          ranges: socialRanges
-        }),
+        sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID, ranges: socialRanges }),
         'socialBatchGet',
         CFG.GOOGLE_TIMEOUT_MS
       )
@@ -695,6 +675,26 @@ exports.handler = async (event, context) => {
       socialPosts
     };
 
+    // --- FAST PATH ---------------------------------------------------------
+    const qsp = event.queryStringParameters || {};
+    const wantFast = qsp.fast === '1' || qsp.fast === 'true';
+    if (wantFast) {
+      return ok(headers, {
+        executiveSummary: 'Fast mode: AI analysis skipped.',
+        timestamp: new Date().toISOString(),
+        summary: aggregatedData.summary,
+        bids: aggregatedData.bidUrgency,
+        webinarKPIs: aggregatedData.webinarKPIs,
+        priorityBids: aggregatedData.priorityBids.slice(0, 25),
+        contactLeads: aggregatedData.contactLeads.slice(0, 50),
+        newsArticles: aggregatedData.newsArticles,
+        socialPosts: aggregatedData.socialPosts.slice(0, 10),
+        note: 'Full AI analysis unavailable (fast mode).',
+        processingTime: `${Date.now() - started}ms`
+      });
+    }
+    // ----------------------------------------------------------------------
+
     // Early time check
     if (Date.now() - started > 15000) {
       console.warn('[Insights] Time nearly exceeded; skipping AI.');
@@ -768,13 +768,9 @@ exports.handler = async (event, context) => {
       stack: process.env.NODE_ENV !== 'production' ? e?.stack : undefined,
       timestamp: new Date().toISOString()
     };
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify(payload)
-    };
+    return { statusCode: 500, headers, body: JSON.stringify(payload) };
   }
-}; // <-- important: closes exports.handler properly
+}; // closes exports.handler
 
 // ---- Contact leads (unchanged semantics) ----
 function extractContactLeads(surveys, registrations) {

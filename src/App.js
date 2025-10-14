@@ -140,29 +140,51 @@ const App = () => {
     setLoading(false);
   }
 }, [loadTickerFeed]);
-
-  const loadSocialPosts = useCallback(async () => {
+const loadSocialPosts = useCallback(async () => {
   try {
-    const { fetchSocialMediaContent } = await import('./services/socialMediaService');
-    const data = await fetchSocialMediaContent();
-    
-    // Generate ticker items from social posts
-    const { generateSocialMediaTickerItems } = await import('./services/tickerService');
-    const socialTickerItems = generateSocialMediaTickerItems(data.posts);
-    
-    if (socialTickerItems.length > 0) {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: socialTickerItems, source: 'auto-social' })
-      });
+    // Dynamically import the social service
+    const mod = await import('./services/socialMediaService');
+
+    // Support both: named export and default export
+    const fetchSocialMediaContent =
+      mod.fetchSocialMediaContent || mod.default;
+
+    if (typeof fetchSocialMediaContent !== 'function') {
+      throw new Error('fetchSocialMediaContent is not a function (check default vs named export)');
     }
-    
+
+    const data = await fetchSocialMediaContent();
+
+    // Normalize posts array safely
+    const posts = Array.isArray(data?.posts)
+      ? data.posts
+      : Array.isArray(data?.items)
+      ? data.items
+      : [];
+
+    // Generate ticker items from social posts (support both named/default again)
+    const tmod = await import('./services/tickerService');
+    const generateSocialMediaTickerItems =
+      tmod.generateSocialMediaTickerItems || tmod.default?.generateSocialMediaTickerItems;
+
+    if (typeof generateSocialMediaTickerItems === 'function' && posts.length) {
+      const socialTickerItems = generateSocialMediaTickerItems(posts);
+
+      if (Array.isArray(socialTickerItems) && socialTickerItems.length > 0) {
+        await fetch('/.netlify/functions/refreshAutoTickerItems', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: socialTickerItems, source: 'auto-social' })
+        });
+      }
+    }
+
     await loadTickerFeed();
   } catch (err) {
     console.error('Failed to load social posts:', err);
   }
 }, [loadTickerFeed]);
+
 
   useEffect(() => {
   if (user) {
