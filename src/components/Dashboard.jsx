@@ -293,7 +293,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </div>
           <button
             onClick={() => loadAIInsights(true)} // Explicitly bypass cache on button click
-            disabled={aiLoading}
+            enabled={aiLoading}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
           >
             <RefreshCw size={16} className={aiLoading ? 'animate-spin' : ''} />
