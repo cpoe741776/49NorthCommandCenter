@@ -1,21 +1,25 @@
-export const fetchAIInsights = async (bypassCache = false) => {
+// src/services/aiInsightsService.js
+export const fetchAIInsights = async (bypassCache = false, { full = false } = {}) => {
+  const base = '/.netlify/functions/getAIInsights';
+  // Default to fast path unless explicitly asking for full
+  const qs = [];
+  if (!full) qs.push('fast=1');
+  if (bypassCache) qs.push(`t=${Date.now()}`);
+  const url = `${base}${qs.length ? `?${qs.join('&')}` : ''}`;
+
   try {
-    let url = '/.netlify/functions/getAIInsights';
-    
-    if (bypassCache) {
-      
-      url += `?t=${Date.now()}`;
-      console.log('Fetching new insights:', url);
-    } else {
-      console.log('Fetching cached insights:', url);
+    console.log(full ? 'Fetching full insights:' : 'Fetching fast insights:', url);
+    let res = await fetch(url);
+
+    // If full analysis times out or service unavailable, fall back to fast mode
+    if ((res.status === 504 || res.status === 503) && full) {
+      const fastUrl = `${base}?fast=1&t=${Date.now()}`;
+      console.warn(`[AI] Full analysis failed (${res.status}). Falling back to fast: ${fastUrl}`);
+      res = await fetch(fastUrl);
     }
-    
-    const response = await fetch(url); 
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch AI insights');
-    }
-    return await response.json();
+
+    if (!res.ok) throw new Error('Failed to fetch AI insights');
+    return await res.json();
   } catch (error) {
     console.error('Error fetching AI insights:', error);
     throw error;
