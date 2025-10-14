@@ -1,400 +1,72 @@
-// services/tickerService.js
+// src/services/tickerService.js
+// Normalizes backend responses and avoids .filter() on non-arrays.
+// Also (optionally) sends X-App-Token if window.__APP_TOKEN is set.
+
+function withAuthHeaders(init = {}) {
+  const headers = new Headers(init.headers || {});
+  headers.set('Content-Type', 'application/json');
+  // Optional inbound token support (set window.__APP_TOKEN in your app if you enabled APP_INBOUND_TOKEN on Netlify)
+  if (typeof window !== 'undefined' && window.__APP_TOKEN) {
+    headers.set('X-App-Token', window.__APP_TOKEN);
+  }
+  return { ...init, headers };
+}
+
+function normalizeItems(data) {
+  // Accept either an array or an object like { items: [...] }
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.items)) return data.items;
+  return [];
+}
 
 /**
- * Ticker Service
- * Handles fetching and auto-generating ticker feed items
- */
-
-/**
- * Fetch active ticker items from Google Sheets
+ * Fetch ticker items from Netlify function.
+ * Always returns an array (possibly empty). Never throws into UI code.
  */
 export async function fetchTickerItems() {
   try {
-    const response = await fetch('/.netlify/functions/getTickerFeed');
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch ticker items');
-    }
-    
-    const data = await response.json();
-    
-    // Filter active items and sort by priority and timestamp
-    const activeItems = data
-      .filter(item => item.active === true || item.active === 'TRUE')
-      .sort((a, b) => {
-        const priorityOrder = { high: 3, medium: 2, low: 1 };
-        const priorityDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
-        
-        if (priorityDiff !== 0) return priorityDiff;
-        
-        return new Date(b.timestamp) - new Date(a.timestamp);
-      });
-    
-    return activeItems;
-  } catch (error) {
-    console.error('Error fetching ticker items:', error);
-    return getFallbackTickerItems();
-  }
-}
+    const res = await fetch('/.netlify/functions/getTickerFeed', withAuthHeaders());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
 
-/**
- * Generate ticker items from bid activity
- */
-export const generateTickerItemsFromBids = (bids) => {
-  const items = [];
-  const now = new Date();
-  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  
-  // High-priority bids (Respond)
-  const respondBids = bids.filter(b => b.recommendation === 'Respond');
-  if (respondBids.length > 0) {
-    items.push({
-      message: `🔥 ${respondBids.length} HIGH PRIORITY bid${respondBids.length > 1 ? 's' : ''} requiring immediate response`,
-      priority: 'high'
+    const items = normalizeItems(data);
+
+    // Defensive filtering/sorting with safe defaults
+    const active = items.filter(i => (String(i?.status || '')).toLowerCase() !== 'archived');
+
+    active.sort((a, b) => {
+      const aTs = Date.parse(a?.createdAt || a?.timestamp || 0) || 0;
+      const bTs = Date.parse(b?.createdAt || b?.timestamp || 0) || 0;
+      return bTs - aTs;
     });
-  }
-  
-  // Process each bid for deadline alerts
-  bids.forEach(bid => {
-    // Deadline approaching (within 7 days)
-    if (bid.dueDate && bid.dueDate !== 'Not specified') {
-      const dueDate = new Date(bid.dueDate);
-      if (dueDate > now && dueDate < sevenDaysFromNow) {
-        const daysUntil = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
-        items.push({
-          message: `⏰ Deadline approaching: ${bid.emailSubject.substring(0, 50)}... due in ${daysUntil} day${daysUntil > 1 ? 's' : ''}`,
-          priority: daysUntil <= 3 ? 'high' : 'medium'
-        });
-      }
-    }
-  });
-  
-  return items;
-};
 
-/**
- * Generate ticker items from submitted bids
- */
-export function generateSubmittedBidItems(submittedBids) {
-  const items = [];
-  
-  submittedBids.forEach(bid => {
-    if (bid.dueDate && bid.dueDate !== 'Not specified') {
-      items.push({
-        message: `📤 Submitted: ${bid.emailSubject.substring(0, 50)}... - Due: ${bid.dueDate}`,
-        priority: 'medium'
-      });
-    }
-  });
-  
-  return items;
+    return active;
+  } catch (err) {
+    console.error('Error fetching ticker items:', err);
+    return []; // keep UI alive
+  }
 }
 
 /**
- * Add ticker item to Google Sheet
+ * Push auto-generated ticker items (from AI, etc.).
+ * @param {Array} items - array of { message, category, source, link?, newRecommendation?, urgency?, createdAt? }
+ * @param {string} source - e.g., 'auto-ai'
  */
-export async function addTickerItem(item) {
+export async function pushAutoTickerItems(items, source = 'auto') {
   try {
-    const response = await fetch('/.netlify/functions/addTickerItem', {
+    const payload = { items: Array.isArray(items) ? items : [], source };
+    const res = await fetch('/.netlify/functions/refreshAutoTickerItems', withAuthHeaders({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item)
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to add ticker item');
+      body: JSON.stringify(payload)
+    }));
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`refreshAutoTickerItems failed: ${res.status} ${text}`);
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error adding ticker item:', error);
-    throw error;
-  }
-}
-
-function getFallbackTickerItems() {
-  return [
-    {
-      message: '🔔 Welcome to 49 North Command Center!',
-      priority: 'high'
-    },
-    {
-      message: '📊 Loading latest updates...',
-      priority: 'medium'
-    }
-  ];
-}
-
-/**
- * Generate ticker items from AI insights
- */
-export function generateAIInsightsTickerItems(aiInsights) {
-  const items = [];
-  
-  if (!aiInsights) return items;
-
-  // Hot contact leads
-  if (aiInsights.contactLeads && aiInsights.contactLeads.length > 0) {
-    const highPriorityLeads = aiInsights.contactLeads.filter(lead => lead.score >= 70);
-    if (highPriorityLeads.length > 0) {
-      items.push({
-        message: `🔥 ${highPriorityLeads.length} HOT lead${highPriorityLeads.length > 1 ? 's' : ''} requesting contact - Review Dashboard`,
-        priority: 'high',
-        target: 'dashboard'
-      });
-    }
-  }
-
-  // Top AI priorities
-  if (aiInsights.insights?.topPriorities) {
-    aiInsights.insights.topPriorities.slice(0, 2).forEach(priority => {
-      if (priority.urgency === 'high') {
-        items.push({
-          message: `⚡ AI Priority: ${priority.title}`,
-          priority: 'high',
-          target: 'dashboard'
-        });
-      }
-    });
-  }
-
-  // Priority bids from AI
-  if (aiInsights.priorityBids && aiInsights.priorityBids.length > 0) {
-    items.push({
-      message: `📋 ${aiInsights.priorityBids.length} bid${aiInsights.priorityBids.length > 1 ? 's' : ''} marked "Respond" - Action required`,
-      priority: 'high',
-      target: 'bids'
-    });
-  }
-
-  // News articles - CREATE INDIVIDUAL ITEMS FOR EACH ARTICLE
-  if (aiInsights.newsArticles && aiInsights.newsArticles.length > 0) {
-    aiInsights.newsArticles.forEach(article => {
-      items.push({
-        message: `📰 Latest News: ${article.title}`,
-        priority: 'medium',
-        target: 'dashboard'
-      });
-    });
-  }
-
-  return items;
-}
-
-/**
- * Generate ticker items from webinar operations
- */
-export function generateWebinarTickerItems(webinarData) {
-  const items = [];
-  
-  if (!webinarData) return items;
-
-  const { webinars = [], surveys = [] } = webinarData;
-  
-  // Upcoming webinars (within 7 days)
-  const upcomingWebinars = webinars.filter(w => {
-    if (w.status !== 'Upcoming') return false;
-    const webinarDate = new Date(w.date);
-    const now = new Date();
-    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    return webinarDate > now && webinarDate < sevenDaysFromNow;
-  });
-
-  upcomingWebinars.forEach(webinar => {
-    const webinarDate = new Date(webinar.date);
-    const daysUntil = Math.ceil((webinarDate - new Date()) / (1000 * 60 * 60 * 24));
-    items.push({
-      message: `📅 Webinar "${webinar.title}" in ${daysUntil} day${daysUntil > 1 ? 's' : ''} - ${webinar.registrationCount} registered`,
-      priority: daysUntil <= 2 ? 'high' : 'medium',
-      target: 'webinars'
-    });
-  });
-
-  // Recent contact requests from surveys
-  const recentContactRequests = surveys.filter(s => 
-    s.contactRequest && String(s.contactRequest).toLowerCase().includes('yes')
-  );
-
-  if (recentContactRequests.length > 0) {
-    // Get last 7 days of contact requests
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const recentRequests = recentContactRequests.filter(s => 
-      new Date(s.timestamp) > sevenDaysAgo
-    );
-
-    if (recentRequests.length > 0) {
-      items.push({
-        message: `📞 ${recentRequests.length} new contact request${recentRequests.length > 1 ? 's' : ''} from webinar attendees`,
-        priority: 'high',
-        target: 'dashboard'
-      });
-    }
-  }
-
-  // High attendance webinar completed
-  const recentCompleted = webinars
-    .filter(w => w.status === 'Completed')
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 1);
-
-  if (recentCompleted.length > 0 && recentCompleted[0].attendanceCount > 20) {
-    const webinar = recentCompleted[0];
-    items.push({
-      message: `✨ Latest webinar had ${webinar.attendanceCount} attendees - Strong engagement!`,
-      priority: 'medium',
-      target: 'webinars'
-    });
-  }
-
-  return items;
-}
-
-/**
- * Generate ticker items from social media posts
- */
-export function generateSocialMediaTickerItems(socialPosts) {
-  const items = [];
-  
-  if (!socialPosts || socialPosts.length === 0) return items;
-
-  // Recently published posts (last 24 hours)
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const recentlyPublished = socialPosts.filter(p => 
-    p.status === 'Published' && new Date(p.publishedDate) > oneDayAgo
-  );
-
-  if (recentlyPublished.length > 0) {
-    items.push({
-      message: `📱 ${recentlyPublished.length} social media post${recentlyPublished.length > 1 ? 's' : ''} published in last 24 hours`,
-      priority: 'low',
-      target: 'social'
-    });
-  }
-
-  // Scheduled posts coming up (next 3 days)
-  const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-  const upcomingScheduled = socialPosts.filter(p => {
-    if (p.status !== 'Scheduled' || !p.scheduleDate) return false;
-    const scheduleDate = new Date(p.scheduleDate);
-    return scheduleDate > new Date() && scheduleDate < threeDaysFromNow;
-  });
-
-  if (upcomingScheduled.length > 0) {
-    items.push({
-      message: `📅 ${upcomingScheduled.length} post${upcomingScheduled.length > 1 ? 's' : ''} scheduled for next 3 days`,
-      priority: 'medium',
-      target: 'social'
-    });
-  }
-
-  // Drafts needing attention
-  const drafts = socialPosts.filter(p => p.status === 'Draft');
-  if (drafts.length >= 5) {
-    items.push({
-      message: `✍️ ${drafts.length} draft posts awaiting review`,
-      priority: 'low',
-      target: 'social'
-    });
-  }
-
-  return items;
-}
-
-/**
- * Generate ticker items from system admin emails
- */
-export function generateSystemAdminTickerItems(adminEmails) {
-  const items = [];
-  
-  if (!adminEmails || adminEmails.length === 0) return items;
-
-  // Count new admin emails by system
-  const newEmails = adminEmails.filter(e => e.status === 'New');
-  
-  if (newEmails.length > 0) {
-    // Group by system
-    const bySystem = {};
-    newEmails.forEach(email => {
-      const system = email.bidSystem || 'Unknown';
-      if (!bySystem[system]) bySystem[system] = [];
-      bySystem[system].push(email);
-    });
-
-    // Create ticker item for each system with notifications
-    Object.entries(bySystem).forEach(([system, emails]) => {
-      if (emails.length === 1) {
-        // Single notification - show subject
-        items.push({
-          message: `📧 ${system}: ${emails[0].emailSubject}`,
-          priority: 'low',
-          target: 'bid-systems',
-          source: 'admin'
-        });
-      } else {
-        // Multiple notifications - show count
-        items.push({
-          message: `📧 ${emails.length} system notifications from ${system}`,
-          priority: 'low',
-          target: 'bid-systems',
-          source: 'admin'
-        });
-      }
-    });
-
-    // Also add summary if multiple systems
-    if (Object.keys(bySystem).length > 1) {
-      items.push({
-        message: `📧 ${newEmails.length} system administration notices from ${Object.keys(bySystem).length} platforms`,
-        priority: 'low',
-        target: 'bid-systems',
-        source: 'admin'
-      });
-    }
-  }
-
-  return items;
-}
-
-/**
- * Send all auto-generated items to the ticker
- */
-export async function refreshAllTickerItems(bids, webinarData, aiInsights, adminEmails, socialPosts) {
-  try {
-    const allItems = [
-      ...generateTickerItemsFromBids(bids.activeBids || []),
-      ...generateSubmittedBidItems(bids.submittedBids || []),
-      ...generateWebinarTickerItems(webinarData),
-      ...generateAIInsightsTickerItems(aiInsights),
-      ...generateSystemAdminTickerItems(adminEmails || []),
-      ...generateSocialMediaTickerItems(socialPosts || [])
-    ];
-
-    if (allItems.length === 0) return;
-
-    // Send items grouped by source
-    const adminItems = allItems.filter(i => i.source === 'admin');
-    const otherItems = allItems.filter(i => i.source !== 'admin');
-
-    // Send admin items with source 'admin'
-    if (adminItems.length > 0) {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: adminItems, source: 'admin' })
-      });
-    }
-
-    // Send other items with source 'auto-bid'
-    if (otherItems.length > 0) {
-      await fetch('/.netlify/functions/refreshAutoTickerItems', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: otherItems, source: 'auto-bid' })
-      });
-    }
-
-    console.log(`Refreshed ${allItems.length} ticker items (${adminItems.length} admin, ${otherItems.length} other)`);
-  } catch (error) {
-    console.error('Error refreshing ticker items:', error);
+    const data = await res.json();
+    return data?.success === true;
+  } catch (err) {
+    console.error('pushAutoTickerItems error:', err);
+    return false;
   }
 }

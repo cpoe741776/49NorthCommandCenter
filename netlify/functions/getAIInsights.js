@@ -16,7 +16,6 @@ const CFG = {
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
 
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
-  GOOGLE_SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
 
   NEWS_QUERY:
     process.env.NEWS_QUERY ||
@@ -453,6 +452,24 @@ function buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { li
 
 // ---- OpenAI call (JSON only) ----
 async function getAIInsights(aiPayload, { model, temperature, max_tokens, timeoutMs }) {
+  // If OPENAI key is missing, return a structured "AI unavailable" block immediately
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      executiveSummary: 'AI analysis unavailable (no API key configured). Data processed below.',
+      topPriorities: [],
+      bidRecommendations: [],
+      systemInsights: {
+        bidSystems: 'See data distributions.',
+        adminAlerts: 'Review system admin notifications.',
+        suggestions: 'Monitor system performance and address any login or sync issues.'
+      },
+      contentInsights: { topPerforming: 'See webinar KPIs.', suggestions: 'Align topics with procurement trends.' },
+      newsOpportunities: [],
+      riskAlerts: [],
+      revivedCandidates: []
+    };
+  }
+
   const systemPrompt = `
 You are a strategic business analyst for 49 North (Mental Armor™), specializing in government procurement intelligence and resilience training market analysis.
 
@@ -532,13 +549,24 @@ exports.handler = async (event, context) => {
   try {
     // Optional POST filters (ignored by default)
     if (event.httpMethod === 'POST' && event.body) {
-      const [, err] = safeJson(event.body);
+      const [, err] = safeJson(event.body); // ESLint-safe destructuring
       if (err) return bad(headers, 'Invalid JSON body');
     }
 
     // Google auth
-    const auth = getGoogleAuth();
-    await auth.authorize();
+    let auth;
+    try {
+      auth = getGoogleAuth();
+      await auth.authorize();
+    } catch (authErr) {
+      console.error('[Insights] Google auth failure:', authErr?.message);
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({ error: 'Google authentication failed' })
+      };
+    }
+
     const sheets = google.sheets({ version: 'v4', auth });
 
     // Fetch ranges (batch) with timeouts

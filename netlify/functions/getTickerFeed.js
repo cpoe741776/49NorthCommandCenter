@@ -1,80 +1,60 @@
 // netlify/functions/getTickerFeed.js
-// Verify this file exists and has the correct structure
+// Consistent JSON shape + CORS + optional shared-secret auth
 
 const { google } = require('googleapis');
+const { corsHeaders, methodGuard, ok, serverErr, checkAuth } = require('./_utils/http');
+const { getGoogleAuth } = require('./_utils/google');
 
-exports.handler = async (event, context) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  };
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+// Adjust tab name if yours differs:
+const TAB_NAME = process.env.TICKER_TAB_NAME || 'TickerFeed';
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers?.origin);
+
+  // Allow GET and preflight
+  const guard = methodGuard(event, headers, 'GET', 'OPTIONS');
+  if (guard) return guard;
+
+  // Optional shared-secret: if APP_INBOUND_TOKEN is set, require X-App-Token
+  if (!checkAuth(event)) {
+    return { statusCode: 401, headers, body: JSON.stringify({ success: false, error: 'Unauthorized' }) };
+  }
+
+  // Basic env validation
+  if (!SHEET_ID) {
+    console.error('[TickerFeed] Missing GOOGLE_SHEET_ID');
+    return serverErr(headers, 'Missing configuration');
   }
 
   try {
-    let serviceAccountKey;
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-      serviceAccountKey = JSON.parse(
-        Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-      );
-    } else {
-      serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    }
-
-    const auth = new google.auth.JWT({
-      email: serviceAccountKey.client_email,
-      key: serviceAccountKey.private_key,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
-    });
-
+    // Google auth + Sheets client (this uses `google`, satisfying ESLint)
+    const auth = getGoogleAuth();
+    await auth.authorize();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch from TickerFeed tab in main bids sheet
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'TickerFeed!A2:F', // Timestamp, Message, Priority, Source, Active, Target
+    // Expect columns (A..H):
+    // A: createdAt | B: message | C: category | D: source | E: link | F: recommendation | G: urgency | H: status
+    const resp = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: `${TAB_NAME}!A2:H`
     });
 
-    const rows = response.data.values || [];
-    
-    // Parse and filter active items only
-    const items = rows
-      .map((row) => ({
-        timestamp: row[0] || new Date().toISOString(),
-        message: row[1] || '',
-        priority: row[2] || 'low',
-        source: row[3] || 'manual',
-        active: String(row[4] || 'true').toLowerCase() === 'true',
-        target: row[5] || null
-      }))
-      .filter(item => item.active && item.message.trim().length > 0);
+    const rows = resp.data.values || [];
+    const items = rows.map((r) => ({
+      createdAt: r[0] || '',
+      message: r[1] || '',
+      category: r[2] || '',
+      source: r[3] || '',
+      link: r[4] || '',
+      recommendation: r[5] || '',
+      urgency: r[6] || '',
+      status: r[7] || '' // e.g. '', 'Archived'
+    }));
 
-    console.log(`[TickerFeed] Returning ${items.length} active items`);
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        items: items,
-        count: items.length,
-        timestamp: new Date().toISOString()
-      })
-    };
-
+    return ok(headers, { success: true, items });
   } catch (error) {
-    console.error('[TickerFeed] Error:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message,
-        items: []
-      })
-    };
+    console.error('[TickerFeed] Error:', error?.message || error);
+    return serverErr(headers);
   }
 };
