@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2 } from 'lucide-react';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
-// FIX: Import the new dashboard data service for the summary/counts
-import { fetchDashboardData } from './services/bidService'; 
+
+// ✅ FIX: Add fetchBids to the import
+import { fetchDashboardData, fetchBids } from './services/bidService'; 
+
 import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, generateSystemAdminTickerItems } from './services/tickerService';
 import RadioPlayer from './components/RadioPlayer';
 import Dashboard from './components/Dashboard';
@@ -93,28 +95,25 @@ const App = () => {
 }, []);
 
   const loadBids = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  try {
+    setLoading(true);
+    setError(null);
+    
+    // ✅ STEP 1: Get FAST summary counts for dashboard cards
+    const dashboardData = await fetchDashboardData(); 
+    setSummary(dashboardData.summary || {});
+    
+    // ✅ STEP 2: Get FULL bid arrays for BidOperations component
+    const fullBidsData = await fetchBids();
+    
+    if (fullBidsData.success) {
+      setBids(fullBidsData.activeBids || []); 
+      setDisregardedBids(fullBidsData.disregardedBids || []);
+      setSubmittedBids(fullBidsData.submittedBids || []);
       
-      // FIX: Use the FAST fetchDashboardData for the summary/counts
-      const data = await fetchDashboardData(); 
-      
-      // Note: If BidOperations requires full data arrays, a dedicated fetch function is needed.
-      // For now, we stub these arrays and populate the essential summary.
-      setBids(data.activeBids || []); 
-      setDisregardedBids(data.disregardedBids || []);
-      setSubmittedBids(data.submittedBids || []);
-      
-      // FIX: Update the summary state directly with the fast data
-      setSummary(data.summary || {});
-      
-      // Ticker generation now relies on the simplified summary counts.
-      const activeBidsStub = Array(data.summary?.activeBidsCount || 0).fill({});
-      const submittedBidsStub = Array(data.summary?.submittedBidsCount || 0).fill({});
-
-      const autoTickerItems = generateTickerItemsFromBids(activeBidsStub);
-      const submittedTickerItems = generateSubmittedBidItems(submittedBidsStub);
+      // ✅ STEP 3: Generate ticker items from actual bid data
+      const autoTickerItems = generateTickerItemsFromBids(fullBidsData.activeBids || []);
+      const submittedTickerItems = generateSubmittedBidItems(fullBidsData.submittedBids || []);
 
       try {
         await fetch('/.netlify/functions/refreshAutoTickerItems', {
@@ -125,17 +124,22 @@ const App = () => {
             source: 'auto-bid'
           })
         });
-      } catch {
-        // non-fatal
+      } catch (tickerErr) {
+        console.warn('Ticker update failed (non-fatal):', tickerErr);
       }
-
-      await loadTickerFeed();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    } else {
+      throw new Error(fullBidsData.error || 'Failed to fetch bids');
     }
-  }, [loadTickerFeed]);
+
+    await loadTickerFeed();
+    
+  } catch (err) {
+    console.error('Error loading bids:', err);
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+}, [loadTickerFeed]);
 
   const loadSocialPosts = useCallback(async () => {
   try {
