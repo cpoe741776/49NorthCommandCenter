@@ -1,15 +1,13 @@
 // netlify/functions/getTickerFeed.js
+// Verify this file exists and has the correct structure
+
 const { google } = require('googleapis');
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const TICKER_TAB = 'TickerFeed';
-
 exports.handler = async (event, context) => {
-  // CORS headers
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
   };
 
   if (event.httpMethod === 'OPTIONS') {
@@ -17,63 +15,66 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Authenticate with Google Sheets API
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(
-  Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    let serviceAccountKey;
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
+      serviceAccountKey = JSON.parse(
+        Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
+      );
+    } else {
+      serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    }
+
+    const auth = new google.auth.JWT({
+      email: serviceAccountKey.client_email,
+      key: serviceAccountKey.private_key,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
     });
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Fetch ticker feed data
+    // Fetch from TickerFeed tab in main bids sheet
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: `${TICKER_TAB}!A:F`,
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: 'TickerFeed!A2:F', // Timestamp, Message, Priority, Source, Active, Target
     });
 
-    const rows = response.data.values;
+    const rows = response.data.values || [];
     
-    if (!rows || rows.length === 0) {
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify([]),
-      };
-    }
+    // Parse and filter active items only
+    const items = rows
+      .map((row) => ({
+        timestamp: row[0] || new Date().toISOString(),
+        message: row[1] || '',
+        priority: row[2] || 'low',
+        source: row[3] || 'manual',
+        active: String(row[4] || 'true').toLowerCase() === 'true',
+        target: row[5] || null
+      }))
+      .filter(item => item.active && item.message.trim().length > 0);
 
-    // Parse rows into objects (skip header row)
-    const [, ...dataRows] = rows;
-    const tickerItems = dataRows.map(row => ({
-      timestamp: row[0] || '',
-      message: row[1] || '',
-      priority: row[2] || 'medium',
-      source: row[3] || 'manual',
-      active: row[4] === 'TRUE' || row[4] === true,
-      expiresOn: row[5] || '',
-    }));
-
-    // Filter out expired items
-    const now = new Date();
-    const activeItems = tickerItems.filter(item => {
-      if (!item.active) return false;
-      if (!item.expiresOn) return true;
-      return new Date(item.expiresOn) > now;
-    });
+    console.log(`[TickerFeed] Returning ${items.length} active items`);
 
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify(activeItems),
+      body: JSON.stringify({
+        success: true,
+        items: items,
+        count: items.length,
+        timestamp: new Date().toISOString()
+      })
     };
+
   } catch (error) {
-    console.error('Error fetching ticker feed:', error);
+    console.error('[TickerFeed] Error:', error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Failed to fetch ticker feed' }),
+      body: JSON.stringify({
+        success: false,
+        error: error.message,
+        items: []
+      })
     };
   }
 };
-
