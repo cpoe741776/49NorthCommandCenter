@@ -232,6 +232,45 @@ export function generateTickerItemsFromBids(bids, limit = 5) {
   });
 }
 
+/**
+ * Generate ticker items from a list of submitted bids (status = Submitted).
+ * This provides “we shipped it” signals in the ticker.
+ *
+ * @param {Array} bids - array with fields like { subject, entity, bidSystem, dateAdded/emailDateReceived/url, status }
+ * @param {number} limit
+ * @returns {Array}
+ */
+export function generateSubmittedBidItems(bids, limit = 5) {
+  if (!Array.isArray(bids) || bids.length === 0) return [];
+  const nowIso = new Date().toISOString();
+
+  const submitted = bids
+    .filter(b => (b?.status || '').toLowerCase() === 'submitted')
+    .sort((a, b) => {
+      const aTs = Date.parse(a?.dateAdded || a?.emailDateReceived || 0) || 0;
+      const bTs = Date.parse(b?.dateAdded || b?.emailDateReceived || 0) || 0;
+      return bTs - aTs; // newest first
+    })
+    .slice(0, limit);
+
+  return submitted.map((b) => {
+    const when =
+      b?.dateAdded || b?.emailDateReceived
+        ? ` (Sent: ${(b.dateAdded || b.emailDateReceived).slice(0, 10)})`
+        : '';
+    const lead = b?.entity || b?.bidSystem || 'Submission';
+    const msg = `${lead}: ${b?.subject || 'Untitled submission'}${when}`;
+    return {
+      createdAt: nowIso,
+      message: truncate(msg, 180),
+      category: 'Submitted',
+      source: 'auto-bids',
+      urgency: 'info',
+      link: b?.url || ''
+    };
+  });
+}
+
 // -------- helpers --------
 function truncate(s, n) {
   const str = String(s || '');
