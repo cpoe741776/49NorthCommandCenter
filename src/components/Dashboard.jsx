@@ -263,6 +263,13 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <RefreshCw size={16} className={aiLoading ? 'animate-spin' : ''} />
             {aiLoading ? 'Analyzing...' : 'Refresh Analysis'}
           </button>
+          <button onClick={async () => {
+  const res = await fetch('/.netlify/functions/listSheetTabs');
+  const data = await res.json();
+  console.log('📊 SHEET TABS:', JSON.stringify(data, null, 2));
+}}>
+  Show Sheet Tabs
+</button>
         </div>
 
         {/* Empty State - FIX APPLIED HERE */}
