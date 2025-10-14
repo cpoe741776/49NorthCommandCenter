@@ -97,7 +97,7 @@ export function generateAIInsightsTickerItems(insights) {
 
   // Top priorities (limit 3 to keep ticker tidy)
   if (Array.isArray(insights.topPriorities)) {
-    insights.topPriorities.slice(0, 3).forEach((p, idx) => {
+    insights.topPriorities.slice(0, 3).forEach((p) => {
       const title = p?.title ? `Priority: ${p.title}` : 'Priority';
       const action = p?.action ? ` → ${p.action}` : '';
       const msg = `${title}${action}`;
@@ -193,8 +193,52 @@ export function generateSystemAdminTickerItems(input) {
   return items;
 }
 
+/**
+ * Generate ticker items directly from a list of bids (e.g., active “Respond”).
+ * Useful when the UI has just fetched /bids and wants quick ticker bullets.
+ *
+ * @param {Array} bids - array of bid objects with fields like:
+ *   { subject, entity, bidSystem, dueDate, daysUntilDue, url, recommendation }
+ * @param {number} limit - max number of items
+ * @returns {Array}
+ */
+export function generateTickerItemsFromBids(bids, limit = 5) {
+  if (!Array.isArray(bids) || bids.length === 0) return [];
+  const nowIso = new Date().toISOString();
+
+  const normalized = bids
+    .filter(b => (b?.recommendation || '').toLowerCase() === 'respond')
+    .sort((a, b) => {
+      const ad = toSafeDays(a?.daysUntilDue);
+      const bd = toSafeDays(b?.daysUntilDue);
+      return ad - bd;
+    })
+    .slice(0, limit);
+
+  return normalized.map((b) => {
+    const dueTxt = b?.dueDate ? ` (Due: ${b.dueDate})` : '';
+    const lead = b?.entity || b?.bidSystem || 'Opportunity';
+    const msg = `${lead}: ${b?.subject || 'No subject'}${dueTxt}`;
+    return {
+      createdAt: nowIso,
+      message: truncate(msg, 180),
+      category: 'Bids',
+      source: 'auto-bids',
+      urgency: (b?.daysUntilDue != null && b.daysUntilDue <= 3) ? 'high'
+            : (b?.daysUntilDue != null && b.daysUntilDue <= 7) ? 'medium'
+            : 'low',
+      link: b?.url || ''
+    };
+  });
+}
+
 // -------- helpers --------
 function truncate(s, n) {
   const str = String(s || '');
   return str.length > n ? `${str.slice(0, n - 1)}…` : str;
+}
+
+function toSafeDays(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 9999;
 }
