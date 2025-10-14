@@ -1,131 +1,70 @@
-// uploadDocument.js //
-
-const { google } = require('googleapis');
+// netlify/functions/uploadDocument.js
 const { Readable } = require('stream');
+const { getGoogleAuth, driveClient, sheetsClient } = require('./_utils/google');
+const { corsHeaders, methodGuard, safeJson, ok, bad, unauth, serverErr, checkAuth } = require('./_utils/http');
+const { MAX_UPLOAD_BYTES, ALLOWED_MIME } = require('./_utils/limits');
 
-const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID;
-const FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
+const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID;           // optional: where you log uploads
+const FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;         // target Drive folder
 
-exports.handler = async (event, context) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers?.origin);
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
+  if (guard) return guard;
 
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: 'Method Not Allowed' };
-  }
+  if (!checkAuth(event)) return unauth(headers);
+
+  const [body, parseErr] = safeJson(event.body);
+  if (parseErr) return bad(headers, 'Invalid JSON');
+
+  const { filename, mimeType, base64, sheetRowMeta } = body || {};
+  if (!filename || !mimeType || !base64) return bad(headers, 'Missing filename, mimeType, or base64');
+  if (!ALLOWED_MIME.includes(mimeType)) return bad(headers, 'Disallowed file type');
+
+  const bytes = Buffer.from(base64, 'base64');
+  if (bytes.length > MAX_UPLOAD_BYTES) return bad(headers, 'File too large');
+
+  // sanitize filename
+  const safeName = filename.replace(/[^\w.\-() ]/g, '_').slice(0, 120);
 
   try {
-    let credentials;
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-      const decoded = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8');
-      credentials = JSON.parse(decoded);
-    } else {
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    const auth = getGoogleAuth();
+    await auth.authorize();
+    const drive = driveClient(auth);
+
+    const createRes = await drive.files.create({
+      requestBody: { name: safeName, parents: FOLDER_ID ? [FOLDER_ID] : undefined, mimeType },
+      media: { mimeType, body: Readable.from(bytes) },
+      fields: 'id, name, mimeType, webViewLink, webContentLink'
+    });
+
+    const file = createRes.data;
+
+    // Optional: log to Sheets
+    if (SHEET_ID && sheetRowMeta) {
+      try {
+        const sheets = sheetsClient(auth);
+        const values = [[
+          new Date().toISOString(),
+          file.id, file.name, file.mimeType,
+          file.webViewLink || '', file.webContentLink || '',
+          JSON.stringify(sheetRowMeta)
+        ]];
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID,
+          range: 'Uploads!A:G',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values }
+        });
+      } catch (logErr) {
+        console.warn('uploadDocument: sheet log failed:', logErr.message);
+      }
     }
 
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/drive.file',
-        'https://www.googleapis.com/auth/spreadsheets'
-      ],
-    });
-
-    const drive = google.drive({ version: 'v3', auth });
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    const { fileName, fileData, category, notes } = JSON.parse(event.body);
-
-    const buffer = Buffer.from(fileData, 'base64');
-    const fileStream = Readable.from(buffer);
-
-    const fileMetadata = {
-      name: fileName,
-      parents: [FOLDER_ID],
-      supportsAllDrives: true
-    };
-
-    const media = {
-      mimeType: 'application/pdf',
-      body: fileStream
-    };
-
-    const driveResponse = await drive.files.create({
-      resource: fileMetadata,
-      media: media,
-      fields: 'id, name, size, webViewLink',
-      supportsAllDrives: true
-    });
-
-    const fileId = driveResponse.data.id;
-    const fileSize = driveResponse.data.size;
-    const webLink = driveResponse.data.webViewLink;
-
-    await drive.permissions.create({
-      fileId: fileId,
-      requestBody: {
-        role: 'reader',
-        type: 'anyone'
-      },
-      supportsAllDrives: true
-    });
-
-    const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const docId = `DOC-${timestamp}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-
-    const fileType = fileName.split('.').pop().toUpperCase();
-    const uploadDate = new Date().toISOString().slice(0, 10);
-    const fileSizeFormatted = `${(fileSize / 1024).toFixed(0)} KB`;
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: 'CompanyDocuments!A:I',
-      valueInputOption: 'RAW',
-      resource: {
-        values: [[
-          docId,
-          category || 'Uncategorized',
-          fileName,
-          fileType,
-          uploadDate,
-          fileId,
-          webLink,
-          fileSizeFormatted,
-          notes || ''
-        ]]
-      }
-    });
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        document: {
-          id: docId,
-          fileName,
-          driveLink: webLink,
-          fileId
-        }
-      })
-    };
-
-  } catch (error) {
-    console.error('Error uploading document:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message
-      })
-    };
+    return ok(headers, { success: true, file });
+  } catch (e) {
+    console.error('uploadDocument error:', e);
+    return serverErr(headers);
   }
 };

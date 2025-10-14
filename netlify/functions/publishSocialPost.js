@@ -1,49 +1,88 @@
+// netlify/functions/publishSocialPost.js
+// Hardened: CORS/auth, safe JSON, platform-by-platform error capture, Sheets updates
+
 const { google } = require('googleapis');
+const { corsHeaders, methodGuard, safeJson, ok, bad, unauth, serverErr, checkAuth } = require('./_utils/http');
+const { getGoogleAuth } = require('./_utils/google');
+
+const SHEET_ID = process.env.SOCIAL_MEDIA_SHEET_ID;
+const SHEET_TAB = 'MainPostData';
+
+// Defaults can be overridden by env
+const LI_ORG_URN = process.env.LINKEDIN_ORG_URN || 'urn:li:organization:107582691';
+const WP_URL = process.env.WP_POSTS_URL || 'https://mymentalarmor.com/wp-json/wp/v2/posts';
 
 exports.handler = async (event) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
+  const headers = corsHeaders(event.headers?.origin);
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
+  if (guard) return guard;
 
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: 'Method Not Allowed' };
-  }
+  if (!checkAuth(event)) return unauth(headers);
+
+  const [body, parseErr] = safeJson(event.body);
+  if (parseErr) return bad(headers, 'Invalid JSON body');
+
+  // We allow either { postId } or a full { postData } payload.
+  const postId = body?.postId;
+  let postData = body?.postData;
 
   try {
-    const { postId } = JSON.parse(event.body);
-    
-    if (!postId) {
-      throw new Error('postId is required');
-    }
+    // Google auth
+    const auth = getGoogleAuth();
+    await auth.authorize();
+    const sheets = google.sheets({ version: 'v4', auth });
 
-    console.log('Publishing post:', postId);
-
-    // Get post data from Google Sheets
-    const postData = await getPostData(postId);
-    
+    // Pull postData from Sheets if necessary
+    let rowIndex = null;
     if (!postData) {
-      return {
-        statusCode: 404,
-        headers,
-        body: JSON.stringify({ success: false, error: 'Post not found' }),
+      if (!postId) return bad(headers, 'postId is required when postData is not supplied');
+
+      const rowsResp = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_TAB}!A2:R`
+      });
+      const rows = rowsResp.data.values || [];
+      const row = rows.find((r) => r[0] === postId);
+      if (!row) return ok(headers, { success: false, error: 'Post not found' });
+
+      postData = {
+        timestamp: row[0],
+        status: row[1],
+        contentType: row[2],
+        title: row[3],
+        body: row[4],
+        imageUrl: row[5],
+        videoUrl: row[6],
+        platforms: row[7],
+        scheduleDate: row[8],
+        publishedDate: row[9],
+        tags: row[17]
       };
+
+      // Find row index for later update
+      const idsResp = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_TAB}!A2:A`
+      });
+      const idRows = idsResp.data.values || [];
+      rowIndex = idRows.findIndex((r) => r[0] === postId) + 2; // +2 for header + 0-index
+      if (rowIndex < 2) rowIndex = null;
     }
+
+    // Validate platforms
+    const platforms = String(postData.platforms || '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    if (!platforms.length) return bad(headers, 'No target platforms provided');
 
     const results = {};
-    const platforms = postData.platforms.split(',').map(p => p.trim()).filter(Boolean);
 
-    console.log('Publishing to platforms:', platforms);
-
-    // Publish to each platform
+    // Publish per platform with isolation
     for (const platform of platforms) {
       try {
-        console.log(`Publishing to ${platform}...`);
         switch (platform) {
           case 'Facebook':
             results.facebook = await publishToFacebook(postData);
@@ -58,275 +97,162 @@ exports.handler = async (event) => {
             results.brevo = await publishToBrevo(postData);
             break;
           default:
-            console.log(`Unknown platform: ${platform}`);
+            results[platform.toLowerCase()] = { error: `Unknown platform: ${platform}` };
         }
-      } catch (error) {
-        console.error(`Error publishing to ${platform}:`, error);
-        results[platform.toLowerCase()] = { error: error.message };
+      } catch (e) {
+        console.error(`publish ${platform} error:`, e);
+        results[platform.toLowerCase()] = { error: e.message || 'publish failed' };
       }
     }
 
-    // Update post status in Google Sheets
-    await updatePostStatus(postId, 'Published', results);
+    // Update sheet status if we have a rowIndex or can find it now
+    const finalRowIndex = rowIndex ?? (await findRowIndexById(sheets, SHEET_ID, SHEET_TAB, postId));
+    if (finalRowIndex) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_TAB}!B${finalRowIndex}:P${finalRowIndex}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: {
+          values: [
+            [
+              'Published', // B status
+              '', // C contentType (unchanged)
+              '', // D title (unchanged)
+              '', // E body (unchanged)
+              '', // F imageUrl (unchanged)
+              '', // G videoUrl (unchanged)
+              '', // H platforms (unchanged)
+              '', // I scheduleDate (unchanged)
+              new Date().toISOString(), // J publishedDate
+              results.wordpress?.permalink || '', // K postPermalink
+              results.facebook?.postId || '', // L facebookPostId
+              results.linkedin?.postId || '', // M linkedInPostId
+              results.wordpress?.postId || '', // N wordPressPostId
+              results.brevo?.campaignId || '', // O brevoEmailId
+              JSON.stringify(results) // P analytics
+            ]
+          ]
+        }
+      });
+    }
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({ success: true, results }),
-    };
-  } catch (error) {
-    console.error('Error publishing post:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ success: false, error: error.message }),
-    };
+    return ok(headers, { success: true, results });
+  } catch (e) {
+    console.error('publishSocialPost fatal:', e);
+    return serverErr(headers);
   }
 };
 
-async function getPostData(postId) {
-  const credentials = JSON.parse(
-    Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-  );
+// ------- Helpers -------
 
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+async function findRowIndexById(sheets, sheetId, tab, postId) {
+  if (!postId) return null;
+  const resp = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: `${tab}!A2:A`
   });
-
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.SOCIAL_MEDIA_SHEET_ID;
-
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: 'MainPostData!A2:R', // Change 'Sheet1' to your actual tab name
-  });
-
-  const rows = response.data.values || [];
-  const post = rows.find(row => row[0] === postId);
-  
-  if (!post) return null;
-
-  return {
-    timestamp: post[0],
-    status: post[1],
-    contentType: post[2],
-    title: post[3],
-    body: post[4],
-    imageUrl: post[5],
-    videoUrl: post[6],
-    platforms: post[7],
-    tags: post[17]
-  };
+  const rows = resp.data.values || [];
+  const idx = rows.findIndex((r) => r[0] === postId);
+  return idx >= 0 ? idx + 2 : null;
 }
 
-async function updatePostStatus(postId, status, results) {
-  const credentials = JSON.parse(
-    Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-  );
-
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.SOCIAL_MEDIA_SHEET_ID;
-
-  // Find row index for this postId
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: 'MainPostData!A2:A', // Change 'Sheet1' to your actual tab name
-  });
-
-  const rows = response.data.values || [];
-  const rowIndex = rows.findIndex(row => row[0] === postId) + 2; // +2 for header and 0-index
-
-  if (rowIndex < 2) {
-    console.error('Could not find row for postId:', postId);
-    return;
-  }
-
-  console.log(`Updating row ${rowIndex} with status: ${status}`);
-
-  // Update the entire row with new data
-  await sheets.spreadsheets.values.update({
-    spreadsheetId,
-    range: `MainPostData!B${rowIndex}:P${rowIndex}`, // Change 'Sheet1' to your actual tab name
-    valueInputOption: 'USER_ENTERED',
-    resource: {
-      values: [[
-        status,                                     // B: status
-        '',                                         // C: contentType (unchanged)
-        '',                                         // D: title (unchanged)
-        '',                                         // E: body (unchanged)
-        '',                                         // F: imageUrl (unchanged)
-        '',                                         // G: videoUrl (unchanged)
-        '',                                         // H: platforms (unchanged)
-        '',                                         // I: scheduleDate (unchanged)
-        new Date().toISOString(),                   // J: publishedDate
-        results.wordpress?.permalink || '',         // K: postPermalink
-        results.facebook?.postId || '',             // L: facebookPostId
-        results.linkedin?.postId || '',             // M: linkedInPostId
-        results.wordpress?.postId || '',            // N: wordPressPostId
-        results.brevo?.campaignId || '',            // O: brevoEmailId
-        JSON.stringify(results)                     // P: analytics
-      ]]
-    }
-  });
-}
-
-// Platform publishing functions
 async function publishToFacebook(postData) {
   const FB_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
   const FB_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
-  
-  if (!FB_TOKEN || !FB_PAGE_ID) {
-    throw new Error('Facebook credentials not configured');
-  }
+  if (!FB_TOKEN || !FB_PAGE_ID) throw new Error('Facebook credentials not configured');
 
   const payload = {
-    message: `${postData.title}\n\n${postData.body}`,
+    message: `${postData.title || ''}\n\n${postData.body || ''}`.trim(),
     access_token: FB_TOKEN
   };
+  if (postData.imageUrl) payload.link = postData.imageUrl;
 
-  if (postData.imageUrl) {
-    payload.link = postData.imageUrl;
-  }
-
-  const response = await fetch(
-    `https://graph.facebook.com/v19.0/${FB_PAGE_ID}/feed`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }
-  );
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Facebook API error: ${error}`);
-  }
-
-  const result = await response.json();
-  console.log('Facebook publish result:', result);
-  return { postId: result.id };
+  const res = await fetch(`https://graph.facebook.com/v19.0/${FB_PAGE_ID}/feed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(`Facebook API error: ${await res.text()}`);
+  const out = await res.json();
+  return { postId: out.id };
 }
 
 async function publishToLinkedIn(postData) {
   const LI_TOKEN = process.env.LINKEDIN_ACCESS_TOKEN;
-  const LI_ORN = 'urn:li:organization:107582691';
-
-  if (!LI_TOKEN) {
-    throw new Error('LinkedIn token not configured');
-  }
+  const ORG_URN = LI_ORG_URN;
+  if (!LI_TOKEN) throw new Error('LinkedIn token not configured');
 
   const payload = {
-    author: LI_ORN,
+    author: ORG_URN,
     lifecycleState: 'PUBLISHED',
     specificContent: {
       'com.linkedin.ugc.ShareContent': {
-        shareCommentary: {
-          text: `${postData.title}\n\n${postData.body}`
-        },
+        shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() },
         shareMediaCategory: 'NONE'
       }
     },
-    visibility: {
-      'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
-    }
+    visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
   };
 
-  const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
+  const res = await fetch('https://api.linkedin.com/v2/ugcPosts', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${LI_TOKEN}`,
+      Authorization: `Bearer ${LI_TOKEN}`,
       'Content-Type': 'application/json',
       'X-Restli-Protocol-Version': '2.0.0'
     },
     body: JSON.stringify(payload)
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`LinkedIn API error: ${error}`);
-  }
-
-  const result = await response.json();
-  console.log('LinkedIn publish result:', result);
-  return { postId: result.id };
+  if (!res.ok) throw new Error(`LinkedIn API error: ${await res.text()}`);
+  const out = await res.json();
+  return { postId: out.id };
 }
 
 async function publishToWordPress(postData) {
   const WP_USER = process.env.WP_USERNAME;
   const WP_PASS = process.env.WP_APPLICATION_PASSWORD;
-  const WP_URL = 'https://mymentalarmor.com/wp-json/wp/v2/posts';
-
-  if (!WP_USER || !WP_PASS) {
-    throw new Error('WordPress credentials not configured');
-  }
+  const url = WP_URL;
+  if (!WP_USER || !WP_PASS) throw new Error('WordPress credentials not configured');
 
   const payload = {
-    title: postData.title,
-    content: postData.body,
+    title: postData.title || '',
+    content: postData.body || '',
     status: 'publish'
   };
 
   const auth = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
-
-  const response = await fetch(WP_URL, {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Authorization': `Basic ${auth}`,
-      'Content-Type': 'application/json'
-    },
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`WordPress API error: ${error}`);
-  }
-
-  const result = await response.json();
-  console.log('WordPress publish result:', result);
-  return { postId: result.id, permalink: result.link };
+  if (!res.ok) throw new Error(`WordPress API error: ${await res.text()}`);
+  const out = await res.json();
+  return { postId: out.id, permalink: out.link };
 }
 
 async function publishToBrevo(postData) {
   const BREVO_KEY = process.env.BREVO_API_KEY;
   const BREVO_URL = 'https://api.brevo.com/v3/emailCampaigns';
-
-  if (!BREVO_KEY) {
-    throw new Error('Brevo API key not configured');
-  }
+  if (!BREVO_KEY) throw new Error('Brevo API key not configured');
 
   const payload = {
-    name: `Campaign: ${postData.title}`,
-    subject: postData.title,
+    name: `Campaign: ${postData.title || ''}`.trim(),
+    subject: postData.title || '',
     sender: {
       name: process.env.BREVO_SENDER_NAME || '49 North',
       email: process.env.BREVO_SENDER_EMAIL
     },
-    htmlContent: `<h1>${postData.title}</h1><p>${postData.body}</p>`,
+    htmlContent: `<h1>${postData.title || ''}</h1><p>${(postData.body || '').replace(/\n/g, '<br>')}</p>`,
     status: 'draft'
   };
 
-  const response = await fetch(BREVO_URL, {
+  const res = await fetch(BREVO_URL, {
     method: 'POST',
-    headers: {
-      'api-key': BREVO_KEY,
-      'Content-Type': 'application/json'
-    },
+    headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Brevo API error: ${error}`);
-  }
-
-  const result = await response.json();
-  console.log('Brevo publish result:', result);
-  return { campaignId: result.id };
+  if (!res.ok) throw new Error(`Brevo API error: ${await res.text()}`);
+  const out = await res.json();
+  return { campaignId: out.id };
 }

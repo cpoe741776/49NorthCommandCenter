@@ -1,446 +1,210 @@
 // netlify/functions/getAIInsights.js
-// CRITICAL FIX: More aggressive timeout handling to prevent 503 errors
+// Hardened: unified CORS/auth, strict timeouts, stable JSON shape
 
 const { google } = require('googleapis');
 const OpenAI = require('openai');
-
-const CFG = {
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o', 
-  OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '6000', 10), // Reduced from 8000
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10), // Reduced from 45000
-  GOOGLE_SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10), // Reduced from 8000
-  NEWS_QUERY: 'mental health training government OR resilience training military OR law enforcement mental health programs',
-  NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '6', 10), // Reduced from 8
-  NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '4000', 10), // Reduced from 5000
-  AI_LIMITS: { 
-    PRIORITY_BIDS: 10, // Reduced from 12
-    TOP_NEWS: 6, // Reduced from 8
-    TOP_SYSTEMS: 12, // Reduced from 15
-    TOP_ORGS_PER_LIST: 12, // Reduced from 15
-    WEBINARS_FOR_AI: 20, // Reduced from 30
-    SURVEY_COMMENT_SNIPPET: 150, // Reduced from 220
-    DISREGARDED_SAMPLE: 8 // Reduced from 10
-  },
-  FUNCTION_TIMEOUT_MS: 24000, // CRITICAL: Reduced to 24s (Netlify limit is 26s)
-  ENABLE_CACHING: true,
-  CACHE_TTL_MS: 5 * 60 * 1000 
-};
+const { corsHeaders, methodGuard, ok, bad, serverErr, checkAuth, safeJson } = require('./_utils/http');
+const { getGoogleAuth } = require('./_utils/google');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ---- Config ----
+const CFG = {
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+  OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '6000', 10),
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
+
+  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
+  GOOGLE_SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+
+  NEWS_QUERY:
+    process.env.NEWS_QUERY ||
+    'mental health training government OR resilience training military OR law enforcement mental health programs',
+  NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '6', 10),
+  NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '4000', 10),
+
+  AI_LIMITS: {
+    PRIORITY_BIDS: 10,
+    TOP_NEWS: 6,
+    TOP_SYSTEMS: 12,
+    TOP_ORGS_PER_LIST: 12,
+    WEBINARS_FOR_AI: 20,
+    SURVEY_COMMENT_SNIPPET: 150,
+    DISREGARDED_SAMPLE: 8
+  },
+
+  FUNCTION_TIMEOUT_MS: 24000, // Netlify hard limit ~26s — keep headroom
+  ENABLE_CACHING: true,
+  CACHE_TTL_MS: 5 * 60 * 1000
+};
+
+// ---- Utilities ----
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
-const withTimeout = async (promise, label, ms) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    console.warn(`[Timeout] ${label} exceeded ${ms}ms`);
-    controller.abort();
-  }, ms);
-  
+async function withTimeoutPromise(promise, label, ms) {
+  const t = setTimeout(() => console.warn(`[Timeout] ${label} exceeded ${ms}ms`), ms + 1);
   try {
-    const result = await promise;
-    clearTimeout(timeout);
-    return result;
-  } catch (error) {
-    clearTimeout(timeout);
-    if (error.name === 'AbortError') {
-      console.warn(`[Timeout] ${label} was aborted`);
-      return null;
-    }
-    throw error;
-  }
-};
-
-exports.handler = async (event, context) => {
-  const startTime = Date.now();
-  console.log('[Insights] Function start');
-
-  // CRITICAL: Set Netlify function timeout
-  context.callbackWaitsForEmptyEventLoop = false;
-
-  let activeBids = [], submittedBids = [], disregardedBids = [], webinars = [], surveys = [], registrations = [], bidSystems = [], socialPosts = [];
-  let aggregatedData = null;
-
-  try {
-    // Parse credentials
-    let serviceAccountKey;
-    try {
-      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-        serviceAccountKey = JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'));
-      } else {
-        serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-      }
-    } catch (parseError) {
-      throw new Error('Invalid service account credentials');
-    }
-
-    const auth = new google.auth.JWT({
-      email: serviceAccountKey.client_email,
-      key: serviceAccountKey.private_key,
-      scopes: CFG.GOOGLE_SCOPES
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-    
-    // CRITICAL TIME CHECK #1: Before any data fetching
-    let elapsed = Date.now() - startTime;
-    if (elapsed > 3000) {
-      console.warn('[Insights] Slow start detected:', elapsed, 'ms');
-    }
-
-    const bidRanges = ['Active_Bids!A2:U', 'Submitted!A2:U', 'Disregarded!A2:U', 'Active_Admin!A2:J'];
-    const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F'];
-    const systemsRanges = ['_BidSystemsSync!A2:O'];
-    const socialRanges = ['MainPostData!A2:R'];
-
-    // Fetch data with reduced timeouts
-    const [bidsData, webinarData, systemsData, socialData] = await Promise.all([
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.GOOGLE_SHEET_ID, ranges: bidRanges }), 'bidsBatchGet', CFG.GOOGLE_TIMEOUT_MS),
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.WEBINAR_SHEET_ID, ranges: webinarRanges }), 'webinarBatchGet', CFG.GOOGLE_TIMEOUT_MS),
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.GOOGLE_SHEET_ID, ranges: systemsRanges }), 'systemsBatchGet', CFG.GOOGLE_TIMEOUT_MS),
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID, ranges: socialRanges }), 'socialBatchGet', CFG.GOOGLE_TIMEOUT_MS),
+    const result = await Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timeout`)), ms))
     ]);
-    
-    // CRITICAL TIME CHECK #2: After data fetching
-    elapsed = Date.now() - startTime;
-    console.log('[Insights] Data fetched in', elapsed, 'ms');
-    
-    if (elapsed > 10000) {
-      throw new Error('CRITICAL_TIME_EXCEEDED');
+    clearTimeout(t);
+    return result;
+  } catch (err) {
+    clearTimeout(t);
+    if (err && String(err.message || '').includes('timeout')) {
+      console.warn(`[Timeout] ${label} hit timeout`);
+      return null; // treat as soft-fail and continue
     }
-
-    if (!bidsData || !webinarData) {
-      return { 
-        statusCode: 503, 
-        headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
-          error: 'Unable to fetch critical data', 
-          details: 'Service temporarily unavailable',
-          timestamp: new Date().toISOString()
-        }) 
-      };
-    }
-
-    // Parse data
-    activeBids = parseBids(bidsData.data.valueRanges[0]?.values || []);
-    submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
-    disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []);
-    const adminEmails = parseAdminEmails(bidsData.data.valueRanges[3]?.values || []);
-    webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
-    surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
-    registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
-    bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
-    socialPosts = parseSocialPosts(socialData?.data.valueRanges[0]?.values || []);
-    
-    // Build aggregation
-    const contactLeads = extractContactLeads(surveys, registrations);
-    const respondBids = activeBids.filter((b) => b.recommendation === 'Respond');
-    const newsArticles = await fetchRelevantNews(CFG.NEWS_QUERY, CFG.NEWS_MAX) || [];
-    const bidUrgency = computeBidUrgencyBuckets(activeBids);
-    const bidSystemDistribution = countByField(activeBids, (b) => b.bidSystem, 'Unknown');
-    const agencyDistribution = countByField(activeBids, (b) => b.entity, 'Unknown');
-    const keywordDistribution = computeKeywordDistribution(activeBids);
-    const scoreDistribution = computeScoreDistribution(activeBids);
-    const adminBySystem = countByField(adminEmails, (e) => e.bidSystem, 'Unknown');
-    const newAdminCount = adminEmails.filter(e => e.status === 'New').length;
-    const disregardedByReason = analyzeDisregardedReasons(disregardedBids);
-    const revivedCandidates = findRevivalCandidates(disregardedBids);
-    const { past30, past90, presenterAverages, anomalies } = computeWebinarKPIs(webinars, surveys);
-
-    aggregatedData = {
-      timestamp: new Date().toISOString(),
-      summary: { 
-        activeBidsCount: activeBids.length, 
-        respondBidsCount: respondBids.length, 
-        submittedBidsCount: submittedBids.length, 
-        disregardedBidsCount: disregardedBids.length, 
-        adminEmailsCount: adminEmails.length, 
-        newAdminEmailsCount: newAdminCount, 
-        registeredSystemsCount: bidSystems.filter(s => s.status === 'Active').length, 
-        completedWebinars: webinars.filter((w) => w.status === 'Completed').length, 
-        totalSurveyResponses: surveys.length, 
-        contactRequests: contactLeads.length, 
-        totalRegistrations: registrations.length, 
-        socialPostsTotal: socialPosts.length,
-        socialPostsPublished: socialPosts.filter(p => p.status === 'Published').length,
-        socialPostsDrafts: socialPosts.filter(p => p.status === 'Draft').length
-      },
-      bidUrgency, bidSystemDistribution, agencyDistribution, keywordDistribution, scoreDistribution,
-      systemAdmin: { bySystem: adminBySystem, newCount: newAdminCount },
-      disregardedAnalysis: { byReason: disregardedByReason, revivedCandidates },
-      webinarKPIs: { past30, past90, presenterAverages, anomalies },
-      priorityBids: respondBids.map((bid) => ({ 
-        recommendation: bid.recommendation, 
-        score: bid.scoreDetails, 
-        subject: bid.emailSubject || 'No Subject', 
-        summary: bid.aiSummary || bid.significantSnippet || bid.emailSubject || 'No summary available', 
-        entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null, 
-        bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null, 
-        dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null, 
-        daysUntilDue: daysUntil(bestDate(bid.dueDate)), 
-        relevance: bid.relevance, 
-        keywords: bid.keywordsFound, 
-        emailFrom: bid.emailFrom, 
-        url: bid.url 
-      })),
-      contactLeads, newsArticles, bidSystems: bidSystems.slice(0, CFG.AI_LIMITS.TOP_SYSTEMS), socialPosts
-    };
-    
-    // CRITICAL TIME CHECK #3: Before OpenAI
-    elapsed = Date.now() - startTime;
-    console.log('[Insights] Aggregation done in', elapsed, 'ms');
-    
-    if (elapsed > 15000) {
-      throw new Error('CRITICAL_TIME_EXCEEDED');
-    }
-
-    const aiPayload = buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { limits: CFG.AI_LIMITS });
-
-    // Try OpenAI with very short timeout
-    let aiInsights;
-    try {
-      aiInsights = await getAIInsights(aiPayload, {
-        model: CFG.OPENAI_MODEL,
-        temperature: CFG.OPENAI_TEMPERATURE,
-        max_tokens: CFG.OPENAI_MAX_TOKENS,
-        timeoutMs: CFG.OPENAI_TIMEOUT_MS
-      });
-    } catch (aiErr) {
-      console.error('[Insights] OpenAI failed:', aiErr.message);
-      aiInsights = { 
-        executiveSummary: 'AI analysis unavailable. Data has been processed and is displayed below.', 
-        topPriorities: [], 
-        bidRecommendations: [], 
-        contentInsights: { topPerforming: 'See webinar KPIs section', suggestions: 'Focus on high-scoring opportunities' }, 
-        newsOpportunities: [], 
-        riskAlerts: [] 
-      };
-    }
-
-    const response = {
-      executiveSummary: aiInsights.executiveSummary || 'AI analysis unavailable.',
-      topPriorities: aiInsights.topPriorities || [],
-      bidRecommendations: aiInsights.bidRecommendations || [],
-      systemInsights: aiInsights.systemInsights,
-      contentInsights: aiInsights.contentInsights,
-      newsOpportunities: aiInsights.newsOpportunities,
-      riskAlerts: aiInsights.riskAlerts,
-      revivedCandidates: aiInsights.revivedCandidates,
-      timestamp: new Date().toISOString(),
-      summary: aggregatedData.summary,
-      bids: aggregatedData.bidUrgency,
-      webinarKPIs: aggregatedData.webinarKPIs,
-      contactLeads: aggregatedData.contactLeads.slice(0, 50),
-      priorityBids: aggregatedData.priorityBids.slice(0, 25),
-      newsArticles: aggregatedData.newsArticles,
-      socialPosts: aggregatedData.socialPosts.slice(0, 10),
-      processingTime: `${Date.now() - startTime}ms`
-    };
-
-    return {
-      statusCode: 200,
-      headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' }, 
-      body: JSON.stringify(response)
-    };
-
-  } catch (error) {
-    if (error.message === 'CRITICAL_TIME_EXCEEDED' && aggregatedData) {
-      console.warn('[Insights] Returning partial data due to timeout');
-      return {
-        statusCode: 200,
-        headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300' },
-        body: JSON.stringify({ 
-          executiveSummary: 'AI Analysis skipped due to time constraints. Basic data loaded successfully.', 
-          timestamp: new Date().toISOString(), 
-          summary: aggregatedData.summary,
-          bids: aggregatedData.bidUrgency, 
-          webinarKPIs: aggregatedData.webinarKPIs,
-          priorityBids: aggregatedData.priorityBids,
-          contactLeads: aggregatedData.contactLeads,
-          newsArticles: aggregatedData.newsArticles,
-          socialPosts: aggregatedData.socialPosts,
-          note: 'Full AI analysis unavailable due to time constraints',
-          processingTime: `${Date.now() - startTime}ms`
-        })
-      };
-    }
-
-    console.error('[Insights] Fatal error:', error);
-    return {
-      statusCode: 503,
-      headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        error: 'Service temporarily unavailable', 
-        message: error.message, 
-        timestamp: new Date().toISOString() 
-      })
-    };
-  }
-};
-
-// ==================================
-// HELPER FUNCTIONS (FULL COPIES OF ALL UTILITIES MUST REMAIN HERE)
-// ==================================
-
-// OpenAI helper (Keeps retry logic and rich system prompt)
-async function getAIInsights(aiPayload, { model, temperature, max_tokens, timeoutMs }) {
-  console.log('[OpenAI] Starting analysis with model:', model);
-
-  const systemPrompt = `
-You are a strategic business analyst for 49 North (Mental Armor™), specializing in government procurement intelligence and resilience training market analysis.
-
-CONTEXT:
-49 North operates in the mental health and resilience training space, serving first responders, military, law enforcement, and government agencies. You have access to:
-- Active bid opportunities from multiple procurement systems
-- System administrative correspondence tracking
-- Disregarded opportunities archive (for potential revival)
-- Webinar engagement and survey data
-- News intelligence on sector trends (last 90 days)
-
-CRITICAL RULES:
-- Bids are separate from webinars. Do NOT conflate these datasets.
-- System admin emails are operational notifications, NOT bid opportunities.
-- Disregarded bids may contain revival candidates if circumstances changed.
-- Focus on actionable insights with owner + timeline.
-- Use specific numbers and dates.
-- Be concise but specific in all recommendations.
-
-DELIVERABLE: Return valid JSON with this exact structure:
-{
-  "executiveSummary": "3-6 sentences covering key metrics, urgent actions, and strategic opportunities",
-  "topPriorities": [
-    {
-      "title": "Specific action item",
-      "description": "Why this matters with supporting data",
-      "action": "Concrete next step with owner and timeline",
-      "urgency": "high|medium|low"
-    }
-  ],
-  "bidRecommendations": [
-    {
-      "subject": "Email subject line",
-      "entity": "Agency name",
-      "reason": "Why pursue this specific opportunity",
-      "action": "Specific next step with timeline",
-      "dueDate": "YYYY-MM-DD",
-      "daysUntilDue": number,
-      "score": "AI score"
-    }
-  ],
-  "systemInsights": {
-    "bidSystems": "Analysis of which procurement systems are most productive",
-    "adminAlerts": "Any system admin issues requiring attention",
-    "suggestions": "Recommendations for system optimization"
-  },
-  "contentInsights": {
-    "topPerforming": "Best webinar themes based on attendance/engagement",
-    "suggestions": "Topics aligned with bid opportunities and news trends"
-  },
-  "newsOpportunities": [
-    {
-      "headline": "News title",
-      "relevance": "How this connects to our capabilities",
-      "action": "Specific opportunity or outreach suggestion"
-    }
-  ],
-  "riskAlerts": [
-    {
-      "issue": "Specific problem or concern",
-      "impact": "Business impact",
-      "mitigation": "Concrete action to address"
-    }
-  ],
-  "revivedCandidates": [
-    {
-      "subject": "Previously disregarded opportunity",
-      "reason": "Why reconsider now",
-      "action": "Recommendation (Respond/Gather Info)"
-    }
-  ]
-}
-
-IMPORTANT: Return ONLY valid JSON. No markdown, no explanations, just the JSON object.
-`.trim();
-
-  const userPrompt = `
-CURRENT_DATE: ${new Date().toISOString().split('T')[0]}
-
-BUSINESS INTELLIGENCE DATA:
-${JSON.stringify(aiPayload, null, 2)}
-
-Analyze and provide strategic insights. Return ONLY the JSON object with no additional text.
-`.trim();
-
-  const callOnce = async () => {
-    const controller = new AbortController();
-    const t = setTimeout(() => { console.log('[OpenAI] Request timeout triggered'); controller.abort(); }, timeoutMs);
-    try {
-      const completion = await openai.chat.completions.create({ model, temperature, max_tokens, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }] });
-      clearTimeout(t);
-      const txt = completion.choices?.[0]?.message?.content || '{}';
-      return JSON.parse(txt);
-    } catch (err) {
-      clearTimeout(t);
-      throw err;
-    }
-  };
-
-  try {
-    return await callOnce();
-  } catch (e1) {
-    await sleep(2000);
-    try {
-      return await callOnce();
-    } catch (e2) {
-      // Fallback logic remains the same
-      return { executiveSummary: `Analysis engine temporarily unavailable. Current snapshot: ${aiPayload.summary?.activeBidsCount || 0} active bids, ${aiPayload.summary?.respondBidsCount || 0} requiring response, ${aiPayload.contacts?.count || 0} contact leads pending.`, topPriorities: [ { title: 'Review Priority Bids', description: `${aiPayload.summary?.respondBidsCount || 0} bids marked as "Respond" require immediate attention`, action: 'Review all "Respond" category bids', urgency: 'high' } ], bidRecommendations: [], systemInsights: { bidSystems: 'Check distribution in data section.', adminAlerts: 'Review system admin notifications', suggestions: 'Monitor bid system performance' }, contentInsights: { topPerforming: 'Review webinar KPIs section', suggestions: 'Align content topics with procurement trends' }, newsOpportunities: [], riskAlerts: [], revivedCandidates: [] };
-    }
+    throw err;
   }
 }
 
-// ==================
-// Parsers (FULL COPIES OF ALL UTILITIES MUST REMAIN HERE)
-// ==================
-function parseBids(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ recommendation: row[0] || '', scoreDetails: row[1] || '', aiReasoning: row[2] || '', aiSummary: row[3] || '', emailDateReceived: row[4] || '', emailFrom: row[5] || '', keywordsCategory: row[6] || '', keywordsFound: row[7] || '', relevance: row[8] || '', emailSubject: row[9] || '', emailBody: row[10] || '', url: row[11] || '', dueDate: row[12] || '', significantSnippet: row[13] || '', emailDomain: row[14] || '', bidSystem: row[15] || '', country: row[16] || '', entity: row[17] || '', status: row[18] || '', dateAdded: row[19] || '', sourceEmailId: row[20] || '' })); 
+function bestDate(s) {
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
-function parseAdminEmails(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ recommendation: row[0] || '', emailDateReceived: row[1] || '', emailFrom: row[2] || '', emailSubject: row[3] || '', emailBody: row[4] || '', bidSystem: row[5] || '', emailDomain: row[6] || '', dateAdded: row[7] || '', sourceEmailId: row[8] || '', status: row[9] || '' })); 
+function daysBetween(d1, d2) {
+  if (!d1 || !d2) return Infinity;
+  return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24));
 }
-function parseBidSystems(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ systemId: row[0] || '', systemName: row[1] || '', category: row[2] || '', status: row[3] || '', websiteUrl: row[4] || '', loginUrl: row[5] || '', username: row[6] || '', geographicCoverage: row[13] || '' })); 
+function daysUntil(d) {
+  if (!d) return null;
+  return daysBetween(new Date(), d);
 }
-function parseWebinars(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ id: row[0] || '', title: row[1] || '', date: row[2] || '', time: row[3] || '', status: row[6] || '', registrationCount: parseInt(row[8] || '0', 10) || 0, attendanceCount: parseInt(row[9] || '0', 10) || 0 })); 
+function sanitize(s) {
+  return (s || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
 }
-function parseSurveys(rows) { 
+
+// ---- Parsers (unchanged semantics) ----
+function parseBids(rows) {
   if (!rows) return [];
-  return rows.map((row) => ({ timestamp: row[0] || '', email: row[1] || '', webinarId: row[2] || '', relevance: row[3] || '', rhonda: row[4] || '', chris: row[5] || '', guest: row[6] || '', sharing: row[7] || '', attending: row[8] || '', contactRequest: row[9] || '', comments: row[10] || '' })); 
+  return rows.map((row) => ({
+    recommendation: row[0] || '',
+    scoreDetails: row[1] || '',
+    aiReasoning: row[2] || '',
+    aiSummary: row[3] || '',
+    emailDateReceived: row[4] || '',
+    emailFrom: row[5] || '',
+    keywordsCategory: row[6] || '',
+    keywordsFound: row[7] || '',
+    relevance: row[8] || '',
+    emailSubject: row[9] || '',
+    emailBody: row[10] || '',
+    url: row[11] || '',
+    dueDate: row[12] || '',
+    significantSnippet: row[13] || '',
+    emailDomain: row[14] || '',
+    bidSystem: row[15] || '',
+    country: row[16] || '',
+    entity: row[17] || '',
+    status: row[18] || '',
+    dateAdded: row[19] || '',
+    sourceEmailId: row[20] || ''
+  }));
 }
-function parseRegistrations(rows) { 
+function parseAdminEmails(rows) {
   if (!rows) return [];
-  return rows.map((row) => ({ timestamp: row[0] || '', webinarId: row[1] || '', name: row[2] || '', email: row[3] || '', organization: row[4] || '', phone: row[5] || '' })); 
+  return rows.map((row) => ({
+    recommendation: row[0] || '',
+    emailDateReceived: row[1] || '',
+    emailFrom: row[2] || '',
+    emailSubject: row[3] || '',
+    emailBody: row[4] || '',
+    bidSystem: row[5] || '',
+    emailDomain: row[6] || '',
+    dateAdded: row[7] || '',
+    sourceEmailId: row[8] || '',
+    status: row[9] || ''
+  }));
 }
-function parseSocialPosts(rows) { 
+function parseBidSystems(rows) {
   if (!rows) return [];
-  return rows.map((row) => ({ timestamp: row[0] || '', status: row[1] || '', contentType: row[2] || '', title: row[3] || '', body: row[4] || '', platforms: row[7] || '', publishedDate: row[9] || '' })); 
+  return rows.map((row) => ({
+    systemId: row[0] || '',
+    systemName: row[1] || '',
+    category: row[2] || '',
+    status: row[3] || '',
+    websiteUrl: row[4] || '',
+    loginUrl: row[5] || '',
+    username: row[6] || '',
+    geographicCoverage: row[13] || ''
+  }));
 }
+function parseWebinars(rows) {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    id: row[0] || '',
+    title: row[1] || '',
+    date: row[2] || '',
+    time: row[3] || '',
+    status: row[6] || '',
+    registrationCount: parseInt(row[8] || '0', 10) || 0,
+    attendanceCount: parseInt(row[9] || '0', 10) || 0
+  }));
+}
+function parseSurveys(rows) {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    timestamp: row[0] || '',
+    email: row[1] || '',
+    webinarId: row[2] || '',
+    relevance: row[3] || '',
+    rhonda: row[4] || '',
+    chris: row[5] || '',
+    guest: row[6] || '',
+    sharing: row[7] || '',
+    attending: row[8] || '',
+    contactRequest: row[9] || '',
+    comments: row[10] || ''
+  }));
+}
+function parseRegistrations(rows) {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    timestamp: row[0] || '',
+    webinarId: row[1] || '',
+    name: row[2] || '',
+    email: row[3] || '',
+    organization: row[4] || '',
+    phone: row[5] || ''
+  }));
+}
+function parseSocialPosts(rows) {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    timestamp: row[0] || '',
+    status: row[1] || '',
+    contentType: row[2] || '',
+    title: row[3] || '',
+    body: row[4] || '',
+    imageUrl: row[5] || '',
+    videoUrl: row[6] || '',
+    platforms: row[7] || '',
+    scheduleDate: row[8] || '',
+    publishedDate: row[9] || '',
+    tags: row[17] || ''
+  }));
+}
+
 function computeKeywordDistribution(bids) {
   const keywords = new Map();
-  bids.forEach(bid => {
-    const kws = (bid.keywordsFound || '').split(',').map(k => k.trim()).filter(Boolean);
-    kws.forEach(kw => { keywords.set(kw, (keywords.get(kw) || 0) + 1); });
+  bids.forEach((bid) => {
+    const kws = (bid.keywordsFound || '')
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
+    kws.forEach((kw) => keywords.set(kw, (keywords.get(kw) || 0) + 1));
   });
-  return Array.from(keywords.entries()).map(([keyword, count]) => ({ keyword, count })).sort((a, b) => b.count - a.count).slice(0, 20);
+  return Array.from(keywords.entries())
+    .map(([keyword, count]) => ({ keyword, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
 }
 function computeScoreDistribution(bids) {
   const buckets = { '0-5': 0, '6-8': 0, '9-14': 0, '15-20': 0 };
-  bids.forEach(bid => {
+  bids.forEach((bid) => {
     const score = parseFloat(bid.scoreDetails) || 0;
     if (score <= 5) buckets['0-5']++;
     else if (score <= 8) buckets['6-8']++;
@@ -451,18 +215,23 @@ function computeScoreDistribution(bids) {
 }
 function analyzeDisregardedReasons(disregarded) {
   const reasons = new Map();
-  disregarded.forEach(bid => {
+  disregarded.forEach((bid) => {
     const reasoning = bid.aiReasoning || '';
-    if (reasoning.includes('no relevant keywords')) { reasons.set('No Keywords', (reasons.get('No Keywords') || 0) + 1); }
-    else if (reasoning.includes('marketing') || reasoning.includes('promotional')) { reasons.set('Marketing Noise', (reasons.get('Marketing Noise') || 0) + 1); }
-    else if (reasoning.includes('lacks')) { reasons.set('Missing Procurement Signals', (reasons.get('Missing Procurement Signals') || 0) + 1); }
-    else { reasons.set('Other', (reasons.get('Other') || 0) + 1); }
+    if (reasoning.includes('no relevant keywords'))
+      reasons.set('No Keywords', (reasons.get('No Keywords') || 0) + 1);
+    else if (reasoning.includes('marketing') || reasoning.includes('promotional'))
+      reasons.set('Marketing Noise', (reasons.get('Marketing Noise') || 0) + 1);
+    else if (reasoning.includes('lacks'))
+      reasons.set('Missing Procurement Signals', (reasons.get('Missing Procurement Signals') || 0) + 1);
+    else reasons.set('Other', (reasons.get('Other') || 0) + 1);
   });
-  return Array.from(reasons.entries()).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+  return Array.from(reasons.entries())
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
 }
 function findRevivalCandidates(disregarded) {
   return disregarded
-    .filter(bid => {
+    .filter((bid) => {
       const score = parseFloat(bid.scoreDetails) || 0;
       const hasKeywords = (bid.keywordsFound || '').trim().length > 0;
       const hasEntity = bid.entity && bid.entity !== 'Unknown';
@@ -470,96 +239,70 @@ function findRevivalCandidates(disregarded) {
     })
     .sort((a, b) => parseFloat(b.scoreDetails) - parseFloat(a.scoreDetails))
     .slice(0, 10)
-    .map(bid => ({ subject: bid.emailSubject, score: bid.scoreDetails, keywords: bid.keywordsFound, entity: bid.entity, reasoning: bid.aiReasoning }));
+    .map((bid) => ({
+      subject: bid.emailSubject,
+      score: bid.scoreDetails,
+      keywords: bid.keywordsFound,
+      entity: bid.entity,
+      reasoning: bid.aiReasoning
+    }));
 }
+
 async function fetchRelevantNews(query, limit) {
   try {
     const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), CFG.NEWS_TIMEOUT_MS);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(t);
+    const res = await withTimeoutPromise(fetch(url), 'newsFetch', CFG.NEWS_TIMEOUT_MS);
+    if (!res) return [];
     if (!res.ok) return [];
-
     const xml = await res.text();
+
     const items = [];
     const regexes = [
       /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g,
       /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g
     ];
 
-    for (let rx of regexes) { // FIX: Use let and remove unused rx
+    for (let rx of regexes) {
       let m;
-      // FIX: Added parentheses to clarify mixed operators
-      while ((m = rx.exec(xml)) && (items.length < limit * 2)) {
-        items.push({ title: sanitize(m[1]), link: sanitize(m[2]), pubDate: sanitize(m[3]), source: 'Google News' });
+      while ((m = rx.exec(xml)) && items.length < limit * 2) {
+        items.push({
+          title: sanitize(m[1]),
+          link: sanitize(m[2]),
+          pubDate: sanitize(m[3]),
+          source: 'Google News'
+        });
       }
       if (items.length) break;
     }
 
-    const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 90);
-    const sixtyDaysAgoMs = sixtyDaysAgo.getTime();
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
     const seen = new Map();
-
     for (const it of items) {
       const key = (it.link || it.title).trim();
       const ts = Date.parse(it.pubDate || '') || 0;
-      if (ts > 0 && ts < sixtyDaysAgoMs) continue;
+      if (ts > 0 && ts < cutoff) continue;
       const prev = seen.get(key);
-      if (!prev || (ts > (Date.parse(prev.pubDate || '') || 0))) { // FIX: Added parentheses to clarify mixed operators
-        seen.set(key, it); 
+      if (!prev || ts > (Date.parse(prev.pubDate || '') || 0)) {
+        seen.set(key, it);
       }
     }
-
-    return Array.from(seen.values()).sort((a, b) => Date.parse(b.pubDate || '') - Date.parse(a.pubDate || '')).slice(0, limit);
+    return Array.from(seen.values())
+      .sort((a, b) => Date.parse(b.pubDate || '') - Date.parse(a.pubDate || ''))
+      .slice(0, limit);
   } catch (e) {
     console.error('[News] Fetch error:', e?.message);
     return [];
   }
 }
-function extractContactLeads(surveys, registrations) {
-  const leads = new Map();
-  const regByEmail = new Map();
-  registrations.forEach((r) => { const email = (r.email || '').toLowerCase().trim(); if (email) regByEmail.set(email, r); });
 
-  surveys.forEach((survey) => {
-    const email = (survey.email || '').toLowerCase().trim();
-    if (!email) return;
-
-    const val = String(survey.contactRequest || '');
-    const wantsContact = val.toLowerCase().includes('yes');
-    const wantsReminder = val.includes('🟢 Drop me a reminder in 3 months');
-
-    if (wantsContact || wantsReminder) {
-      if (!leads.has(email)) {
-        const reg = regByEmail.get(email);
-        leads.set(email, {
-          email: survey.email, name: reg?.name || 'Unknown', organization: reg?.organization || 'Unknown',
-          phone: reg?.phone || '', score: 0, factors: [], comments: survey.comments || '', lastActivity: survey.timestamp
-        });
-      }
-      const lead = leads.get(email);
-      if (wantsContact) { lead.score += 50; lead.factors.push('Requested Contact'); }
-      if (wantsReminder) { lead.score += 30; lead.factors.push('Wants 3-Month Reminder'); }
-    }
-  });
-
-  const counts = new Map();
-  registrations.forEach((r) => { const email = (r.email || '').toLowerCase().trim(); if (email) counts.set(email, (counts.get(email) || 0) + 1); });
-
-  leads.forEach((lead, email) => {
-    const c = counts.get(email) || 0;
-    if (c >= 2) { lead.score += 30 * (c - 1); lead.factors.push(`${c} Webinars Attended`); }
-    if ((lead.comments || '').trim().length > 10) { lead.score += 20; lead.factors.push('Left Detailed Comments'); }
-  });
-
-  return Array.from(leads.values()).sort((a, b) => b.score - a.score);
-}
 function computeBidUrgencyBuckets(bids) {
   const buckets = { '0-3': 0, '4-7': 0, '8-14': 0, '15+': 0, pastDue: 0, undated: 0 };
   bids.forEach((b) => {
     const due = bestDate(b.dueDate);
-    if (!due || isNaN(due.getTime())) { buckets.undated++; return; }
+    if (!due || Number.isNaN(due.getTime())) {
+      buckets.undated++;
+      return;
+    }
     const d = daysUntil(due);
     if (d < 0) buckets.pastDue++;
     else if (d <= 3) buckets['0-3']++;
@@ -576,15 +319,27 @@ function countByField(list, getter, emptyLabel = 'Unknown') {
     const key = raw || emptyLabel;
     map.set(key, (map.get(key) || 0) + 1);
   });
-  return Array.from(map.entries()).map(([key, count]) => ({ key, count })).sort((a, b) => b.count - a.count);
+  return Array.from(map.entries())
+    .map(([key, count]) => ({ key, count }))
+    .sort((a, b) => b.count - a.count);
+}
+function computePresenterAverages(surveys) {
+  const avg = (field) => {
+    const vals = surveys
+      .map((s) => {
+        const m = String(s[field] || '').match(/(\d+)/);
+        return m ? parseInt(m[1], 10) : null;
+      })
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 5);
+    const mean = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    return vals.length ? Number(mean.toFixed(2)) : null;
+  };
+  return { rhonda: avg('rhonda'), chris: avg('chris'), guest: avg('guest') };
 }
 function computeWebinarKPIs(webinars, surveys) {
-  const completed = webinars.filter((w) => w.status === 'Completed');
-  completed.sort((a, b) => new Date(a.date) - new Date(b.date));
-
+  const completed = webinars.filter((w) => w.status === 'Completed').sort((a, b) => new Date(a.date) - new Date(b.date));
   const now = new Date();
   const withinDays = (n) => completed.filter((w) => daysBetween(new Date(w.date), now) <= n);
-
   const last30 = withinDays(30);
   const last90 = withinDays(90);
 
@@ -592,7 +347,9 @@ function computeWebinarKPIs(webinars, surveys) {
     const totalAttendance = arr.reduce((s, w) => s + (w.attendanceCount || 0), 0);
     const totalRegs = arr.reduce((s, w) => s + (w.registrationCount || 0), 0);
     return {
-      count: arr.length, totalAttendance, totalRegistrations: totalRegs,
+      count: arr.length,
+      totalAttendance,
+      totalRegistrations: totalRegs,
       avgAttendance: arr.length ? Math.round(totalAttendance / arr.length) : 0,
       attendanceRate: totalRegs ? Math.round((totalAttendance / totalRegs) * 100) : 0
     };
@@ -606,20 +363,28 @@ function computeWebinarKPIs(webinars, surveys) {
     .filter((w) => Math.abs((w.attendanceCount || 0) - allMean) >= Math.max(10, allMean * 0.5))
     .slice(-5)
     .map((w) => ({
-      id: w.id, title: w.title, date: w.date, attendance: w.attendanceCount,
+      id: w.id,
+      title: w.title,
+      date: w.date,
+      attendance: w.attendanceCount,
       deviationFromMean: Math.round((w.attendanceCount || 0) - allMean)
     }));
 
   return { past30: kpi(last30), past90: kpi(last90), presenterAverages, anomalies };
 }
-function computePresenterAverages(surveys) {
-  const avg = (field) => {
-    const vals = surveys.map((s) => { const m = String(s[field] || '').match(/(\d+)/); return m ? parseInt(m[1], 10) : null; }).filter((n) => Number.isInteger(n) && n >= 1 && n <= 5);
-    const mean = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
-    return vals.length ? Number(mean.toFixed(2)) : null;
-  };
-  return { rhonda: avg('rhonda'), chris: avg('chris'), guest: avg('guest') };
+function getTopDomainsFromEmails(emails) {
+  const counts = {};
+  (emails || []).forEach((e) => {
+    const domain = (e || '').split('@')[1]?.toLowerCase();
+    if (!domain) return;
+    if (/(gmail|yahoo|hotmail|outlook)\./i.test(domain)) return;
+    counts[domain] = (counts[domain] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .map(([domain, count]) => ({ domain, count }))
+    .sort((a, b) => b.count - a.count);
 }
+
 function buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { limits }) {
   const redactedLeads = aggregatedData.contactLeads.slice(0, 100).map((lead) => ({
     organization: lead.organization || 'Unknown',
@@ -634,11 +399,20 @@ function buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { li
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, limits.WEBINARS_FOR_AI)
     .map((w) => ({
-      id: w.id, title: w.title, date: w.date, status: w.status, registrationCount: w.registrationCount, attendanceCount: w.attendanceCount
+      id: w.id,
+      title: w.title,
+      date: w.date,
+      status: w.status,
+      registrationCount: w.registrationCount,
+      attendanceCount: w.attendanceCount
     }));
 
-  const disregardedSample = disregardedBids.slice(0, limits.DISREGARDED_SAMPLE).map(bid => ({
-    subject: bid.emailSubject, score: bid.scoreDetails, keywords: bid.keywordsFound, entity: bid.entity, reasoning: (bid.aiReasoning || '').slice(0, 200)
+  const disregardedSample = disregardedBids.slice(0, limits.DISREGARDED_SAMPLE).map((bid) => ({
+    subject: bid.emailSubject,
+    score: bid.scoreDetails,
+    keywords: bid.keywordsFound,
+    entity: bid.entity,
+    reasoning: (bid.aiReasoning || '').slice(0, 200)
   }));
 
   return {
@@ -668,33 +442,361 @@ function buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { li
       topDomains: getTopDomainsFromEmails(aggregatedData.contactLeads.map((l) => l.email)).slice(0, 15)
     },
     news: aggregatedData.newsArticles.slice(0, limits.TOP_NEWS),
-    bidSystems: aggregatedData.bidSystems.map(s => ({ name: s.systemName, category: s.category, status: s.status, coverage: s.geographicCoverage }))
+    bidSystems: aggregatedData.bidSystems.map((s) => ({
+      name: s.systemName,
+      category: s.category,
+      status: s.status,
+      coverage: s.geographicCoverage
+    }))
   };
 }
-function bestDate(s) {
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
+
+// ---- OpenAI call (JSON only) ----
+async function getAIInsights(aiPayload, { model, temperature, max_tokens, timeoutMs }) {
+  const systemPrompt = `
+You are a strategic business analyst for 49 North (Mental Armor™), specializing in government procurement intelligence and resilience training market analysis.
+
+CRITICAL RULES:
+- Bids are separate from webinars; do NOT conflate datasets.
+- System admin emails are notifications, NOT bid opportunities.
+- Disregarded bids may contain revival candidates if conditions changed.
+- Return only valid JSON matching the required schema. No markdown.
+
+Return JSON with keys:
+executiveSummary, topPriorities[], bidRecommendations[], systemInsights, contentInsights, newsOpportunities[], riskAlerts[], revivedCandidates[].
+`.trim();
+
+  const userPrompt = `
+CURRENT_DATE: ${new Date().toISOString().split('T')[0]}
+BUSINESS INTELLIGENCE DATA:
+${JSON.stringify(aiPayload, null, 2)}
+`.trim();
+
+  const once = async () => {
+    const res = await Promise.race([
+      openai.chat.completions.create({
+        model,
+        temperature,
+        max_tokens,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('AI timeout')), timeoutMs))
+    ]);
+    const txt = res.choices?.[0]?.message?.content || '{}';
+    return JSON.parse(txt);
+  };
+
+  try {
+    return await once();
+  } catch (e1) {
+    await sleep(1200);
+    try {
+      return await once();
+    } catch (e2) {
+      return {
+        executiveSummary:
+          'AI analysis unavailable. Data processed without strategic summary.',
+        topPriorities: [],
+        bidRecommendations: [],
+        systemInsights: {
+          bidSystems: 'See data distributions.',
+          adminAlerts: 'Review system admin notifications.',
+          suggestions: 'Monitor system performance and address any login or sync issues.'
+        },
+        contentInsights: {
+          topPerforming: 'See webinar KPIs.',
+          suggestions: 'Align topics with procurement trends.'
+        },
+        newsOpportunities: [],
+        riskAlerts: [],
+        revivedCandidates: []
+      };
+    }
+  }
 }
-function daysBetween(d1, d2) {
-  if (!d1 || !d2) return Infinity;
-  const ms = d2 - d1;
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
-}
-function daysUntil(d) {
-  if (!d) return null;
-  return daysBetween(new Date(), d);
-}
-function sanitize(s) {
-  return (s || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
-}
-function getTopDomainsFromEmails(emails) {
-  const counts = {};
-  (emails || []).forEach((e) => {
-    const domain = (e || '').split('@')[1]?.toLowerCase();
-    if (!domain) return;
-    if (domain.includes('gmail') || domain.includes('yahoo') || domain.includes('hotmail') || domain.includes('outlook'))
-      return;
-    counts[domain] = (counts[domain] || 0) + 1;
+
+// ---- Handler ----
+exports.handler = async (event, context) => {
+  const started = Date.now();
+  context.callbackWaitsForEmptyEventLoop = false;
+
+  const headers = corsHeaders(event.headers?.origin);
+  const guard = methodGuard(event, headers, 'GET', 'POST', 'OPTIONS');
+  if (guard) return guard;
+  if (!checkAuth(event)) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+
+  try {
+    // Optional POST filters (ignored by default)
+    if (event.httpMethod === 'POST' && event.body) {
+      const [, err] = safeJson(event.body);
+      if (err) return bad(headers, 'Invalid JSON body');
+    }
+
+    // Google auth
+    const auth = getGoogleAuth();
+    await auth.authorize();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // Fetch ranges (batch) with timeouts
+    const bidRanges = ['Active_Bids!A2:U', 'Submitted!A2:U', 'Disregarded!A2:U', 'Active_Admin!A2:J'];
+    const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F'];
+    const systemsRanges = ['_BidSystemsSync!A2:O'];
+    const socialRanges = ['MainPostData!A2:R'];
+
+    const [bidsData, webinarData, systemsData, socialData] = await Promise.all([
+      withTimeoutPromise(
+        sheets.spreadsheets.values.batchGet({
+          spreadsheetId: process.env.GOOGLE_SHEET_ID,
+          ranges: bidRanges
+        }),
+        'bidsBatchGet',
+        CFG.GOOGLE_TIMEOUT_MS
+      ),
+      withTimeoutPromise(
+        sheets.spreadsheets.values.batchGet({
+          spreadsheetId: process.env.WEBINAR_SHEET_ID,
+          ranges: webinarRanges
+        }),
+        'webinarBatchGet',
+        CFG.GOOGLE_TIMEOUT_MS
+      ),
+      withTimeoutPromise(
+        sheets.spreadsheets.values.batchGet({
+          spreadsheetId: process.env.GOOGLE_SHEET_ID,
+          ranges: systemsRanges
+        }),
+        'systemsBatchGet',
+        CFG.GOOGLE_TIMEOUT_MS
+      ),
+      withTimeoutPromise(
+        sheets.spreadsheets.values.batchGet({
+          spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID,
+          ranges: socialRanges
+        }),
+        'socialBatchGet',
+        CFG.GOOGLE_TIMEOUT_MS
+      )
+    ]);
+
+    if (!bidsData || !webinarData) {
+      return {
+        statusCode: 503,
+        headers,
+        body: JSON.stringify({
+          error: 'Unable to fetch critical data',
+          details: 'Service temporarily unavailable',
+          timestamp: new Date().toISOString()
+        })
+      };
+    }
+
+    // Parse
+    const activeBids = parseBids(bidsData.data.valueRanges[0]?.values || []);
+    const submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
+    const disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []);
+    const adminEmails = parseAdminEmails(bidsData.data.valueRanges[3]?.values || []);
+    const webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
+    const surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
+    const registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
+    const bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
+    const socialPosts = parseSocialPosts(socialData?.data.valueRanges[0]?.values || []);
+
+    // Aggregations
+    const contactLeads = extractContactLeads(surveys, registrations);
+    const respondBids = activeBids.filter((b) => (b.recommendation || '').toLowerCase() === 'respond');
+    const newsArticles = (await fetchRelevantNews(CFG.NEWS_QUERY, CFG.NEWS_MAX)) || [];
+    const bidUrgency = computeBidUrgencyBuckets(activeBids);
+    const bidSystemDistribution = countByField(activeBids, (b) => b.bidSystem, 'Unknown');
+    const agencyDistribution = countByField(activeBids, (b) => b.entity, 'Unknown');
+    const keywordDistribution = computeKeywordDistribution(activeBids);
+    const scoreDistribution = computeScoreDistribution(activeBids);
+    const adminBySystem = countByField(adminEmails, (e) => e.bidSystem, 'Unknown');
+    const newAdminCount = adminEmails.filter((e) => (e.status || '').toLowerCase() === 'new').length;
+    const disregardedByReason = analyzeDisregardedReasons(disregardedBids);
+    const revivedCandidates = findRevivalCandidates(disregardedBids);
+    const webinarKPIs = computeWebinarKPIs(webinars, surveys);
+
+    const aggregatedData = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        activeBidsCount: activeBids.length,
+        respondBidsCount: respondBids.length,
+        submittedBidsCount: submittedBids.length,
+        disregardedBidsCount: disregardedBids.length,
+        adminEmailsCount: adminEmails.length,
+        newAdminEmailsCount: newAdminCount,
+        registeredSystemsCount: bidSystems.filter((s) => s.status === 'Active').length,
+        completedWebinars: webinars.filter((w) => w.status === 'Completed').length,
+        totalSurveyResponses: surveys.length,
+        contactRequests: contactLeads.length,
+        totalRegistrations: registrations.length,
+        socialPostsTotal: socialPosts.length,
+        socialPostsPublished: socialPosts.filter((p) => p.status === 'Published').length,
+        socialPostsDrafts: socialPosts.filter((p) => p.status === 'Draft').length
+      },
+      bidUrgency,
+      bidSystemDistribution,
+      agencyDistribution,
+      keywordDistribution,
+      scoreDistribution,
+      systemAdmin: { bySystem: adminBySystem, newCount: newAdminCount },
+      disregardedAnalysis: { byReason: disregardedByReason, revivedCandidates },
+      webinarKPIs,
+      priorityBids: respondBids.map((bid) => ({
+        recommendation: bid.recommendation,
+        score: bid.scoreDetails,
+        subject: bid.emailSubject || 'No Subject',
+        summary: bid.aiSummary || bid.significantSnippet || bid.emailSubject || 'No summary available',
+        entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null,
+        bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null,
+        dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null,
+        daysUntilDue: daysUntil(bestDate(bid.dueDate)),
+        relevance: bid.relevance,
+        keywords: bid.keywordsFound,
+        emailFrom: bid.emailFrom,
+        url: bid.url
+      })),
+      contactLeads,
+      newsArticles,
+      bidSystems: bidSystems.slice(0, CFG.AI_LIMITS.TOP_SYSTEMS),
+      socialPosts
+    };
+
+    // Early time check
+    if (Date.now() - started > 15000) {
+      console.warn('[Insights] Time nearly exceeded; skipping AI.');
+      return ok(headers, {
+        executiveSummary: 'AI Analysis skipped due to time constraints. Basic data loaded successfully.',
+        timestamp: new Date().toISOString(),
+        summary: aggregatedData.summary,
+        bids: aggregatedData.bidUrgency,
+        webinarKPIs: aggregatedData.webinarKPIs,
+        priorityBids: aggregatedData.priorityBids,
+        contactLeads: aggregatedData.contactLeads,
+        newsArticles: aggregatedData.newsArticles,
+        socialPosts: aggregatedData.socialPosts,
+        note: 'Full AI analysis unavailable due to time constraints',
+        processingTime: `${Date.now() - started}ms`
+      });
+    }
+
+    // Build AI payload + call
+    const aiPayload = buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { limits: CFG.AI_LIMITS });
+    let aiInsights;
+    try {
+      aiInsights = await getAIInsights(aiPayload, {
+        model: CFG.OPENAI_MODEL,
+        temperature: CFG.OPENAI_TEMPERATURE,
+        max_tokens: CFG.OPENAI_MAX_TOKENS,
+        timeoutMs: CFG.OPENAI_TIMEOUT_MS
+      });
+    } catch (aiErr) {
+      console.error('[Insights] OpenAI failed:', aiErr.message);
+      aiInsights = {
+        executiveSummary: 'AI analysis unavailable. Data has been processed and is displayed below.',
+        topPriorities: [],
+        bidRecommendations: [],
+        systemInsights: {
+          bidSystems: 'See distributions in data section.',
+          adminAlerts: 'Review system admin notifications',
+          suggestions: 'Monitor bid system performance'
+        },
+        contentInsights: { topPerforming: 'See webinar KPIs section', suggestions: 'Align with procurement trends' },
+        newsOpportunities: [],
+        riskAlerts: [],
+        revivedCandidates: []
+      };
+    }
+
+    return ok(headers, {
+      executiveSummary: aiInsights.executiveSummary || 'AI analysis unavailable.',
+      topPriorities: aiInsights.topPriorities || [],
+      bidRecommendations: aiInsights.bidRecommendations || [],
+      systemInsights: aiInsights.systemInsights,
+      contentInsights: aiInsights.contentInsights,
+      newsOpportunities: aiInsights.newsOpportunities,
+      riskAlerts: aiInsights.riskAlerts,
+      revivedCandidates: aiInsights.revivedCandidates,
+      timestamp: new Date().toISOString(),
+      summary: aggregatedData.summary,
+      bids: aggregatedData.bidUrgency,
+      webinarKPIs: aggregatedData.webinarKPIs,
+      contactLeads: aggregatedData.contactLeads.slice(0, 50),
+      priorityBids: aggregatedData.priorityBids.slice(0, 25),
+      newsArticles: aggregatedData.newsArticles,
+      socialPosts: aggregatedData.socialPosts.slice(0, 10),
+      processingTime: `${Date.now() - started}ms`
+    });
+  } catch (e) {
+    console.error('[Insights] Fatal error:', e);
+    return serverErr(headers);
+  }
+};
+
+// ---- Contact leads (unchanged semantics) ----
+function extractContactLeads(surveys, registrations) {
+  const leads = new Map();
+  const regByEmail = new Map();
+  registrations.forEach((r) => {
+    const email = (r.email || '').toLowerCase().trim();
+    if (email) regByEmail.set(email, r);
   });
-  return Object.entries(counts).map(([domain, count]) => ({ domain, count })).sort((a, b) => b.count - a.count);
+
+  surveys.forEach((survey) => {
+    const email = (survey.email || '').toLowerCase().trim();
+    if (!email) return;
+
+    const val = String(survey.contactRequest || '');
+    const wantsContact = val.toLowerCase().includes('yes');
+    const wantsReminder = val.includes('🟢 Drop me a reminder in 3 months');
+
+    if (wantsContact || wantsReminder) {
+      if (!leads.has(email)) {
+        const reg = regByEmail.get(email);
+        leads.set(email, {
+          email: survey.email,
+          name: reg?.name || 'Unknown',
+          organization: reg?.organization || 'Unknown',
+          phone: reg?.phone || '',
+          score: 0,
+          factors: [],
+          comments: survey.comments || '',
+          lastActivity: survey.timestamp
+        });
+      }
+      const lead = leads.get(email);
+      if (wantsContact) {
+        lead.score += 50;
+        lead.factors.push('Requested Contact');
+      }
+      if (wantsReminder) {
+        lead.score += 30;
+        lead.factors.push('Wants 3-Month Reminder');
+      }
+    }
+  });
+
+  const counts = new Map();
+  registrations.forEach((r) => {
+    const email = (r.email || '').toLowerCase().trim();
+    if (email) counts.set(email, (counts.get(email) || 0) + 1);
+  });
+
+  leads.forEach((lead, email) => {
+    const c = counts.get(email) || 0;
+    if (c >= 2) {
+      lead.score += 30 * (c - 1);
+      lead.factors.push(`${c} Webinars Attended`);
+    }
+    if ((lead.comments || '').trim().length > 10) {
+      lead.score += 20;
+      lead.factors.push('Left Detailed Comments');
+    }
+  });
+
+  return Array.from(leads.values()).sort((a, b) => b.score - a.score);
 }

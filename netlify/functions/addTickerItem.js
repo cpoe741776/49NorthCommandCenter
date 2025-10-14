@@ -1,96 +1,66 @@
 // netlify/functions/addTickerItem.js
-const { google } = require('googleapis');
+const { getGoogleAuth, sheetsClient } = require('./_utils/google');
+const { corsHeaders, methodGuard, safeJson, ok, bad, unauth, serverErr, checkAuth } = require('./_utils/http');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const TICKER_TAB = 'TickerFeed';
 
-exports.handler = async (event, context) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  };
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers?.origin);
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
+  const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
+  if (guard) return guard;
+
+  if (!checkAuth(event)) return unauth(headers);
+
+  const [body, parseErr] = safeJson(event.body);
+  if (parseErr) return bad(headers, 'Invalid JSON body');
+
+  const {
+    message,
+    category,
+    source = '',
+    link = '',
+    newRecommendation = '',
+    urgency = 'low',
+    createdAt
+  } = body || {};
+
+  if (!message || !category) {
+    return bad(headers, 'Missing required fields: message, category');
   }
-
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
+  if (newRecommendation && !['Respond', 'Gather More Information'].includes(newRecommendation)) {
+    return bad(headers, 'Invalid recommendation');
+  }
+  if (!['low', 'medium', 'high', ''].includes(urgency)) {
+    return bad(headers, 'Invalid urgency');
   }
 
   try {
-    const item = JSON.parse(event.body);
+    const auth = getGoogleAuth();
+    await auth.authorize();
+    const sheets = sheetsClient(auth);
 
-    // Validate required fields
-    if (!item.message) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Message is required' }),
-      };
-    }
+    const values = [[
+      createdAt || new Date().toISOString(),
+      message,
+      category,
+      source,
+      link,
+      newRecommendation,
+      urgency
+    ]];
 
-    // Set defaults
-    const tickerItem = {
-      timestamp: item.timestamp || new Date().toISOString(),
-      message: item.message,
-      priority: item.priority || 'medium',
-      source: item.source || 'auto',
-      active: item.active !== undefined ? item.active : true,
-      expiresOn: item.expiresOn || addDays(new Date(), 7).toISOString(),
-    };
-
-    // Authenticate with Google Sheets API
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(
-  Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    // Append to sheet
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: `${TICKER_TAB}!A:F`,
+      range: `${TICKER_TAB}!A:G`,
       valueInputOption: 'USER_ENTERED',
-      resource: {
-        values: [[
-          tickerItem.timestamp,
-          tickerItem.message,
-          tickerItem.priority,
-          tickerItem.source,
-          tickerItem.active,
-          tickerItem.expiresOn,
-        ]],
-      },
+      requestBody: { values }
     });
 
-    return {
-      statusCode: 201,
-      headers,
-      body: JSON.stringify({ success: true, item: tickerItem }),
-    };
-  } catch (error) {
-    console.error('Error adding ticker item:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Failed to add ticker item' }),
-    };
+    return ok(headers, { success: true });
+  } catch (e) {
+    console.error('addTickerItem error:', e);
+    return serverErr(headers);
   }
 };
-
-// Add this at the very end of addTickerItem.js, before the closing of the file
-
-function addDays(date, days) {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
