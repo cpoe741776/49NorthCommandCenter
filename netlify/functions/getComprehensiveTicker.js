@@ -66,9 +66,11 @@ function isRecent(dateStr, days = 7) {
 
 async function fetchBidsData(auth) {
   try {
+    console.log('[Bids] Starting bid data fetch...');
     const sheets = google.sheets({ version: 'v4', auth });
     
     // Fetch all bid-related sheets
+    console.log('[Bids] Fetching from main sheet:', CFG.SHEET_ID);
     const [activeRes, submittedRes, disregardedRes] = await Promise.all([
       withTimeout(
         sheets.spreadsheets.values.get({
@@ -99,52 +101,117 @@ async function fetchBidsData(auth) {
     const activeRows = activeRes?.data?.values || [];
     const submittedRows = submittedRes?.data?.values || [];
     const disregardedRows = disregardedRes?.data?.values || [];
+    
+    console.log('[Bids] Raw data counts:', {
+      active: activeRows.length,
+      submitted: submittedRows.length,
+      disregarded: disregardedRows.length
+    });
 
-    // Process active bids
+    // Process active bids - CORRECTED COLUMN MAPPINGS
     const activeBids = activeRows.map(row => ({
-      subject: row[0] || '',
-      entity: row[1] || '',
-      bidSystem: row[2] || '',
-      recommendation: normalizeRecommendation(row[3]),
-      dueDate: row[4] || '',
-      url: row[5] || '',
-      daysUntilDue: daysUntil(row[4]),
-      emailDateReceived: row[6] || '',
-      dateAdded: row[7] || ''
+      recommendation: normalizeRecommendation(row[0]), // A = Recommendation
+      scoreDetails: row[1] || '', // B = Score Details
+      aiReasoning: row[2] || '', // C = AI Reasoning
+      emailSummary: row[3] || '', // D = AI Email Summary
+      emailDateReceived: row[4] || '', // E = Email Date Received
+      emailFrom: row[5] || '', // F = Email From
+      keywordsCategory: row[6] || '', // G = Keywords Category
+      keywordsFound: row[7] || '', // H = Keywords Found
+      relevance: row[8] || '', // I = Relevance
+      subject: row[9] || '', // J = Email Subject (was wrong!)
+      emailBody: row[10] || '', // K = Email Body
+      url: row[11] || '', // L = URL
+      dueDate: row[12] || '', // M = Due Date
+      significantSnippet: row[13] || '', // N = Significant Snippet
+      emailDomain: row[14] || '', // O = Email Domain
+      bidSystem: row[15] || '', // P = Bid System
+      country: row[16] || '', // Q = Country
+      entity: row[17] || '', // R = Entity/Agency
+      status: row[18] || '', // S = Status
+      dateAdded: row[19] || '', // T = Date Added
+      sourceEmailId: row[20] || '', // U = Source Email ID
+      daysUntilDue: daysUntil(row[12]) // Calculate from Due Date
     }));
 
-    // Process submitted bids
+    // Process submitted bids - CORRECTED COLUMN MAPPINGS
     const submittedBids = submittedRows.map(row => ({
-      subject: row[0] || '',
-      entity: row[1] || '',
-      bidSystem: row[2] || '',
-      status: 'submitted',
-      url: row[3] || '',
-      emailDateReceived: row[4] || '',
-      dateAdded: row[5] || ''
+      recommendation: normalizeRecommendation(row[0]), // A = Recommendation
+      reasoning: row[1] || '', // B = Reasoning
+      emailSummary: row[2] || '', // C = Email Summary
+      emailDateReceived: row[3] || '', // D = Email Date Received
+      emailFrom: row[4] || '', // E = Email From
+      keywordsCategory: row[5] || '', // F = Keywords Category
+      keywordsFound: row[6] || '', // G = Keywords Found
+      relevance: row[7] || '', // H = Relevance
+      subject: row[8] || '', // I = Email Subject
+      emailBody: row[9] || '', // J = Email Body
+      url: row[10] || '', // K = URL
+      dueDate: row[11] || '', // L = Due Date
+      significantSnippet: row[12] || '', // M = Significant Snippet
+      emailDomain: row[13] || '', // N = Email Domain
+      bidSystem: row[14] || '', // O = Bid System
+      country: row[15] || '', // P = Country
+      entity: row[16] || '', // Q = Entity/Agency
+      status: row[17] || '', // R = Status
+      dateAdded: row[18] || '', // S = Date Added
+      sourceEmailId: row[19] || '', // T = Source Email ID
+      submissionDate: row[20] || '' // U = Submission Date
     }));
 
-    // Process disregarded bids
+    // Process disregarded bids - CORRECTED COLUMN MAPPINGS
     const disregardedBids = disregardedRows.map(row => ({
-      subject: row[0] || '',
-      entity: row[1] || '',
-      bidSystem: row[2] || '',
-      status: 'disregarded',
-      aiReasoning: row[3] || '',
-      url: row[4] || '',
-      emailDateReceived: row[5] || '',
-      dateAdded: row[6] || ''
+      recommendation: normalizeRecommendation(row[0]), // A = Recommendation
+      scoreDetails: row[1] || '', // B = Score Details
+      aiReasoning: row[2] || '', // C = AI Reasoning
+      emailSummary: row[3] || '', // D = AI Email Summary
+      emailDateReceived: row[4] || '', // E = Email Date Received
+      emailFrom: row[5] || '', // F = Email From
+      keywordsCategory: row[6] || '', // G = Keywords Category
+      keywordsFound: row[7] || '', // H = Keywords Found
+      relevance: row[8] || '', // I = Relevance
+      subject: row[9] || '', // J = Email Subject
+      emailBody: row[10] || '', // K = Email Body
+      url: row[11] || '', // L = URL
+      dueDate: row[12] || '', // M = Due Date
+      significantSnippet: row[13] || '', // N = Significant Snippet
+      emailDomain: row[14] || '', // O = Email Domain
+      bidSystem: row[15] || '', // P = Bid System
+      country: row[16] || '', // Q = Country
+      entity: row[17] || '', // R = Entity/Agency
+      status: row[18] || '', // S = Status
+      dateAdded: row[19] || '', // T = Date Added
+      sourceEmailId: row[20] || '' // U = Source Email ID
     }));
 
-    // Calculate counts
-    const activeBidsCount = activeBids.filter(b => b.recommendation === 'respond').length;
+    // Calculate counts - Debug the filtering
+    console.log('[Bids] Active bids sample:', activeBids.slice(0, 3).map(b => ({ 
+      recommendation: b.recommendation, 
+      subject: b.subject?.substring(0, 50) 
+    })));
+    
+    const respondBids = activeBids.filter(b => b.recommendation === 'respond');
+    console.log('[Bids] Respond bids count:', respondBids.length);
+    
+    const activeBidsCount = respondBids.length;
+    
+    // Debug disregarded bids
+    console.log('[Bids] Disregarded bids sample:', disregardedBids.slice(0, 3).map(b => ({
+      dateAdded: b.dateAdded,
+      emailDateReceived: b.emailDateReceived,
+      subject: b.subject?.substring(0, 50)
+    })));
+    
     const recentDisregardedCount = disregardedBids.filter(b => isRecent(b.dateAdded || b.emailDateReceived)).length;
+    console.log('[Bids] Recent disregarded count:', recentDisregardedCount);
 
     // Priority bids (respond recommendations with due dates soon)
     const priorityBids = activeBids
       .filter(b => b.recommendation === 'respond' && b.daysUntilDue !== null)
       .sort((a, b) => (a.daysUntilDue || 999) - (b.daysUntilDue || 999))
       .slice(0, 5);
+      
+    console.log('[Bids] Priority bids:', priorityBids.length);
 
     return {
       activeBidsCount,
@@ -170,6 +237,7 @@ async function fetchBidsData(auth) {
 async function fetchWebinarData(auth) {
   try {
     if (!CFG.WEBINAR_SHEET_ID) {
+      console.log('[Webinars] WEBINAR_SHEET_ID not set, skipping');
       return {
         upcomingWebinars: [],
         upcomingWebinarRegistrations: 0,
@@ -178,6 +246,7 @@ async function fetchWebinarData(auth) {
       };
     }
 
+    console.log('[Webinars] Starting webinar data fetch from:', CFG.WEBINAR_SHEET_ID);
     const sheets = google.sheets({ version: 'v4', auth });
     
     // Fetch webinar-related sheets
@@ -212,12 +281,22 @@ async function fetchWebinarData(auth) {
     const registrationRows = registrationsRes?.data?.values || [];
     const surveyRows = surveyRes?.data?.values || [];
 
-    // Process webinars
+    // Process webinars - CORRECTED COLUMN MAPPINGS
     const webinars = webinarRows.map(row => ({
-      title: row[0] || '',
-      startTime: row[1] || '',
-      registrationUrl: row[2] || '',
-      daysUntil: daysUntil(row[1])
+      webinarId: row[0] || '', // A = Webinar ID
+      title: row[1] || '', // B = Title
+      date: row[2] || '', // C = Date
+      time: row[3] || '', // D = Time
+      platformLink: row[4] || '', // E = Platform Link
+      registrationUrl: row[5] || '', // F = Registration Form URL
+      status: row[6] || '', // G = Status
+      capacity: row[7] || '', // H = Capacity
+      registrationCount: row[8] || '', // I = Registration Count
+      attendanceCount: row[9] || '', // J = Attendance Count
+      surveyLink: row[10] || '', // K = Survey Link
+      createdDate: row[11] || '', // L = Created Date
+      startTime: `${row[2]} ${row[3]}`, // Combine date and time
+      daysUntil: daysUntil(row[2]) // Calculate from date
     }));
 
     // Upcoming webinars (next 30 days)
@@ -225,17 +304,20 @@ async function fetchWebinarData(auth) {
       .filter(w => w.daysUntil !== null && w.daysUntil >= 0 && w.daysUntil <= 30)
       .sort((a, b) => (a.daysUntil || 999) - (b.daysUntil || 999));
 
-    // Process registrations
+    // Process registrations - CORRECTED COLUMN MAPPINGS
     const registrations = registrationRows.map(row => ({
-      webinarTitle: row[0] || '',
-      name: row[1] || '',
-      email: row[2] || '',
-      registrationDate: row[3] || ''
+      timestamp: row[0] || '', // A = Timestamp
+      webinarId: row[1] || '', // B = Webinar ID
+      name: row[2] || '', // C = Name
+      email: row[3] || '', // D = Email
+      organization: row[4] || '', // E = Organization
+      phone: row[5] || '', // F = Phone
+      registrationDate: row[0] || '' // Use timestamp as registration date
     }));
 
     // Upcoming webinar registrations
     const upcomingWebinarRegistrations = registrations.filter(r => 
-      upcomingWebinars.some(w => w.title === r.webinarTitle)
+      upcomingWebinars.some(w => w.webinarId === r.webinarId)
     ).length;
 
     // Recent registrations (last 7 days)
@@ -243,14 +325,23 @@ async function fetchWebinarData(auth) {
       isRecent(r.registrationDate)
     ).length;
 
-    // Survey contacts to contact (Column J = "Yes")
+    // Survey contacts to contact (Column J = "Yes") - CORRECTED COLUMN MAPPINGS
     const surveyContactsToContact = surveyRows
-      .filter(row => String(row[9] || '').toLowerCase().trim() === 'yes')
+      .filter(row => String(row[9] || '').toLowerCase().trim() === 'yes') // J = Contact request
       .map(row => ({
-        name: row[0] || '',
-        email: row[1] || '',
-        webinarTitle: row[2] || '',
-        responseDate: row[3] || ''
+        timestamp: row[0] || '', // A = Timestamp
+        email: row[1] || '', // B = Email Address
+        webinarId: row[2] || '', // C = Webinar ID
+        relevance: row[3] || '', // D = Relevance
+        presenterRhonda: row[4] || '', // E = Presenter Rhonda
+        presenterChris: row[5] || '', // F = Presenter Chris
+        presenterGuest: row[6] || '', // G = Presenter Guest
+        sharing: row[7] || '', // H = Sharing
+        attending: row[8] || '', // I = Attending
+        contactRequest: row[9] || '', // J = Contact Request (Yes/No)
+        comments: row[10] || '', // K = Comments
+        name: row[1] || '', // Use email as name fallback
+        responseDate: row[0] || '' // Use timestamp as response date
       }));
 
     return {
@@ -273,6 +364,7 @@ async function fetchWebinarData(auth) {
 async function fetchSocialMediaData(auth) {
   try {
     if (!CFG.SOCIAL_MEDIA_SHEET_ID) {
+      console.log('[Social] SOCIAL_MEDIA_SHEET_ID not set, skipping');
       return {
         recentSocialPosts: [],
         scheduledSocialCount: 0,
@@ -281,6 +373,7 @@ async function fetchSocialMediaData(auth) {
       };
     }
 
+    console.log('[Social] Starting social media data fetch from:', CFG.SOCIAL_MEDIA_SHEET_ID);
     const sheets = google.sheets({ version: 'v4', auth });
     
     const res = await withTimeout(
@@ -295,14 +388,30 @@ async function fetchSocialMediaData(auth) {
     const rows = res?.data?.values || [];
     
     const posts = rows.map(row => ({
-      title: row[0] || '',
-      text: row[1] || '',
-      platform: row[2] || '',
-      url: row[3] || '',
-      permalink: row[4] || '',
-      publishedAt: row[5] || '',
-      scheduledFor: row[6] || '',
-      status: row[7] || ''
+      timestamp: row[0] || '', // A = timestamp
+      status: row[1] || '', // B = status
+      contentType: row[2] || '', // C = contentType
+      title: row[3] || '', // D = title
+      body: row[4] || '', // E = body
+      imageUrl: row[5] || '', // F = imageUrl
+      videoUrl: row[6] || '', // G = videoUrl
+      platforms: row[7] || '', // H = platforms
+      scheduleDate: row[8] || '', // I = scheduleDate
+      publishedDate: row[9] || '', // J = publishedDate
+      postPermalink: row[10] || '', // K = postPermalink
+      facebookPostId: row[11] || '', // L = facebookPostId
+      linkedInPostId: row[12] || '', // M = linkedInPostId
+      wordPressPostId: row[13] || '', // N = wordPressPostId
+      brevoEmailId: row[14] || '', // O = brevoEmailId
+      analytics: row[15] || '', // P = analytics
+      createdBy: row[16] || '', // Q = createdBy
+      tags: row[17] || '', // R = tags
+      url: row[10] || '', // Use postPermalink as url
+      permalink: row[10] || '', // Use postPermalink as permalink
+      text: row[4] || '', // Use body as text
+      platform: row[7] || '', // Use platforms as platform
+      publishedAt: row[9] || '', // Use publishedDate as publishedAt
+      scheduledFor: row[8] || '' // Use scheduleDate as scheduledFor
     }));
 
     // Recent published posts (last 7 days)
@@ -344,18 +453,13 @@ async function fetchSocialMediaData(auth) {
 
 async function fetchBidSystemsData(auth) {
   try {
-    if (!CFG.BID_SYSTEMS_SHEET_ID) {
-      return {
-        activeBidSystemsCount: 0,
-        recentBidSystemChanges: []
-      };
-    }
-
+    console.log('[BidSystems] Using main sheet Active_Admin tab for bid systems data');
     const sheets = google.sheets({ version: 'v4', auth });
     
+    // Use the main sheet's Active_Admin tab instead of separate sheet
     const res = await withTimeout(
       sheets.spreadsheets.values.get({
-        spreadsheetId: CFG.BID_SYSTEMS_SHEET_ID,
+        spreadsheetId: CFG.SHEET_ID, // Use main sheet
         range: 'Active_Admin!A2:Z'
       }),
       'bidSystems',
@@ -364,11 +468,29 @@ async function fetchBidSystemsData(auth) {
 
     const rows = res?.data?.values || [];
     
+    if (rows.length === 0) {
+      console.log('[BidSystems] No data found in Active_Admin tab');
+      return {
+        activeBidSystemsCount: 0,
+        recentBidSystemChanges: []
+      };
+    }
+    
+    console.log('[BidSystems] Found data in Active_Admin tab, rows:', rows.length);
+    
     const systems = rows.map(row => ({
-      name: row[0] || '',
-      status: row[1] || '',
-      dateAdded: row[2] || '',
-      dateModified: row[3] || ''
+      recommendation: row[0] || '', // A = Recommendation
+      emailDateReceived: row[1] || '', // B = Email Date Received
+      emailFrom: row[2] || '', // C = Email From
+      emailSubject: row[3] || '', // D = Email Subject
+      emailBody: row[4] || '', // E = Email Body
+      bidSystem: row[5] || '', // F = Bid System
+      emailDomain: row[6] || '', // G = Email Domain
+      dateAdded: row[7] || '', // H = Date Added
+      sourceEmailId: row[8] || '', // I = Source Email ID
+      status: row[9] || '', // J = Status
+      name: row[5] || '', // Use Bid System as name
+      dateModified: row[7] || '' // Use Date Added as dateModified
     }));
 
     // Active systems
@@ -472,6 +594,27 @@ exports.handler = async (event, context) => {
       social: socialData.recentSocialPosts?.length || 0,
       systems: bidSystemsData.activeBidSystemsCount,
       news: newsData.newsArticles?.length || 0
+    });
+    
+    // Debug each data source
+    console.log('[ComprehensiveTicker] Detailed data:', {
+      bidsData: {
+        activeBidsCount: bidsData.activeBidsCount,
+        recentDisregardedCount: bidsData.recentDisregardedCount,
+        priorityBidsCount: bidsData.priorityBids?.length || 0
+      },
+      webinarData: {
+        upcomingWebinars: webinarData.upcomingWebinars?.length || 0,
+        registrations: webinarData.upcomingWebinarRegistrations || 0
+      },
+      socialData: {
+        recentPosts: socialData.recentSocialPosts?.length || 0,
+        scheduled: socialData.scheduledSocialCount || 0
+      },
+      bidSystemsData: {
+        activeCount: bidSystemsData.activeBidSystemsCount || 0,
+        recentChanges: bidSystemsData.recentBidSystemChanges?.length || 0
+      }
     });
 
     // Combine all data
