@@ -12,7 +12,7 @@ const CFG = {
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '8000', 10),
-  NEWS_QUERY: process.env.NEWS_QUERY || 'K12 mental health programs OR school psychology services OR student resilience training OR higher education mental health OR university counseling services OR corporate employee wellbeing OR workplace mental health OR HR resilience programs OR employee psychological health OR city mental health funding OR county mental health services OR state mental health budget OR community mental health programs OR municipal mental health initiatives',
+  NEWS_QUERY: process.env.NEWS_QUERY || '(corporate employee wellbeing OR workplace mental health OR HR resilience programs) OR (city mental health funding OR county mental health services OR state mental health budget) OR (K12 mental health programs OR higher education mental health OR university counseling services) OR (police mental health OR first responder psychological health OR firefighter resilience OR EMS mental health) OR (military mental health OR defense department psychological health OR veteran mental health) OR (federal mental health programs OR government employee wellbeing OR federal agency mental health)',
   NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '10', 10),
 };
 
@@ -86,14 +86,117 @@ async function fetchRelevantNews(query, limit) {
   }
 }
 
+function generateFallbackAnalysis(newsData) {
+  const articles = newsData.articles || [];
+  const corporateArticles = articles.filter(a => 
+    a.title.toLowerCase().includes('corporate') || 
+    a.title.toLowerCase().includes('workplace') || 
+    a.title.toLowerCase().includes('employee') ||
+    a.title.toLowerCase().includes('hr')
+  );
+  const communityArticles = articles.filter(a => 
+    a.title.toLowerCase().includes('city') || 
+    a.title.toLowerCase().includes('county') || 
+    a.title.toLowerCase().includes('state') ||
+    a.title.toLowerCase().includes('municipal') ||
+    a.title.toLowerCase().includes('community')
+  );
+  const educationArticles = articles.filter(a => 
+    a.title.toLowerCase().includes('school') || 
+    a.title.toLowerCase().includes('university') || 
+    a.title.toLowerCase().includes('college') ||
+    a.title.toLowerCase().includes('student') ||
+    a.title.toLowerCase().includes('education')
+  );
+  const firstResponderArticles = articles.filter(a => 
+    a.title.toLowerCase().includes('police') || 
+    a.title.toLowerCase().includes('firefighter') || 
+    a.title.toLowerCase().includes('ems') ||
+    a.title.toLowerCase().includes('first responder') ||
+    a.title.toLowerCase().includes('emergency')
+  );
+  const defenseArticles = articles.filter(a => 
+    a.title.toLowerCase().includes('military') || 
+    a.title.toLowerCase().includes('defense') || 
+    a.title.toLowerCase().includes('veteran') ||
+    a.title.toLowerCase().includes('army') ||
+    a.title.toLowerCase().includes('navy') ||
+    a.title.toLowerCase().includes('air force')
+  );
+  const federalArticles = articles.filter(a => 
+    a.title.toLowerCase().includes('federal') || 
+    a.title.toLowerCase().includes('government') || 
+    a.title.toLowerCase().includes('agency') ||
+    a.title.toLowerCase().includes('department')
+  );
+
+  const summary = `Found ${articles.length} relevant articles across six key sectors: ${corporateArticles.length} corporate/HR initiatives, ${communityArticles.length} municipal/community programs, ${educationArticles.length} education sector developments, ${firstResponderArticles.length} first responder programs, ${defenseArticles.length} military/defense initiatives, and ${federalArticles.length} federal agency programs.`;
+
+  const priorities = [];
+  if (corporateArticles.length > 0) {
+    priorities.push({
+      title: 'Corporate Mental Health Programs',
+      action: 'Review corporate wellness trends and HR initiatives',
+      urgency: 'medium'
+    });
+  }
+  if (communityArticles.length > 0) {
+    priorities.push({
+      title: 'Municipal Mental Health Funding',
+      action: 'Monitor city/county mental health budget allocations',
+      urgency: 'high'
+    });
+  }
+  if (educationArticles.length > 0) {
+    priorities.push({
+      title: 'Education Sector Mental Health',
+      action: 'Track K12 and higher education mental health programs',
+      urgency: 'medium'
+    });
+  }
+  if (firstResponderArticles.length > 0) {
+    priorities.push({
+      title: 'First Responder Mental Health',
+      action: 'Monitor police, fire, and EMS psychological health programs',
+      urgency: 'high'
+    });
+  }
+  if (defenseArticles.length > 0) {
+    priorities.push({
+      title: 'Military/Defense Mental Health',
+      action: 'Track military and veteran mental health initiatives',
+      urgency: 'high'
+    });
+  }
+  if (federalArticles.length > 0) {
+    priorities.push({
+      title: 'Federal Agency Mental Health',
+      action: 'Monitor federal government mental health programs',
+      urgency: 'medium'
+    });
+  }
+
+  return {
+    executiveSummary: summary,
+    topPriorities: priorities,
+    newsOpportunities: articles.slice(0, 3).map(article => ({
+      headline: article.title,
+      relevance: 'Relevant to mental health and resilience training market',
+      action: 'Review for potential market opportunities'
+    })),
+    marketTrends: [
+      {
+        trend: 'Growing focus on workplace mental health',
+        impact: 'Increased demand for corporate resilience training',
+        recommendation: 'Develop corporate wellness program offerings'
+      }
+    ]
+  };
+}
+
 async function getNewsAIInsights(newsData) {
   if (!process.env.OPENAI_API_KEY) {
-    return {
-      executiveSummary: 'AI analysis unavailable (no API key configured).',
-      topPriorities: [],
-      newsOpportunities: [],
-      marketTrends: []
-    };
+    return generateFallbackAnalysis(newsData);
   }
 
   const systemPrompt = `
@@ -109,6 +212,9 @@ Focus on:
 - K12 and Higher Education mental health programs and student resilience initiatives
 - Corporate HR programs for employee wellbeing, psychological health, and workplace resilience
 - City, county, and state funding for community mental health services
+- First responder mental health challenges and psychological health programs (police, fire, EMS)
+- Military and defense department mental health initiatives and veteran programs
+- Federal agency mental health programs and government employee wellbeing
 - Educational psychology services and school-based mental health programs
 - Corporate wellness trends and employee assistance programs
 - Municipal mental health initiatives and community resilience programs
@@ -138,12 +244,8 @@ ${JSON.stringify(newsData, null, 2)}
     return JSON.parse(txt);
   } catch (err) {
     console.error('[NewsAI] OpenAI failed:', err.message);
-    return {
-      executiveSummary: 'AI analysis unavailable. News data processed below.',
-      topPriorities: [],
-      newsOpportunities: [],
-      marketTrends: []
-    };
+    console.log('[NewsAI] Using fallback analysis due to timeout or error');
+    return generateFallbackAnalysis(newsData);
   }
 }
 
