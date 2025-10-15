@@ -42,6 +42,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     social: null,
     news: null
   });
+  const [showAllNews, setShowAllNews] = useState(false);
 
   // Individual section loaders - only load cached data on mount, refresh on button click
   const loadBidsAnalysis = useCallback(async (bypassCache = false) => {
@@ -611,7 +612,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Relevant News (Last 90 Days)</h3>
                   <div className="space-y-3">
-                    {aiInsights.news.articles.slice(0, 5).map((article, idx) => (
+                    {aiInsights.news.articles.slice(0, showAllNews ? aiInsights.news.articles.length : 5).map((article, idx) => (
                       <div key={idx} className="border border-gray-200 rounded p-3 hover:border-orange-400 transition-colors">
                         <a href={article.link} target="_blank" rel="noopener noreferrer" className="block">
                           <h4 className="font-semibold text-gray-900 hover:text-orange-600 transition-colors mb-2">
@@ -638,9 +639,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                     ))}
                   </div>
                   {aiInsights.news.articles.length > 5 && (
-                    <p className="text-xs text-gray-500 mt-3 text-center">
-                      Showing top 5 of {aiInsights.news.articles.length} relevant articles
-                    </p>
+                    <div className="mt-4 text-center">
+                      <button
+                        onClick={() => setShowAllNews(!showAllNews)}
+                        className="px-4 py-2 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors text-sm font-medium"
+                      >
+                        {showAllNews ? 'Show Less' : `View All ${aiInsights.news.articles.length} Articles`}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
