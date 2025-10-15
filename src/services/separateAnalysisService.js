@@ -36,7 +36,20 @@ async function fetchAnalysisSection(section, bypassCache = false) {
   }
 
   try {
-    const response = await fetch(`/.netlify/functions/get${section.charAt(0).toUpperCase() + section.slice(1)}Analysis`, {
+    // Map section names to correct function names
+    const functionMap = {
+      'bids': 'getBidsAnalysis',
+      'webinars': 'getWebinarAnalysis', 
+      'social': 'getSocialAnalysis',
+      'news': 'getNewsAnalysis'
+    };
+    
+    const functionName = functionMap[section];
+    if (!functionName) {
+      throw new Error(`Unknown section: ${section}`);
+    }
+    
+    const response = await fetch(`/.netlify/functions/${functionName}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

@@ -9,8 +9,8 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const CFG = {
   OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '3000', 10),
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '12000', 10),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '8000', 10),
   NEWS_QUERY: process.env.NEWS_QUERY || 'mental health training government OR resilience training military OR law enforcement mental health programs',
   NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '10', 10),
