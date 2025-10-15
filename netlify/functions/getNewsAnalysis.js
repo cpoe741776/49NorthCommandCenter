@@ -12,7 +12,7 @@ const CFG = {
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '8000', 10),
-  NEWS_QUERY: process.env.NEWS_QUERY || 'mental health training government OR resilience training military OR law enforcement mental health programs',
+  NEWS_QUERY: process.env.NEWS_QUERY || 'K12 mental health programs OR school psychology services OR student resilience training OR higher education mental health OR university counseling services OR corporate employee wellbeing OR workplace mental health OR HR resilience programs OR employee psychological health OR city mental health funding OR county mental health services OR state mental health budget OR community mental health programs OR municipal mental health initiatives',
   NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '10', 10),
 };
 
@@ -97,7 +97,7 @@ async function getNewsAIInsights(newsData) {
   }
 
   const systemPrompt = `
-You are a market intelligence analyst for 49 North (Mental Armor™), specializing in government contracting opportunities and resilience training market trends.
+You are a market intelligence analyst for 49 North (Mental Armor™), specializing in psychological health and resilience training across education, corporate, and community sectors.
 
 Analyze the news data and return JSON with:
 - executiveSummary: Brief overview of market opportunities and trends
@@ -106,10 +106,12 @@ Analyze the news data and return JSON with:
 - marketTrends: Array of {trend, impact, recommendation} for market insights
 
 Focus on:
-- Government contracting opportunities
-- Mental health and resilience training trends
-- Military and law enforcement programs
-- Policy changes affecting your market
+- K12 and Higher Education mental health programs and student resilience initiatives
+- Corporate HR programs for employee wellbeing, psychological health, and workplace resilience
+- City, county, and state funding for community mental health services
+- Educational psychology services and school-based mental health programs
+- Corporate wellness trends and employee assistance programs
+- Municipal mental health initiatives and community resilience programs
 `.trim();
 
   const userPrompt = `
