@@ -23,16 +23,7 @@ const WebinarOperations = () => {
       setData(webinarData);
       setError(null);
 
-      const { generateWebinarTickerItems } = await import('../services/tickerService');
-      const webinarTickerItems = generateWebinarTickerItems(webinarData);
-
-      if (webinarTickerItems.length > 0) {
-        await fetch('/.netlify/functions/refreshAutoTickerItems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: webinarTickerItems }),
-        });
-      }
+      // Ticker integration removed - now handled by comprehensive ticker system
     } catch (err) {
       setError(err.message);
     } finally {

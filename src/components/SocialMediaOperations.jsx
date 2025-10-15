@@ -30,20 +30,7 @@ const SocialMediaOperations = () => {
       setPosts(Array.isArray(data.posts) ? data.posts : []);
       setSummary(data.summary || { totalPosts: 0, published: 0, scheduled: 0, drafts: 0 });
 
-      // Enrich ticker if generator exists
-      try {
-        const { generateSocialMediaTickerItems, pushAutoTickerItems } = await import('../services/tickerService');
-        if (typeof generateSocialMediaTickerItems === 'function') {
-          const items = generateSocialMediaTickerItems(data.posts || []);
-          if (Array.isArray(items) && items.length > 0) {
-            await (pushAutoTickerItems ? pushAutoTickerItems(items, 'auto-social') :
-              fetch('/.netlify/functions/refreshAutoTickerItems', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items, source: 'auto-social' })
-              }));
-          }
-        }
-      } catch (_) { /* optional ticker; ignore */ }
+      // Ticker integration removed - now handled by comprehensive ticker system
     } catch (e) {
       setErr(e?.message || 'Failed to load social posts');
     } finally {

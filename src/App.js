@@ -75,7 +75,6 @@ const App = () => {
         console.warn('getSystemAdminEmails non-200:', resp.status);
         return;
       }
-      const data = await resp.json().catch(() => ({}));
       // Generate ticker from admin emails - REMOVED (now handled by comprehensive ticker)
       // The comprehensive ticker will handle all data aggregation
     } catch (err) {
@@ -229,12 +228,7 @@ const App = () => {
     else setCurrentPage('dashboard');
   }, []);
 
-  const onTickerKeyDown = useCallback((e, item) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      navigateFromTicker(item);
-    }
-  }, [navigateFromTicker]);
+  // Removed onTickerKeyDown - now handled inline in ticker rendering
 
   if (authLoading) {
     return (
