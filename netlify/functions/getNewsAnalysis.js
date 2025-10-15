@@ -12,7 +12,7 @@ const CFG = {
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '8000', 10),
-  NEWS_QUERY: process.env.NEWS_QUERY || '(corporate employee wellbeing OR workplace mental health OR HR resilience programs) OR (city mental health funding OR county mental health services OR state mental health budget) OR (K12 mental health programs OR higher education mental health OR university counseling services) OR (police mental health OR first responder psychological health OR firefighter resilience OR EMS mental health) OR (military mental health OR defense department psychological health OR veteran mental health) OR (federal mental health programs OR government employee wellbeing OR federal agency mental health)',
+  NEWS_QUERY: process.env.NEWS_QUERY || 'mental health OR psychological health OR resilience training OR employee wellbeing OR workplace mental health OR police mental health OR firefighter mental health OR military mental health OR veteran mental health OR school mental health OR university mental health OR corporate mental health OR government mental health OR community mental health',
   NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '10', 10),
 };
 

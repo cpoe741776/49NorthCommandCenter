@@ -36,14 +36,21 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     social: null,
     news: null
   });
+  const [lastRefresh, setLastRefresh] = useState({
+    bids: null,
+    webinars: null,
+    social: null,
+    news: null
+  });
 
-  // Individual section loaders
+  // Individual section loaders - only load cached data on mount, refresh on button click
   const loadBidsAnalysis = useCallback(async (bypassCache = false) => {
     try {
       setAiLoading(prev => ({ ...prev, bids: true }));
       setAiError(prev => ({ ...prev, bids: null }));
       const data = await fetchBidsAnalysis(bypassCache);
       setAiInsights(prev => ({ ...prev, bids: data }));
+      setLastRefresh(prev => ({ ...prev, bids: new Date() }));
     } catch (err) {
       setAiError(prev => ({ ...prev, bids: err?.message || 'Failed to load bids analysis' }));
     } finally {
@@ -57,6 +64,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       setAiError(prev => ({ ...prev, webinars: null }));
       const data = await fetchWebinarAnalysis(bypassCache);
       setAiInsights(prev => ({ ...prev, webinars: data }));
+      setLastRefresh(prev => ({ ...prev, webinars: new Date() }));
     } catch (err) {
       setAiError(prev => ({ ...prev, webinars: err?.message || 'Failed to load webinar analysis' }));
     } finally {
@@ -70,6 +78,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       setAiError(prev => ({ ...prev, social: null }));
       const data = await fetchSocialAnalysis(bypassCache);
       setAiInsights(prev => ({ ...prev, social: data }));
+      setLastRefresh(prev => ({ ...prev, social: new Date() }));
     } catch (err) {
       setAiError(prev => ({ ...prev, social: err?.message || 'Failed to load social analysis' }));
     } finally {
@@ -83,29 +92,42 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       setAiError(prev => ({ ...prev, news: null }));
       const data = await fetchNewsAnalysis(bypassCache);
       setAiInsights(prev => ({ ...prev, news: data }));
-      } catch (err) {
+      setLastRefresh(prev => ({ ...prev, news: new Date() }));
+    } catch (err) {
       setAiError(prev => ({ ...prev, news: err?.message || 'Failed to load news analysis' }));
-      } finally {
+    } finally {
       setAiLoading(prev => ({ ...prev, news: false }));
-      }
+    }
   }, []);
 
-  // Initial load - load all sections in parallel
+  // Initial load - only load cached data, no auto-refresh
   useEffect(() => {
-    const loadAllSections = async () => {
+    const loadCachedSections = async () => {
       try {
         await Promise.all([
-          fetchBidsAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, bids: data }))).catch(() => {}),
-          fetchWebinarAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, webinars: data }))).catch(() => {}),
-          fetchSocialAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, social: data }))).catch(() => {}),
-          fetchNewsAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, news: data }))).catch(() => {})
+          fetchBidsAnalysis(false).then(data => {
+            setAiInsights(prev => ({ ...prev, bids: data }));
+            setLastRefresh(prev => ({ ...prev, bids: new Date() }));
+          }).catch(() => {}),
+          fetchWebinarAnalysis(false).then(data => {
+            setAiInsights(prev => ({ ...prev, webinars: data }));
+            setLastRefresh(prev => ({ ...prev, webinars: new Date() }));
+          }).catch(() => {}),
+          fetchSocialAnalysis(false).then(data => {
+            setAiInsights(prev => ({ ...prev, social: data }));
+            setLastRefresh(prev => ({ ...prev, social: new Date() }));
+          }).catch(() => {}),
+          fetchNewsAnalysis(false).then(data => {
+            setAiInsights(prev => ({ ...prev, news: data }));
+            setLastRefresh(prev => ({ ...prev, news: new Date() }));
+          }).catch(() => {})
         ]);
       } catch (e) {
-        console.warn('[Dashboard] Initial load failed:', e);
+        console.warn('[Dashboard] Initial cached load failed:', e);
       }
     };
     
-    loadAllSections();
+    loadCachedSections();
   }, []);
 
   if (loading) {
@@ -258,20 +280,27 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       <div className="space-y-6">
         {/* Bids Analysis Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
               <FileText className="text-blue-600" size={24} />
-              <h2 className="text-xl font-bold text-gray-900">Bids Analysis</h2>
-          </div>
-          <button
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Bids Analysis</h2>
+                {lastRefresh.bids && (
+                  <p className="text-xs text-gray-500">
+                    Last updated: {lastRefresh.bids.toLocaleString()}
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
               onClick={() => loadBidsAnalysis(true)}
               disabled={aiLoading.bids}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
-          >
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
+            >
               <RefreshCw size={16} className={aiLoading.bids ? 'animate-spin' : ''} />
               {aiLoading.bids ? 'Analyzing...' : 'Refresh Analysis'}
-          </button>
-        </div>
+            </button>
+          </div>
 
           {aiLoading.bids && (
             <div className="flex items-center justify-center py-8">
@@ -362,7 +391,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Video className="text-green-600" size={24} />
-              <h2 className="text-xl font-bold text-gray-900">Webinar Analysis</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Webinar Analysis</h2>
+                {lastRefresh.webinars && (
+                  <p className="text-xs text-gray-500">
+                    Last updated: {lastRefresh.webinars.toLocaleString()}
+                  </p>
+                )}
+              </div>
             </div>
             <button
               onClick={() => loadWebinarAnalysis(true)}
@@ -449,7 +485,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Share2 className="text-purple-600" size={24} />
-              <h2 className="text-xl font-bold text-gray-900">Social Media Analysis</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Social Media Analysis</h2>
+                {lastRefresh.social && (
+                  <p className="text-xs text-gray-500">
+                    Last updated: {lastRefresh.social.toLocaleString()}
+                  </p>
+                )}
+              </div>
             </div>
             <button
               onClick={() => loadSocialAnalysis(true)}
@@ -517,7 +560,14 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Newspaper className="text-orange-600" size={24} />
-              <h2 className="text-xl font-bold text-gray-900">News Analysis</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">News Analysis</h2>
+                {lastRefresh.news && (
+                  <p className="text-xs text-gray-500">
+                    Last updated: {lastRefresh.news.toLocaleString()}
+                  </p>
+                )}
+              </div>
             </div>
             <button
               onClick={() => loadNewsAnalysis(true)}
