@@ -41,45 +41,68 @@ function sanitize(s) {
 
 async function fetchRelevantNews(query, limit) {
   try {
-    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-    const res = await withTimeout(fetch(url), 'newsFetch', CFG.NEWS_TIMEOUT_MS);
-    if (!res) return [];
-    if (!res.ok) return [];
-    const xml = await res.text();
-
-    const items = [];
-    const regexes = [
-      /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g,
-      /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g
+    // Search multiple regions: US, Canada, UK
+    const regions = [
+      { gl: 'US', ceid: 'US:en', name: 'US' },
+      { gl: 'CA', ceid: 'CA:en', name: 'Canada' },
+      { gl: 'GB', ceid: 'GB:en', name: 'UK' }
     ];
+    
+    const allArticles = [];
+    
+    for (const region of regions) {
+      try {
+        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=${region.gl}&ceid=${region.ceid}`;
+        const res = await withTimeout(fetch(url), `newsFetch-${region.name}`, CFG.NEWS_TIMEOUT_MS);
+        if (!res || !res.ok) continue;
+        const xml = await res.text();
+        
+        const items = [];
+        const regexes = [
+          /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g,
+          /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g
+        ];
 
-    for (let rx of regexes) {
-      let m;
-      while ((m = rx.exec(xml)) && items.length < limit * 2) {
-        items.push({
-          title: sanitize(m[1]),
-          link: sanitize(m[2]),
-          pubDate: sanitize(m[3]),
-          source: 'Google News'
-        });
+        for (let rx of regexes) {
+          let m;
+          while ((m = rx.exec(xml)) && items.length < limit) {
+            items.push({
+              title: sanitize(m[1]),
+              link: sanitize(m[2]),
+              pubDate: sanitize(m[3]),
+              source: 'Google News',
+              region: region.name
+            });
+          }
+          if (items.length) break;
+        }
+        
+        allArticles.push(...items);
+      } catch (e) {
+        console.warn(`[News] Failed to fetch from ${region.name}:`, e?.message);
       }
-      if (items.length) break;
     }
-
+    
+    if (allArticles.length === 0) return [];
+    
+    // Process and deduplicate articles
     const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
     const seen = new Map();
-    for (const it of items) {
-      const key = (it.link || it.title).trim();
-      const ts = Date.parse(it.pubDate || '') || 0;
+    
+    for (const article of allArticles) {
+      const key = (article.link || article.title).trim();
+      const ts = Date.parse(article.pubDate || '') || 0;
       if (ts > 0 && ts < cutoff) continue;
       const prev = seen.get(key);
       if (!prev || ts > (Date.parse(prev.pubDate || '') || 0)) {
-        seen.set(key, it);
+        seen.set(key, article);
       }
     }
+    
     return Array.from(seen.values())
       .sort((a, b) => Date.parse(b.pubDate || '') - Date.parse(a.pubDate || ''))
       .slice(0, limit);
+      
   } catch (e) {
     console.error('[News] Fetch error:', e?.message);
     return [];

@@ -621,6 +621,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                             <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded">
                               {article.source}
                             </span>
+                            {article.region && (
+                              <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded">
+                                {article.region}
+                              </span>
+                            )}
                             <span>{article.daysAgo} days ago</span>
                             {article.daysAgo <= 7 && (
                               <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
