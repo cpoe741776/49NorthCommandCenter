@@ -7,7 +7,7 @@ function readCache(key) {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-    const { etag, ts, data } = JSON.parse(raw);
+    const { ts, data } = JSON.parse(raw);
     if (Date.now() - ts > CACHE_TTL_MS) {
       localStorage.removeItem(key);
       return null;
@@ -21,7 +21,6 @@ function readCache(key) {
 function writeCache(key, data) {
   try {
     localStorage.setItem(key, JSON.stringify({ 
-      etag: '', 
       ts: Date.now(), 
       data 
     }));

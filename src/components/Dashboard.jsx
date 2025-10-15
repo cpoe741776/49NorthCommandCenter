@@ -6,13 +6,8 @@ import {
   FileText,
   Video,
   Share2,
-  TrendingUp,
-  AlertTriangle,
-  Sparkles,
   RefreshCw,
-  ChevronRight,
   Mail,
-  Target,
   Newspaper
 } from 'lucide-react';
 import { 
@@ -21,9 +16,6 @@ import {
   fetchSocialAnalysis, 
   fetchNewsAnalysis 
 } from '../services/separateAnalysisService';
-
-const CACHE_KEY = 'aiInsightsCache';
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiInsights, setAiInsights] = useState({
