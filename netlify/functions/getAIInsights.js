@@ -6,6 +6,7 @@ const OpenAI = require('openai');
 const { corsHeaders, methodGuard, ok, bad, checkAuth, safeJson } = require('./_utils/http');
 const { getGoogleAuth } = require('./_utils/google');
 
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ---- Config ----
@@ -554,18 +555,16 @@ exports.handler = async (event, context) => {
     }
 
     // Google auth
-    let auth;
-    try {
-      auth = getGoogleAuth();
-      await auth.authorize();
-    } catch (authErr) {
-      console.error('[Insights] Google auth failure:', authErr?.message);
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({ error: 'Google authentication failed' })
-      };
-    }
+    // Google auth (explicit)
+let auth;
+try {
+   auth = getGoogleAuth();
+  await auth.authorize();
+ } catch (authErr) {
+   console.error('[Insights] Google auth failure:', authErr?.message);
+   return { statusCode: 503, headers, body: JSON.stringify({ error: 'Google authentication failed' }) };
+ }
+
 
     const sheets = google.sheets({ version: 'v4', auth });
 
