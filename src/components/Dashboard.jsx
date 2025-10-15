@@ -556,13 +556,13 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           )}
         </div>
 
-        {/* News Analysis Section */}
+        {/* Relevant News Articles Section */}
         <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-6 rounded-lg shadow-lg border border-orange-200">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Newspaper className="text-orange-600" size={24} />
               <div>
-                <h2 className="text-xl font-bold text-gray-900">News Analysis</h2>
+                <h2 className="text-xl font-bold text-gray-900">Relevant News Articles</h2>
                 {lastRefresh.news && (
                   <p className="text-xs text-gray-500">
                     Last updated: {lastRefresh.news.toLocaleString()}
@@ -603,11 +603,6 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
 
           {!aiLoading.news && !aiError.news && aiInsights.news && (
             <div className="space-y-4">
-              <div className="bg-white rounded-lg p-4 border border-orange-200">
-                <h3 className="font-semibold text-gray-900 mb-2">Executive Summary</h3>
-                <p className="text-gray-700">{aiInsights.news.executiveSummary}</p>
-              </div>
-
               {Array.isArray(aiInsights.news.articles) && aiInsights.news.articles.length > 0 && (
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
                   <h3 className="font-semibold text-gray-900 mb-3">US News (Last 90 Days)</h3>
@@ -650,8 +645,8 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                   )}
                 </div>
               )}
-              </div>
-            )}
+            </div>
+          )}
           </div>
       </div>
 
