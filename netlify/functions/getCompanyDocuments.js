@@ -1,88 +1,82 @@
-// getCompanyDocuments.js //
+// netlify/functions/getCompanyDocuments.js
+const { getGoogleAuth, sheetsClient } = require('./_utils/google');
+const { corsHeaders, methodGuard, ok, serverErr } = require('./_utils/http');
 
-const { google } = require('googleapis');
+const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID; // Sheet with "Uploads" tab (A:G)
 
-const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID;
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers?.origin);
 
-exports.handler = async (event, context) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  };
-
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  // Support GET and OPTIONS
+  const guard = methodGuard(event, headers, 'GET', 'OPTIONS');
+  if (guard) return guard;
 
   try {
-    let credentials;
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-      const decoded = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8');
-      credentials = JSON.parse(decoded);
-    } else {
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    if (!SHEET_ID) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ success: false, error: 'COMPANY_DATA_SHEET_ID not set' })
+      };
     }
 
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-    });
+    const auth = getGoogleAuth();
+    await auth.authorize();
+    const sheets = sheetsClient(auth);
 
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    // Fetch CompanyDocuments
-    const response = await sheets.spreadsheets.values.get({
+    // Expecting Uploads!A:G matching uploadDocument.js appends:
+    // A uploadedAt | B driveFileId | C filename | D mimeType
+    // E webViewLink | F webContentLink | G meta JSON
+    const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'CompanyDocuments!A2:I',
+      range: 'Uploads!A:G',
     });
 
-    const rows = response.data.values || [];
+    const rows = res.data.values || [];
 
-    const documents = rows.map((row, index) => ({
-      id: row[0] || `DOC-${index + 1}`,
-      category: row[1] || 'Uncategorized',
-      documentName: row[2] || '',
-      fileType: row[3] || '',
-      uploadDate: row[4] || '',
-      driveFileId: row[5] || '',
-      driveLink: row[6] || '',
-      fileSize: row[7] || '',
-      notes: row[8] || ''
-    }));
+    // Detect header row (look for "uploaded" in A1); if present, slice it off
+    const hasHeader = rows[0] && /uploaded/i.test(String(rows[0][0] || ''));
+    const dataRows = hasHeader ? rows.slice(1) : rows;
 
-    // Group by category
+    const documents = dataRows.map((r, i) => {
+      // Compute 1-based sheet row number for deletion:
+      // if header exists, first data row is row 2; else row 1
+      const rowNumber = (hasHeader ? 2 : 1) + i;
+
+      const uploadedAt = r[0] || '';
+      const driveFileId = r[1] || '';
+      const documentName = r[2] || '';
+      const mimeType = r[3] || '';
+      const webViewLink = r[4] || '';
+      const webContentLink = r[5] || '';
+      let meta = {};
+      try { meta = JSON.parse(r[6] || '{}'); } catch { meta = {}; }
+
+      return {
+        id: rowNumber, // used by deleteDocument to delete the row
+        driveFileId,   // used by deleteDocument to delete the Drive file (optional)
+        documentName,
+        fileType: mimeType || 'application/octet-stream',
+        fileSize: meta.sizeReadable || '',
+        uploadDate: uploadedAt ? new Date(uploadedAt).toLocaleDateString() : '',
+        notes: meta.notes || '',
+        category: meta.category || 'Other',
+        driveLink: webViewLink || webContentLink || '',
+        // optional raw fields for debugging/auditing:
+        _uploadedAtRaw: uploadedAt || '',
+      };
+    });
+
+    // Group by category for the UI
     const grouped = documents.reduce((acc, doc) => {
-      if (!acc[doc.category]) {
-        acc[doc.category] = [];
-      }
-      acc[doc.category].push(doc);
+      const key = doc.category || 'Other';
+      (acc[key] ||= []).push(doc);
       return acc;
     }, {});
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        documents,
-        grouped,
-        summary: {
-          total: documents.length,
-          categories: Object.keys(grouped).length
-        }
-      })
-    };
-
-  } catch (error) {
-    console.error('Error fetching documents:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message
-      })
-    };
+    return ok(headers, { success: true, grouped, flat: documents });
+  } catch (e) {
+    console.error('getCompanyDocuments error:', e);
+    return serverErr(headers, 'Failed to load company documents');
   }
 };

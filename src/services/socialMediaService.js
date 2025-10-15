@@ -1,31 +1,35 @@
 // src/services/socialMediaService.js
 
-export const fetchSocialMediaContent = async () => {
-  try {
-    const response = await fetch('/.netlify/functions/getSocialMediaContent');
-    if (!response.ok) {
-      throw new Error('Failed to fetch social media content');
-    }
-    const data = await response.json();
-    return {
-      posts: data.posts || [],
-      summary: {
-        totalPosts: data.posts?.length || 0,
-        published: data.posts?.filter(p => p.status === 'Published').length || 0,
-        scheduled: data.posts?.filter(p => p.status === 'Scheduled').length || 0,
-        drafts: data.posts?.filter(p => p.status === 'Draft').length || 0,
-      }
-    };
-  } catch (error) {
-    console.error('Error fetching social media content:', error);
-    return {
-      posts: [],
-      summary: {
-        totalPosts: 0,
-        published: 0,
-        scheduled: 0,
-        drafts: 0,
-      }
-    };
-  }
-};
+// GET posts (optionally filtered)
+export async function fetchSocialMediaContent(params = {}) {
+  const url = new URL('/.netlify/functions/getSocialMediaContent', window.location.origin);
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
+  });
+
+  const res = await fetch(url.toString(), { headers: { 'Content-Type': 'application/json' } });
+  if (!res.ok) throw new Error(`Failed to fetch social posts: ${res.status}`);
+  return res.json(); // { success, posts }
+}
+
+// CREATE (draft) a new post
+export async function createSocialPost(post) {
+  const res = await fetch('/.netlify/functions/createSocialPost', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(post),
+  });
+  if (!res.ok) throw new Error(`Failed to create post: ${res.status}`);
+  return res.json();
+}
+
+// PUBLISH to platforms (supports { postId } OR { postData })
+export async function publishSocialPost(payload) {
+  const res = await fetch('/.netlify/functions/publishSocialPost', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to publish post: ${res.status}`);
+  return res.json();
+}

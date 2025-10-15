@@ -1,6 +1,4 @@
 // netlify/functions/publishSocialPost.js
-// Hardened: CORS/auth, safe JSON, platform-by-platform error capture, Sheets updates
-
 const { google } = require('googleapis');
 const { corsHeaders, methodGuard, safeJson, ok, bad, unauth, serverErr, checkAuth } = require('./_utils/http');
 const { getGoogleAuth } = require('./_utils/google');
@@ -8,46 +6,40 @@ const { getGoogleAuth } = require('./_utils/google');
 const SHEET_ID = process.env.SOCIAL_MEDIA_SHEET_ID;
 const SHEET_TAB = 'MainPostData';
 
-// Defaults can be overridden by env
 const LI_ORG_URN = process.env.LINKEDIN_ORG_URN || 'urn:li:organization:107582691';
 const WP_URL = process.env.WP_POSTS_URL || 'https://mymentalarmor.com/wp-json/wp/v2/posts';
 
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin);
-
   const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
   if (guard) return guard;
-
   if (!checkAuth(event)) return unauth(headers);
 
   const [body, parseErr] = safeJson(event.body);
   if (parseErr) return bad(headers, 'Invalid JSON body');
 
-  // We allow either { postId } or a full { postData } payload.
   const postId = body?.postId;
   let postData = body?.postData;
 
   try {
-    // Google auth
     const auth = getGoogleAuth();
     await auth.authorize();
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Pull postData from Sheets if necessary
+    // Load from sheet if postData not provided
     let rowIndex = null;
     if (!postData) {
       if (!postId) return bad(headers, 'postId is required when postData is not supplied');
-
       const rowsResp = await sheets.spreadsheets.values.get({
         spreadsheetId: SHEET_ID,
         range: `${SHEET_TAB}!A2:R`
       });
       const rows = rowsResp.data.values || [];
-      const row = rows.find((r) => r[0] === postId);
+      const row = rows.find(r => r[0] === postId);
       if (!row) return ok(headers, { success: false, error: 'Post not found' });
 
       postData = {
-        timestamp: row[0],
+        postId: row[0],
         status: row[1],
         contentType: row[2],
         title: row[3],
@@ -57,30 +49,22 @@ exports.handler = async (event) => {
         platforms: row[7],
         scheduleDate: row[8],
         publishedDate: row[9],
-        tags: row[17]
+        // K..Q skipped here
+        tags: row[17] // R
       };
 
-      // Find row index for later update
-      const idsResp = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_TAB}!A2:A`
-      });
-      const idRows = idsResp.data.values || [];
-      rowIndex = idRows.findIndex((r) => r[0] === postId) + 2; // +2 for header + 0-index
-      if (rowIndex < 2) rowIndex = null;
+      rowIndex = await findRowIndexById(sheets, SHEET_ID, SHEET_TAB, postId);
     }
 
-    // Validate platforms
+    // Parse target platforms
     const platforms = String(postData.platforms || '')
       .split(',')
-      .map((p) => p.trim())
+      .map(p => p.trim())
       .filter(Boolean);
-
     if (!platforms.length) return bad(headers, 'No target platforms provided');
 
+    // Publish per platform
     const results = {};
-
-    // Publish per platform with isolation
     for (const platform of platforms) {
       try {
         switch (platform) {
@@ -105,34 +89,48 @@ exports.handler = async (event) => {
       }
     }
 
-    // Update sheet status if we have a rowIndex or can find it now
-    const finalRowIndex = rowIndex ?? (await findRowIndexById(sheets, SHEET_ID, SHEET_TAB, postId));
+    const finalRowIndex = rowIndex ?? (await findRowIndexById(sheets, SHEET_ID, SHEET_TAB, postId || postData.postId));
     if (finalRowIndex) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_TAB}!B${finalRowIndex}:P${finalRowIndex}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: {
-          values: [
-            [
-              'Published', // B status
-              '', // C contentType (unchanged)
-              '', // D title (unchanged)
-              '', // E body (unchanged)
-              '', // F imageUrl (unchanged)
-              '', // G videoUrl (unchanged)
-              '', // H platforms (unchanged)
-              '', // I scheduleDate (unchanged)
-              new Date().toISOString(), // J publishedDate
-              results.wordpress?.permalink || '', // K postPermalink
-              results.facebook?.postId || '', // L facebookPostId
-              results.linkedin?.postId || '', // M linkedInPostId
-              results.wordpress?.postId || '', // N wordPressPostId
-              results.brevo?.campaignId || '', // O brevoEmailId
-              JSON.stringify(results) // P analytics
-            ]
-          ]
+      // Write ONLY the columns we intend to modify: B, J..P
+      const data = [
+        {
+          range: `${SHEET_TAB}!B${finalRowIndex}`, // status
+          values: [['Published']]
+        },
+        {
+          range: `${SHEET_TAB}!J${finalRowIndex}`, // publishedDate
+          values: [[new Date().toISOString()]]
+        },
+        {
+          range: `${SHEET_TAB}!K${finalRowIndex}`, // postPermalink
+          values: [[results.wordpress?.permalink || '']]
+        },
+        {
+          range: `${SHEET_TAB}!L${finalRowIndex}`, // facebookPostId
+          values: [[results.facebook?.postId || '']]
+        },
+        {
+          range: `${SHEET_TAB}!M${finalRowIndex}`, // linkedInPostId
+          values: [[results.linkedin?.postId || '']]
+        },
+        {
+          range: `${SHEET_TAB}!N${finalRowIndex}`, // wordPressPostId
+          values: [[results.wordpress?.postId || '']]
+        },
+        {
+          range: `${SHEET_TAB}!O${finalRowIndex}`, // brevoEmailId
+          values: [[results.brevo?.campaignId || '']]
+        },
+        {
+          range: `${SHEET_TAB}!P${finalRowIndex}`, // analytics json
+          values: [[JSON.stringify(results)]]
         }
+      ];
+
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: SHEET_ID,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { data }
       });
     }
 
@@ -143,8 +141,7 @@ exports.handler = async (event) => {
   }
 };
 
-// ------- Helpers -------
-
+// ---- helpers ----
 async function findRowIndexById(sheets, sheetId, tab, postId) {
   if (!postId) return null;
   const resp = await sheets.spreadsheets.values.get({
@@ -152,7 +149,7 @@ async function findRowIndexById(sheets, sheetId, tab, postId) {
     range: `${tab}!A2:A`
   });
   const rows = resp.data.values || [];
-  const idx = rows.findIndex((r) => r[0] === postId);
+  const idx = rows.findIndex(r => r[0] === postId);
   return idx >= 0 ? idx + 2 : null;
 }
 

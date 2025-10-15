@@ -1,0 +1,151 @@
+.
+├── .gitignore
+├── .netlify
+│   ├── blobs-serve
+│   ├── functions
+│   │   ├── addTickerItem.zip
+│   │   ├── archiveTickerItems.zip
+│   │   ├── fetchWebinars.zip
+│   │   ├── getAIInsights.zip
+│   │   ├── getBids.zip
+│   │   ├── getTickerFeed.zip
+│   │   ├── manifest.json
+│   │   ├── refreshAutoTickerItems.zip
+│   │   └── updateBidStatus.zip
+│   ├── functions-internal
+│   ├── functions-serve
+│   │   ├── addTickerItem
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── addTickerItem.js
+│   │   │   └── netlify
+│   │   ├── archiveTickerItems
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── archiveTickerItems.js
+│   │   │   └── netlify
+│   │   ├── fetchWebinars
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── fetchWebinars.js
+│   │   │   └── netlify
+│   │   ├── getAIInsights
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── getAIInsights.js
+│   │   │   └── netlify
+│   │   ├── getBids
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── getBids.js
+│   │   │   └── netlify
+│   │   ├── getBidSystems
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── getBidSystems.js
+│   │   │   └── netlify
+│   │   ├── getCommodityCodes
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── getCommodityCodes.js
+│   │   │   └── netlify
+│   │   ├── getCompanyData
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── getCompanyData.js
+│   │   │   └── netlify
+│   │   ├── getTickerFeed
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── getTickerFeed.js
+│   │   │   └── netlify
+│   │   ├── refreshAutoTickerItems
+│   │   │   ├── ___netlify-telemetry.mjs
+│   │   │   ├── netlify
+│   │   │   └── refreshAutoTickerItems.js
+│   │   └── updateBidStatus
+│   │       ├── ___netlify-telemetry.mjs
+│   │       ├── netlify
+│   │       └── updateBidStatus.js
+│   ├── netlify.toml
+│   ├── state.json
+│   └── v1
+│       └── functions
+├── build-us-map-svg.mjs
+├── netlify
+│   └── functions
+│       ├── _utils
+│       │   ├── google.js
+│       │   ├── http.js
+│       │   └── limits.js
+│       ├── addBidSystem.js
+│       ├── addTickerItem.js
+│       ├── archiveTickerItems.js
+│       ├── createSocialPost.js
+│       ├── deleteBidSystem.js
+│       ├── deleteDocument.js
+│       ├── getAIInsights.js
+│       ├── getBids.js
+│       ├── getBidSystems.js
+│       ├── getCommodityCodes.js
+│       ├── getCompanyData.js
+│       ├── getCompanyDocuments.js
+│       ├── getDashboardData.js
+│       ├── getDisregardedEmails.js
+│       ├── getSocialMediaContent.js
+│       ├── getSystemAdminEmails.js
+│       ├── getTickerFeed.js
+│       ├── getWebinars.js
+│       ├── listSheetTabs.js
+│       ├── publishSocialPost.js
+│       ├── refreshAutoTickerItems.js
+│       ├── reviveDisregardedEmail.js
+│       ├── updateBidStatus.js
+│       ├── updateBidSystem.js
+│       ├── updateSystemAdminStatus.js
+│       └── uploadDocument.js
+├── netlify.toml
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── project-tree.txt
+├── public
+│   ├── favicon.ico
+│   ├── images
+│   │   ├── 49NLogo.png
+│   │   └── us-states.svg
+│   ├── index.html
+│   ├── logo192.png
+│   ├── logo512.png
+│   ├── manifest.json
+│   └── robots.txt
+├── README.md
+├── scripts
+│   ├── list-ticker-imports.mjs
+│   └── make-chatgpt-bundle.sh
+├── src
+│   ├── App.css
+│   ├── App.js
+│   ├── App.test.js
+│   ├── components
+│   │   ├── AddBidSystemForm.jsx
+│   │   ├── Auth.js
+│   │   ├── BidCard.jsx
+│   │   ├── BidOperations.jsx
+│   │   ├── BidSystemDetailModal.jsx
+│   │   ├── BidSystemsManager.jsx
+│   │   ├── CompanyDataVault.jsx
+│   │   ├── Dashboard.jsx
+│   │   ├── DisregardedArchiveModal.jsx
+│   │   ├── LoginPage.js
+│   │   ├── RadioPlayer.jsx
+│   │   ├── SocialMediaOperations.jsx
+│   │   ├── SystemsCorrespondenceModal.jsx
+│   │   ├── USStateMap.jsx
+│   │   └── WebinarOperations.jsx
+│   ├── index.css
+│   ├── index.js
+│   ├── logo.svg
+│   ├── reportWebVitals.js
+│   ├── services
+│   │   ├── aiInsightsService.js
+│   │   ├── bidService.js
+│   │   ├── socialMediaService.js
+│   │   ├── tickerService.js
+│   │   └── webinarService.js
+│   └── setupTests.js
+├── structure.txt
+└── tailwind.config.js
+
+39 directories, 110 files

@@ -1,131 +1,86 @@
+// netlify/functions/deleteDocument.js
 const { google } = require('googleapis');
+const { getGoogleAuth, driveClient, sheetsClient } = require('./_utils/google');
+const { corsHeaders, methodGuard, safeJson, ok, bad, unauth, serverErr, checkAuth } = require('./_utils/http');
 
-const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID || process.env.BID_SYSTEMS_SHEET_ID;
+const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID;
 
-exports.handler = async (event, context) => {
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  };
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers?.origin);
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
+  if (guard) return guard;
+
+  if (!checkAuth(event)) return unauth(headers);
+
+  if (!SHEET_ID) return bad(headers, 'COMPANY_DATA_SHEET_ID not set');
+
+  const [body, parseErr] = safeJson(event.body);
+  if (parseErr) return bad(headers, 'Invalid JSON');
+
+  const { documentId, driveFileId } = body || {};
+  if (!documentId) return bad(headers, 'Missing documentId');
+  // driveFileId is optional—if missing, we’ll only delete the sheet row
 
   try {
-    let credentials;
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-      const decoded = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8');
-      credentials = JSON.parse(decoded);
-    } else {
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    }
+    const auth = getGoogleAuth();
+    await auth.authorize();
 
-    const auth = new google.auth.GoogleAuth({
-      credentials,
-      scopes: [
-        'https://www.googleapis.com/auth/drive',
-        'https://www.googleapis.com/auth/spreadsheets'
-      ],
-    });
-
-    const drive = google.drive({ version: 'v3', auth });
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    const { documentId, driveFileId } = JSON.parse(event.body);
-
-    // Delete from Google Drive
-    // Delete from Google Drive
-let driveDeleteSuccess = false;
-let driveError = null;
-
-try {
-  await drive.files.delete({
-    fileId: driveFileId,
-    supportsAllDrives: true
-  });
-  driveDeleteSuccess = true;
-  console.log('✅ File deleted from Drive:', driveFileId);
-} catch (error) {
-  driveError = error.message;
-  console.error('❌ Drive delete failed:', error.message);
-  console.error('Error details:', JSON.stringify(error, null, 2));
-  // Continue to delete from sheet even if Drive delete fails
-}
-
-    // Find and delete row from sheet
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
-      range: 'CompanyDocuments!A:A',
-    });
-
-    const rows = response.data.values || [];
-    let rowIndex = -1;
-
-    // Find the row with matching document ID
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === documentId) {
-        rowIndex = i + 1; // +1 because sheets are 1-indexed
-        break;
+    // 1) Try to delete the Drive file first (non-fatal if it fails)
+    if (driveFileId) {
+      try {
+        const drive = driveClient(auth);
+        await drive.files.delete({ fileId: driveFileId });
+      } catch (e) {
+        // Log but do not fail: user may have manually deleted it in Drive
+        console.warn('deleteDocument: drive delete failed:', e.message);
       }
     }
 
-    if (rowIndex > 1) { // Row 1 is header, so must be > 1
-      // Get sheet ID for CompanyDocuments tab
-      const sheetMetadata = await sheets.spreadsheets.get({
-        spreadsheetId: SHEET_ID,
-      });
-      
-      const companyDocsSheet = sheetMetadata.data.sheets.find(
-        sheet => sheet.properties.title === 'CompanyDocuments'
-      );
-      
-      const sheetId = companyDocsSheet ? companyDocsSheet.properties.sheetId : 0;
+    // 2) Delete the sheet row from Uploads
+    const sheets = sheetsClient(auth);
 
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SHEET_ID,
-        resource: {
-          requests: [{
-            deleteDimension: {
-              range: {
-                sheetId: sheetId,
-                dimension: 'ROWS',
-                startIndex: rowIndex - 1,
-                endIndex: rowIndex
-              }
-            }
-          }]
-        }
-      });
-      
-      console.log('Row deleted from sheet:', rowIndex);
-    } else {
-      console.warn('Document not found in sheet:', documentId);
+    // We need the sheetId (gid) of "Uploads" tab to issue a batchUpdate deleteDimension
+    const spreadsheet = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
+      spreadsheetId: SHEET_ID,
+    });
+
+    const uploadsSheet = (spreadsheet.data.sheets || []).find(
+      (s) => s.properties && s.properties.title === 'Uploads'
+    );
+    if (!uploadsSheet) return bad(headers, 'Uploads sheet not found');
+
+    const sheetId = uploadsSheet.properties.sheetId;
+
+    // documentId is the row number (1-based). Delete exactly that row.
+    // Sheets API deleteDimension uses 0-based, endIndex exclusive.
+    const rowNumber = Number(documentId);
+    if (!Number.isInteger(rowNumber) || rowNumber < 2) {
+      // We never allow deleting header row
+      return bad(headers, 'Invalid documentId/row number');
     }
 
-    return {
-  statusCode: 200,
-  headers,
-  body: JSON.stringify({
-    success: true,
-    message: driveDeleteSuccess 
-      ? 'Document deleted from both Drive and sheet'
-      : 'Metadata deleted from sheet, but Drive file deletion failed',
-    driveDeleted: driveDeleteSuccess,
-    driveError: driveError
-  })
-};
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId,
+                dimension: 'ROWS',
+                startIndex: rowNumber - 1, // inclusive
+                endIndex: rowNumber,       // exclusive
+              },
+            },
+          },
+        ],
+      },
+    });
 
-  } catch (error) {
-    console.error('Error deleting document:', error);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message
-      })
-    };
+    return ok(headers, { success: true });
+  } catch (e) {
+    console.error('deleteDocument error:', e);
+    return serverErr(headers, 'Failed to delete document');
   }
 };

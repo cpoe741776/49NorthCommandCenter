@@ -1,5 +1,4 @@
-//BidOperations.jsx //
-
+// src/components/BidOperations.jsx
 import React, { useState, useCallback, useMemo } from 'react';
 import { Archive, RefreshCw } from 'lucide-react';
 import BidCard from './BidCard';
@@ -7,35 +6,53 @@ import DisregardedArchiveModal from './DisregardedArchiveModal';
 
 const ITEMS_PER_PAGE = 10;
 
-const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefresh, onNavigate }) => {
-  
+/* helpers */
+const withAuthHeaders = (init = {}, jsonBody = null) => {
+  const headers = new Headers(init.headers || {});
+  headers.set('Content-Type', 'application/json');
+  if (typeof window !== 'undefined' && window.__APP_TOKEN) {
+    headers.set('X-App-Token', window.__APP_TOKEN);
+  }
+  const body = jsonBody ? JSON.stringify(jsonBody) : init.body;
+  return { ...init, headers, body };
+};
+
+const parseDate = (d) => {
+  // fallbacks so bad inputs don’t turn into NaN
+  if (!d || d === 'Not specified') return 0;
+  const t = Date.parse(d);
+  return Number.isNaN(t) ? 0 : t;
+};
+
+const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], loading, onRefresh, onNavigate }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [respondPage, setRespondPage] = useState(1);
   const [gatherInfoPage, setGatherInfoPage] = useState(1);
   const [submittedPage, setSubmittedPage] = useState(1);
-  
-  // NEW: Disregarded Archive Modal State
+
+  // Disregarded Archive Modal
   const [showDisregardedModal, setShowDisregardedModal] = useState(false);
   const [disregardedEmails, setDisregardedEmails] = useState([]);
   const [loadingDisregarded, setLoadingDisregarded] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await onRefresh();
-    setIsRefreshing(false);
-    setSelectedBids([]);
-    setRespondPage(1);
-    setGatherInfoPage(1);
-    setSubmittedPage(1);
+    try {
+      await onRefresh?.();
+    } finally {
+      setIsRefreshing(false);
+      setSelectedBids([]);
+      setRespondPage(1);
+      setGatherInfoPage(1);
+      setSubmittedPage(1);
+    }
   }, [onRefresh]);
 
   const handleSystemClick = useCallback((systemName) => {
     localStorage.setItem('filterBySystem', systemName);
-    if (onNavigate) {
-      onNavigate('bid-systems');
-    }
+    onNavigate?.('bid-systems');
   }, [onNavigate]);
 
   const handleStatusChange = useCallback(async (bidId, status) => {
@@ -43,9 +60,8 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
       let dueDateToSend = null;
 
       if (status === 'submitted') {
-        const allBids = [...bids, ...submittedBids];
-        const bid = allBids.find((b) => b.id === bidId);
-
+        const all = [...bids, ...submittedBids];
+        const bid = all.find((b) => b.id === bidId);
         if (!bid) {
           alert('Error: Could not find bid');
           return;
@@ -63,17 +79,15 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
         }
       }
 
-      const response = await fetch('/.netlify/functions/updateBidStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bidId, status, ...(dueDateToSend && { dueDate: dueDateToSend }) }),
-      });
-
+      const response = await fetch(
+        '/.netlify/functions/updateBidStatus',
+        withAuthHeaders({ method: 'POST' }, { bidId, status, ...(dueDateToSend && { dueDate: dueDateToSend }) })
+      );
       if (!response.ok) throw new Error('Failed to update bid status');
 
       const result = await response.json();
       alert(`Success! ${result.message}`);
-      await onRefresh();
+      await onRefresh?.();
     } catch (err) {
       console.error('Error updating bid status:', err);
       alert('Error: Failed to update bid status');
@@ -106,11 +120,10 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
 
     for (const bidId of selectedBids) {
       try {
-        const response = await fetch('/.netlify/functions/updateBidStatus', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bidId, status }),
-        });
+        const response = await fetch(
+          '/.netlify/functions/updateBidStatus',
+          withAuthHeaders({ method: 'POST' }, { bidId, status })
+        );
         if (response.ok) successCount++; else errorCount++;
       } catch {
         errorCount++;
@@ -120,16 +133,15 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
     setIsBulkProcessing(false);
     alert(`Bulk action complete!\nSuccess: ${successCount}\nErrors: ${errorCount}`);
     setSelectedBids([]);
-    await onRefresh();
+    await onRefresh?.();
   }, [selectedBids, onRefresh]);
 
-  // NEW: Load Disregarded Emails
+  // Disregarded Emails
   const loadDisregardedEmails = useCallback(async () => {
     try {
       setLoadingDisregarded(true);
-      const response = await fetch('/.netlify/functions/getDisregardedEmails');
+      const response = await fetch('/.netlify/functions/getDisregardedEmails', withAuthHeaders());
       const data = await response.json();
-      
       if (data.success) {
         setDisregardedEmails(data.emails || []);
       } else {
@@ -142,67 +154,65 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
     }
   }, []);
 
-  // NEW: Revive Disregarded Email
   const handleReviveEmail = useCallback(async (email, newRecommendation) => {
     try {
-      const response = await fetch('/.netlify/functions/reviveDisregardedEmail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rowNumber: email.rowNumber,
-          newRecommendation: newRecommendation,
-          emailData: {
-            scoreDetails: email.scoreDetails,
-            aiReasoning: email.aiReasoning,
-            aiSummary: email.aiSummary,
-            emailDateReceived: email.emailDateReceived,
-            emailFrom: email.emailFrom,
-            keywordsCategory: email.keywordsCategory,
-            keywordsFound: email.keywordsFound,
-            relevance: email.relevance,
-            emailSubject: email.emailSubject,
-            emailBody: email.emailBody,
-            url: email.url,
-            dueDate: email.dueDate,
-            significantSnippet: email.significantSnippet,
-            emailDomain: email.emailDomain,
-            bidSystem: email.bidSystem,
-            country: email.country,
-            entity: email.entity,
-            sourceEmailId: email.sourceEmailId
+      const response = await fetch(
+        '/.netlify/functions/reviveDisregardedEmail',
+        withAuthHeaders(
+          { method: 'POST' },
+          {
+            rowNumber: email.rowNumber,
+            newRecommendation,
+            emailData: {
+              scoreDetails: email.scoreDetails,
+              aiReasoning: email.aiReasoning,
+              aiSummary: email.aiSummary,
+              emailDateReceived: email.emailDateReceived,
+              emailFrom: email.emailFrom,
+              keywordsCategory: email.keywordsCategory,
+              keywordsFound: email.keywordsFound,
+              relevance: email.relevance,
+              emailSubject: email.emailSubject,
+              emailBody: email.emailBody,
+              url: email.url,
+              dueDate: email.dueDate,
+              significantSnippet: email.significantSnippet,
+              emailDomain: email.emailDomain,
+              bidSystem: email.bidSystem,
+              country: email.country,
+              entity: email.entity,
+              sourceEmailId: email.sourceEmailId
+            }
           }
-        })
-      });
+        )
+      );
 
       const result = await response.json();
       if (result.success) {
         alert(`Success! Email revived as "${newRecommendation}"`);
-        await loadDisregardedEmails(); // Refresh disregarded list
-        await onRefresh(); // Refresh active bids
+        await loadDisregardedEmails(); // refresh modal list
+        await onRefresh?.(); // refresh active boards
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Revive failed');
       }
     } catch (err) {
       console.error('Failed to revive email:', err);
-      throw err;
+      alert('Failed to revive email');
     }
   }, [loadDisregardedEmails, onRefresh]);
 
-  const respondBids = useMemo(
-    () =>
-      bids
-        .filter((b) => b.recommendation === 'Respond')
-        .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived)),
-    [bids]
-  );
+  // sort oldest -> newest (kept your behavior); flip the sign if you want newest first
+  const respondBids = useMemo(() => (
+    bids
+      .filter((b) => b.recommendation === 'Respond')
+      .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
+  ), [bids]);
 
-  const gatherInfoBids = useMemo(
-    () =>
-      bids
-        .filter((b) => b.recommendation === 'Gather More Information')
-        .sort((a, b) => new Date(a.emailDateReceived) - new Date(b.emailDateReceived)),
-    [bids]
-  );
+  const gatherInfoBids = useMemo(() => (
+    bids
+      .filter((b) => b.recommendation === 'Gather More Information')
+      .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
+  ), [bids]);
 
   if (loading) {
     return (
@@ -237,10 +247,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
             Refresh
           </button>
           <button
-            onClick={() => {
-              loadDisregardedEmails();
-              setShowDisregardedModal(true);
-            }}
+            onClick={() => { loadDisregardedEmails(); setShowDisregardedModal(true); }}
             disabled={loadingDisregarded}
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors relative disabled:opacity-50"
           >
@@ -286,6 +293,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Respond */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Respond ({respondBids.length})</h2>
@@ -294,9 +302,9 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 onClick={() => handleSelectAll(respondBids)}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
               >
-                {respondBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
+                {respondBids.length > 0 && respondBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
               </button>
-              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-green-500 rounded-full" />
             </div>
           </div>
           <div className="space-y-3">
@@ -316,7 +324,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 ))}
                 {hasMoreRespond && (
                   <button
-                    onClick={() => setRespondPage(p => p + 1)}
+                    onClick={() => setRespondPage((p) => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedRespondBids.length} of {respondBids.length} shown)
@@ -327,6 +335,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </div>
         </div>
 
+        {/* Gather More Info */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Gather More Information ({gatherInfoBids.length})</h2>
@@ -335,9 +344,9 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 onClick={() => handleSelectAll(gatherInfoBids)}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
               >
-                {gatherInfoBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
+                {gatherInfoBids.length > 0 && gatherInfoBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
               </button>
-              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-yellow-500 rounded-full" />
             </div>
           </div>
           <div className="space-y-3">
@@ -357,7 +366,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 ))}
                 {hasMoreGatherInfo && (
                   <button
-                    onClick={() => setGatherInfoPage(p => p + 1)}
+                    onClick={() => setGatherInfoPage((p) => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedGatherInfoBids.length} of {gatherInfoBids.length} shown)
@@ -368,10 +377,11 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
           </div>
         </div>
 
+        {/* Submitted */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Submitted ({submittedBids.length})</h2>
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-blue-500 rounded-full" />
           </div>
           <div className="space-y-3">
             {submittedBids.length === 0 ? (
@@ -390,7 +400,7 @@ const BidOperations = ({ bids, disregardedBids, submittedBids, loading, onRefres
                 ))}
                 {hasMoreSubmitted && (
                   <button
-                    onClick={() => setSubmittedPage(p => p + 1)}
+                    onClick={() => setSubmittedPage((p) => p + 1)}
                     className="w-full mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium transition-colors"
                   >
                     Load More ({paginatedSubmittedBids.length} of {submittedBids.length} shown)

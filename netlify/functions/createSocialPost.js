@@ -1,26 +1,33 @@
+// netlify/functions/createSocialPost.js
 const { google } = require('googleapis');
 
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-App-Token',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
-
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: 'Method Not Allowed' };
+    return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method Not Allowed' }) };
+  }
+
+  // Safe body parse
+  let formData = {};
+  try {
+    formData = JSON.parse(event.body || '{}');
+  } catch {
+    return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: 'Invalid JSON body' }) };
   }
 
   try {
-    const formData = JSON.parse(event.body);
-    
-    const credentials = JSON.parse(
-      Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-    );
+    // creds: base64 or raw json
+    const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
+      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
+      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
 
     const auth = new google.auth.GoogleAuth({
       credentials,
@@ -29,45 +36,55 @@ exports.handler = async (event) => {
 
     const sheets = google.sheets({ version: 'v4', auth });
     const spreadsheetId = process.env.SOCIAL_MEDIA_SHEET_ID;
-
     if (!spreadsheetId) {
-      throw new Error('SOCIAL_MEDIA_SHEET_ID not configured');
+      return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: 'SOCIAL_MEDIA_SHEET_ID not configured' }) };
     }
 
+    // Normalize platforms to a comma list (accept array or CSV string)
+    const platforms = Array.isArray(formData.platforms)
+      ? formData.platforms.map(p => String(p).trim()).filter(Boolean).join(',')
+      : String(formData.platforms || '').split(',').map(p => p.trim()).filter(Boolean).join(',');
+
+    // Tag handling (accept array or CSV)
+    const tags = Array.isArray(formData.tags)
+      ? formData.tags.map(t => String(t).trim()).filter(Boolean).join(',')
+      : String(formData.tags || '').trim();
+
+    // Use ISO timestamp as a stable postId (your other function looks rows up by A)
+    const timestamp = new Date().toISOString();
+
     const row = [
-      new Date().toISOString(),              // timestamp
-      'Draft',                                // status
-      formData.contentType || 'custom',       // contentType
-      formData.title || '',                   // title
-      formData.body || '',                    // body
-      formData.imageUrl || '',                // imageUrl
-      formData.videoUrl || '',                // videoUrl
-      formData.platforms?.join(',') || '',    // platforms
-      formData.scheduleDate || '',            // scheduleDate
-      '',                                     // publishedDate
-      '',                                     // postPermalink
-      '',                                     // facebookPostId
-      '',                                     // linkedInPostId
-      '',                                     // wordPressPostId
-      '',                                     // brevoEmailId
-      '',                                     // analytics
-      formData.createdBy || 'system',         // createdBy
-      formData.tags || ''                     // tags
+      timestamp,                          // A timestamp (also acts as an ID in your flows)
+      'Draft',                            // B status
+      formData.contentType || 'custom',   // C contentType
+      formData.title || '',               // D title
+      formData.body || '',                // E body
+      formData.imageUrl || '',            // F imageUrl
+      formData.videoUrl || '',            // G videoUrl
+      platforms,                          // H platforms (CSV)
+      formData.scheduleDate || '',        // I scheduleDate
+      '',                                 // J publishedDate
+      '',                                 // K postPermalink
+      '',                                 // L facebookPostId
+      '',                                 // M linkedInPostId
+      '',                                 // N wordPressPostId
+      '',                                 // O brevoEmailId
+      '',                                 // P analytics
+      formData.createdBy || 'system',     // Q createdBy
+      tags                                // R tags
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'MainPostData!A:R', // Change 'Sheet1' to your actual tab name if different
+      range: 'MainPostData!A:R',
       valueInputOption: 'USER_ENTERED',
       resource: { values: [row] },
     });
 
-    console.log('Social post created successfully');
-
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, message: 'Post created successfully' }),
+      body: JSON.stringify({ success: true, message: 'Post created successfully', postId: timestamp }),
     };
   } catch (error) {
     console.error('Error creating social post:', error);

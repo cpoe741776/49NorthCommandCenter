@@ -1,68 +1,124 @@
-// BidSystemsManager.jsx //
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus, Eye, EyeOff, FileText, MapPin, Mail } from 'lucide-react';
+// src/components/BidSystemsManager.js
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  ExternalLink, Key, Globe, Search, CheckCircle, Clock, AlertCircle, Plus,
+  Eye, EyeOff, FileText, MapPin, Mail, X
+} from 'lucide-react';
 import AddBidSystemForm from './AddBidSystemForm';
 import BidSystemDetailModal from './BidSystemDetailModal';
 import USStateMap from './USStateMap';
 import SystemsCorrespondenceModal from './SystemsCorrespondenceModal';
 
-const BidSystemsManager = ({ allBids }) => {
+/* ---------- helpers ---------- */
+const withAuthHeaders = (init = {}, jsonBody = null) => {
+  const headers = new Headers(init.headers || {});
+  headers.set('Content-Type', 'application/json');
+  if (typeof window !== 'undefined' && window.__APP_TOKEN) {
+    headers.set('X-App-Token', window.__APP_TOKEN);
+  }
+  const body = jsonBody ? JSON.stringify(jsonBody) : init.body;
+  return { ...init, headers, body };
+};
+
+const Toast = ({ type = 'success', message, onClose }) => {
+  const color =
+    type === 'error' ? 'bg-red-50 border-red-200 text-red-800'
+      : type === 'info' ? 'bg-blue-50 border-blue-200 text-blue-800'
+        : 'bg-green-50 border-green-200 text-green-800';
+  return (
+    <div className={`fixed bottom-4 right-4 z-[60] border rounded-lg px-4 py-3 shadow ${color}`}>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5" aria-hidden>{type === 'error' ? '⚠️' : type === 'info' ? 'ℹ️' : '✅'}</div>
+        <div className="text-sm">{message}</div>
+        <button onClick={onClose} className="ml-2 text-xs opacity-70 hover:opacity-100" aria-label="Close toast">
+          <X size={16} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/* ---------- component ---------- */
+const BidSystemsManager = ({ allBids = [] }) => {
   const [systems, setSystems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
+
+  // search/filter
+  const [searchInput, setSearchInput] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // debounced
   const [filterCategory, setFilterCategory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
+
   const [showPasswords, setShowPasswords] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedSystem, setSelectedSystem] = useState(null);
   const [hoveredState, setHoveredState] = useState(null);
   const [hoveredCountry, setHoveredCountry] = useState(null);
-  
+
   // Systems Administration state
   const [showSystemsCorrespondence, setShowSystemsCorrespondence] = useState(false);
   const [adminEmails, setAdminEmails] = useState([]);
   const [adminEmailCount, setAdminEmailCount] = useState(0);
   const [loadingAdmin, setLoadingAdmin] = useState(false);
 
-  useEffect(() => {
-    loadSystems();
-    loadAdminEmails();
-    
-    const filterBySystem = localStorage.getItem('filterBySystem');
-    if (filterBySystem) {
-      setSearchTerm(filterBySystem);
-      localStorage.removeItem('filterBySystem');
-    }
-  }, []);
+  // toast
+  const [toast, setToast] = useState(null);
+  const pushToast = (type, message) => {
+    setToast({ type, message });
+    window.setTimeout(() => setToast(null), 3000);
+  };
 
-  const loadSystems = async () => {
+  /* ---------- search debounce ---------- */
+  const debounceRef = useRef(null);
+  useEffect(() => {
+    window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(() => setSearchTerm(searchInput.trim()), 250);
+    return () => window.clearTimeout(debounceRef.current);
+  }, [searchInput]);
+
+  /* ---------- initial load ---------- */
+  const loadSystems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/.netlify/functions/getBidSystems');
+      setError(null);
+
+      // quick session cache
+      const cache = sessionStorage.getItem('bidSystemsCache');
+      if (cache) {
+        try {
+          const entry = JSON.parse(cache);
+          if (Date.now() - entry.ts < 60_000) {
+            setSystems(entry.data || []);
+          }
+        } catch { /* ignore */ }
+      }
+
+      const response = await fetch('/.netlify/functions/getBidSystems', withAuthHeaders());
       const data = await response.json();
-      
+
       if (data.success) {
-        const validSystems = data.systems.filter(s => s.systemName && s.systemName.trim() !== '');
+        const validSystems = (data.systems || []).filter(
+          s => s.systemName && s.systemName.trim() !== ''
+        );
         setSystems(validSystems);
+        sessionStorage.setItem('bidSystemsCache', JSON.stringify({ ts: Date.now(), data: validSystems }));
       } else {
-        setError(data.error);
+        setError(data.error || 'Failed to load bid systems');
       }
     } catch (err) {
-      setError('Failed to load bid systems');
       console.error(err);
+      setError('Failed to load bid systems');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadAdminEmails = async () => {
+  const loadAdminEmails = useCallback(async () => {
     try {
       setLoadingAdmin(true);
       const response = await fetch('/.netlify/functions/getSystemAdminEmails');
       const data = await response.json();
-      
       if (data.success) {
         setAdminEmails(data.emails || []);
         setAdminEmailCount(data.newCount || 0);
@@ -72,32 +128,68 @@ const BidSystemsManager = ({ allBids }) => {
     } finally {
       setLoadingAdmin(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // restore saved filters
+    try {
+      const saved = JSON.parse(localStorage.getItem('bidSystemsFilters') || '{}');
+      if (saved.searchTerm) { setSearchInput(saved.searchTerm); setSearchTerm(saved.searchTerm); }
+      if (saved.filterCategory) setFilterCategory(saved.filterCategory);
+      if (saved.filterStatus) setFilterStatus(saved.filterStatus);
+    } catch { /* ignore */ }
+
+    loadSystems();
+    loadAdminEmails();
+
+    // optional deep-link: filter by a system name
+    const filterBySystem = localStorage.getItem('filterBySystem');
+    if (filterBySystem) {
+      setSearchInput(filterBySystem);
+      localStorage.removeItem('filterBySystem');
+    }
+  }, [loadSystems, loadAdminEmails]);
+
+  // persist filters
+  useEffect(() => {
+    try {
+      localStorage.setItem('bidSystemsFilters', JSON.stringify({ searchTerm, filterCategory, filterStatus }));
+    } catch { /* ignore */ }
+  }, [searchTerm, filterCategory, filterStatus]);
+
+  const debouncedLoadAdminEmails = useRef(null);
+  useEffect(() => {
+    debouncedLoadAdminEmails.current = (() => {
+      let t;
+      return () => {
+        window.clearTimeout(t);
+        t = window.setTimeout(() => {
+          loadAdminEmails();
+        }, 300);
+      };
+    })();
+  }, [loadAdminEmails]);
 
   const handleArchiveAdminEmail = async (email) => {
     try {
-      const response = await fetch('/.netlify/functions/updateSystemAdminStatus', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sourceEmailId: email.sourceEmailId,
-          status: 'Archived'
-        })
-      });
-
+      const response = await fetch(
+        '/.netlify/functions/updateSystemAdminStatus',
+        withAuthHeaders({ method: 'POST' }, { sourceEmailId: email.sourceEmailId, status: 'Archived' })
+      );
       const result = await response.json();
       if (result.success) {
-        await loadAdminEmails();
+        debouncedLoadAdminEmails.current?.();
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Archive failed');
       }
     } catch (err) {
       console.error('Failed to archive email:', err);
+      pushToast('error', 'Failed to archive');
       throw err;
     }
   };
 
-  // Parse state and country coverage
+  /* ---------- computed coverage ---------- */
   const coverageData = useMemo(() => {
     const states = new Set();
     const countries = new Set();
@@ -131,97 +223,85 @@ const BidSystemsManager = ({ allBids }) => {
         });
       }
 
-      if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') || 
+      if (geo.includes('scotland') || geo.includes('england') || geo.includes('wales') ||
           geo.includes('united kingdom') || geo.includes('uk')) {
         countries.add('UK');
-        if (!countrySystemsMap['UK']) countrySystemsMap['UK'] = [];
-        countrySystemsMap['UK'].push(system.systemName);
+        (countrySystemsMap['UK'] ||= []).push(system.systemName);
       } else if (geo.includes('united states') || geo.includes('usa') || category === 'us state') {
         countries.add('USA');
-        if (!countrySystemsMap['USA']) countrySystemsMap['USA'] = [];
-        countrySystemsMap['USA'].push(system.systemName);
+        (countrySystemsMap['USA'] ||= []).push(system.systemName);
       } else if (geo.includes('canada')) {
         countries.add('Canada');
-        if (!countrySystemsMap['Canada']) countrySystemsMap['Canada'] = [];
-        countrySystemsMap['Canada'].push(system.systemName);
+        (countrySystemsMap['Canada'] ||= []).push(system.systemName);
       } else if (geo.includes('australia')) {
         countries.add('Australia');
-        if (!countrySystemsMap['Australia']) countrySystemsMap['Australia'] = [];
-        countrySystemsMap['Australia'].push(system.systemName);
+        (countrySystemsMap['Australia'] ||= []).push(system.systemName);
       } else if (geo.includes('international') || geo.includes('global')) {
         countries.add('International');
-        if (!countrySystemsMap['International']) countrySystemsMap['International'] = [];
-        countrySystemsMap['International'].push(system.systemName);
+        (countrySystemsMap['International'] ||= []).push(system.systemName);
       }
     });
 
-    return { 
-      states: Array.from(states), 
+    return {
+      states: Array.from(states),
       countries: Array.from(countries),
       stateSystemsMap,
       countrySystemsMap
     };
   }, [systems]);
 
-  const togglePasswordVisibility = (systemId) => {
-    setShowPasswords(prev => ({
-      ...prev,
-      [systemId]: !prev[systemId]
-    }));
+  /* ---------- helpers ---------- */
+  const togglePasswordVisibility = (uniqueKey) => {
+    setShowPasswords(prev => ({ ...prev, [uniqueKey]: !prev[uniqueKey] }));
   };
 
-  const handleAddNewSystem = () => {
-    setShowAddForm(true);
-  };
-
+  const handleAddNewSystem = () => setShowAddForm(true);
   const handleFormSuccess = () => {
     setShowAddForm(false);
     loadSystems();
-    alert('System added successfully!');
+    pushToast('success', 'System added');
   };
 
-  const getBidCountForSystem = (systemName) => {
-    if (!allBids || !Array.isArray(allBids)) return 0;
-    return allBids.filter(bid => 
-      bid.bidSystem && bid.bidSystem.toLowerCase() === systemName.toLowerCase()
+  const getBidCountForSystem = (systemName) =>
+    (allBids || []).filter(bid =>
+      bid.bidSystem && bid.bidSystem.toLowerCase() === String(systemName).toLowerCase()
     ).length;
-  };
 
-  const filteredSystems = systems.filter(system => {
-    const matchesSearch = system.systemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         system.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === 'All' || system.category === filterCategory;
-    const matchesStatus = filterStatus === 'All' || system.status === filterStatus;
-    
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
+  const filteredSystems = useMemo(() => {
+    const q = (searchTerm || '').toLowerCase();
+
+    return systems.filter((system) => {
+      const name   = (system?.systemName || '').toLowerCase();
+      const cat    = (system?.category   || '').toLowerCase();
+      
+
+      const matchesSearch   = !q || name.includes(q) || cat.includes(q);
+      const matchesCategory = filterCategory === 'All' || (system?.category === filterCategory);
+      const matchesStatus   = filterStatus === 'All'   || (system?.status   === filterStatus);
+
+      return matchesSearch && matchesCategory && matchesStatus;
+    });
+  }, [systems, searchTerm, filterCategory, filterStatus]);
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'Active':
-        return <CheckCircle className="text-green-600" size={20} />;
-      case 'Pending Registration':
-        return <Clock className="text-yellow-600" size={20} />;
-      case 'Access Issues':
-        return <AlertCircle className="text-red-600" size={20} />;
-      default:
-        return <Clock className="text-gray-600" size={20} />;
+      case 'Active': return <CheckCircle className="text-green-600" size={20} />;
+      case 'Pending Registration': return <Clock className="text-yellow-600" size={20} />;
+      case 'Access Issues': return <AlertCircle className="text-red-600" size={20} />;
+      default: return <Clock className="text-gray-600" size={20} />;
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'Pending Registration':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Access Issues':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'Active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'Pending Registration': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'Access Issues': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
+  /* ---------- render ---------- */
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -234,18 +314,15 @@ const BidSystemsManager = ({ allBids }) => {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-800">{error}</p>
-        <button onClick={loadSystems} className="mt-2 text-red-600 hover:text-red-800">
-          Try Again
-        </button>
+        <button onClick={loadSystems} className="mt-2 text-red-600 hover:text-red-800">Try Again</button>
       </div>
     );
   }
 
-  const categories = ['All', 'International', 'US State', 'Local/County', 'Private/Commercial'];
-  const statuses = ['All', 'Active', 'Pending Registration', 'Access Issues'];
-
   return (
     <div className="space-y-6">
+      {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -254,21 +331,23 @@ const BidSystemsManager = ({ allBids }) => {
         </div>
         <div className="flex items-center gap-3">
           <button
-  onClick={() => {
-    loadAdminEmails();
-    setShowSystemsCorrespondence(true);
-  }}
-  disabled={loadingAdmin}
-  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors relative disabled:opacity-50 disabled:cursor-not-allowed"
->
-  <Mail size={20} />
-  {loadingAdmin ? 'Loading...' : 'View Systems Correspondence'}
-  {adminEmailCount > 0 && !loadingAdmin && (
-    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-      {adminEmailCount}
-    </span>
-  )}
-</button>
+            onClick={() => { loadAdminEmails(); setShowSystemsCorrespondence(true); }}
+            disabled={loadingAdmin}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors relative disabled:opacity-50"
+            aria-label={`View Systems Correspondence${(adminEmailCount || 0) > 0 ? `, ${adminEmailCount} new` : ''}`}
+          >
+            <Mail size={20} />
+            {loadingAdmin ? 'Loading...' : 'View Systems Correspondence'}
+            {(adminEmailCount || 0) > 0 && !loadingAdmin && (
+              <span
+                aria-hidden="true"
+                className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center"
+              >
+                {adminEmailCount}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={handleAddNewSystem}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -295,24 +374,22 @@ const BidSystemsManager = ({ allBids }) => {
               hoveredState={hoveredState}
               allSystems={systems}
             />
-            
+
             {hoveredState && coverageData.stateSystemsMap[hoveredState] && (
               <div className="absolute bottom-4 left-4 bg-white p-3 rounded-lg shadow-lg border border-gray-200 max-w-xs z-10">
                 <p className="font-semibold text-gray-900 mb-1">{hoveredState}</p>
-                <p className="text-xs text-gray-600">
-                  {coverageData.stateSystemsMap[hoveredState].join(', ')}
-                </p>
+                <p className="text-xs text-gray-600">{coverageData.stateSystemsMap[hoveredState].join(', ')}</p>
               </div>
             )}
           </div>
           <div className="mt-4 flex items-center justify-between text-sm">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-blue-400 rounded"></div>
+                <div className="w-4 h-4 bg-blue-400 rounded" />
                 <span className="text-gray-600">Registered ({coverageData.states.length})</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-gray-200 rounded"></div>
+                <div className="w-4 h-4 bg-gray-200 rounded" />
                 <span className="text-gray-600">Not Registered ({50 - coverageData.states.length})</span>
               </div>
             </div>
@@ -322,7 +399,7 @@ const BidSystemsManager = ({ allBids }) => {
           </div>
         </div>
 
-        {/* World Map */}
+        {/* World map (cards) */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="text-green-600" size={24} />
@@ -338,45 +415,32 @@ const BidSystemsManager = ({ allBids }) => {
                     key={country}
                     onMouseEnter={() => setHoveredCountry(country)}
                     onMouseLeave={() => setHoveredCountry(null)}
-                    className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
-                      isRegistered 
-                        ? 'bg-green-100 border-green-400 hover:bg-green-200' 
-                        : 'bg-gray-100 border-gray-300 hover:bg-gray-200'
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      isRegistered ? 'bg-green-100 border-green-400 hover:bg-green-200'
+                                   : 'bg-gray-100 border-gray-300'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className={`font-bold ${isRegistered ? 'text-green-900' : 'text-gray-500'}`}>
                         {country}
                       </span>
-                      {isRegistered && (
-                        <CheckCircle className="text-green-600" size={20} />
-                      )}
+                      {isRegistered && <CheckCircle className="text-green-600" size={20} />}
                     </div>
                     {isRegistered && (
-                      <div className="text-xs text-gray-700">
-                        <span className="font-semibold">{systemCount}</span> system{systemCount !== 1 ? 's' : ''}
-                      </div>
-                    )}
-                    {hoveredCountry === country && isRegistered && (
-                      <div className="mt-2 pt-2 border-t border-green-300 text-xs text-gray-700">
-                        {coverageData.countrySystemsMap[country]?.join(', ')}
-                      </div>
+                      <>
+                        <div className="text-xs text-gray-700">
+                          <span className="font-semibold">{systemCount}</span> system{systemCount !== 1 ? 's' : ''}
+                        </div>
+                        {hoveredCountry === country && (
+                          <div className="mt-2 pt-2 border-t border-green-300 text-xs text-gray-700">
+                            {coverageData.countrySystemsMap[country]?.join(', ')}
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 );
               })}
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-green-400 rounded"></div>
-                <span className="text-gray-600">Active ({coverageData.countries.length})</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-gray-200 rounded"></div>
-                <span className="text-gray-600">No Coverage</span>
-              </div>
             </div>
           </div>
         </div>
@@ -408,12 +472,12 @@ const BidSystemsManager = ({ allBids }) => {
       <div className="bg-white p-4 rounded-lg shadow">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
               type="text"
-              placeholder="Search systems..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search systems…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -423,7 +487,7 @@ const BidSystemsManager = ({ allBids }) => {
               onChange={(e) => setFilterCategory(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {categories.map(cat => (
+              {['All', 'International', 'US State', 'Local/County', 'Private/Commercial', 'US Federal', 'US Territory'].map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
             </select>
@@ -434,22 +498,28 @@ const BidSystemsManager = ({ allBids }) => {
               onChange={(e) => setFilterStatus(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              {statuses.map(status => (
+              {['All', 'Active', 'Pending Registration', 'Access Issues'].map(status => (
                 <option key={status} value={status}>{status}</option>
               ))}
             </select>
           </div>
         </div>
+        {searchTerm && (
+          <p className="text-xs text-gray-500 mt-2">
+            Showing {filteredSystems.length} of {systems.length}
+          </p>
+        )}
       </div>
 
       {/* Systems List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredSystems.map(system => {
           const bidCount = getBidCountForSystem(system.systemName);
-          
+          const uniqueKey = system.systemId || system.id || system.systemName;
+
           return (
-            <div 
-              key={system.id} 
+            <div
+              key={uniqueKey}
               onClick={() => setSelectedSystem(system)}
               className="bg-white p-5 rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer"
             >
@@ -488,16 +558,17 @@ const BidSystemsManager = ({ allBids }) => {
                       <Key size={16} />
                       <span className="font-semibold text-xs text-gray-500">Password:</span>
                       <span className="font-mono flex-1">
-                        {showPasswords[system.systemId] ? system.password : '••••••••'}
+                        {showPasswords[uniqueKey] ? system.password : '••••••••'}
                       </span>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          togglePasswordVisibility(system.systemId);
+                          togglePasswordVisibility(uniqueKey);
                         }}
                         className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        aria-label={showPasswords[uniqueKey] ? 'Hide password' : 'Show password'}
                       >
-                        {showPasswords[system.systemId] ? (
+                        {showPasswords[uniqueKey] ? (
                           <EyeOff size={16} className="text-gray-600" />
                         ) : (
                           <Eye size={16} className="text-gray-600" />
@@ -510,7 +581,8 @@ const BidSystemsManager = ({ allBids }) => {
 
               <div className="flex gap-2">
                 {system.loginUrl && (
-                  <a href={system.loginUrl}
+                  <a
+                    href={system.loginUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -521,7 +593,8 @@ const BidSystemsManager = ({ allBids }) => {
                   </a>
                 )}
                 {system.websiteUrl && !system.loginUrl && (
-                  <a href={system.websiteUrl}
+                  <a
+                    href={system.websiteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
@@ -563,7 +636,6 @@ const BidSystemsManager = ({ allBids }) => {
         />
       )}
 
-      {/* System Correspondence Modal */}
       {showSystemsCorrespondence && (
         <SystemsCorrespondenceModal
           isOpen={showSystemsCorrespondence}

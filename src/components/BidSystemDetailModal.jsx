@@ -1,14 +1,16 @@
-import React, { useState, useMemo } from 'react';
-import { X, ExternalLink, Globe, Key, Eye, EyeOff, Calendar, DollarSign, Mail, CheckCircle, Clock, AlertCircle, Tag, Hash, Shield, FileText, TrendingUp } from 'lucide-react';
+// src/components/BidSystemDetailModal.jsx
+import React, { useMemo, useState } from 'react';
+import {
+  X, ExternalLink, Globe, Key, Eye, EyeOff, Calendar, DollarSign, Mail,
+  CheckCircle, Clock, AlertCircle, Tag, Hash, Shield, FileText, TrendingUp
+} from 'lucide-react';
 
-const BidSystemDetailModal = ({ system, allBids, onClose }) => {
+const BidSystemDetailModal = ({ system, allBids = [], onClose }) => {
   const [showPassword, setShowPassword] = useState(false);
 
-  // Calculate bids related to this system
   const relatedBids = useMemo(() => {
-    if (!allBids || !Array.isArray(allBids)) return [];
-    return allBids.filter(bid => 
-      bid.bidSystem && bid.bidSystem.toLowerCase() === system.systemName.toLowerCase()
+    return (allBids || []).filter(bid =>
+      bid.bidSystem && bid.bidSystem.toLowerCase() === String(system.systemName).toLowerCase()
     );
   }, [allBids, system.systemName]);
 
@@ -16,45 +18,29 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
     const respond = relatedBids.filter(b => b.recommendation === 'Respond').length;
     const gatherInfo = relatedBids.filter(b => b.recommendation === 'Gather More Information').length;
     const submitted = relatedBids.filter(b => b.status === 'Submitted' || b.recommendation === 'Submitted').length;
-    
-    return {
-      total: relatedBids.length,
-      respond,
-      gatherInfo,
-      submitted,
-      active: respond + gatherInfo
-    };
+    return { total: relatedBids.length, respond, gatherInfo, submitted, active: respond + gatherInfo };
   }, [relatedBids]);
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'Active':
-        return <CheckCircle className="text-green-600" size={24} />;
-      case 'Pending Registration':
-        return <Clock className="text-yellow-600" size={24} />;
-      case 'Access Issues':
-        return <AlertCircle className="text-red-600" size={24} />;
-      default:
-        return <Clock className="text-gray-600" size={24} />;
+      case 'Active': return <CheckCircle className="text-green-600" size={24} />;
+      case 'Pending Registration': return <Clock className="text-yellow-600" size={24} />;
+      case 'Access Issues': return <AlertCircle className="text-red-600" size={24} />;
+      default: return <Clock className="text-gray-600" size={24} />;
     }
   };
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'Pending Registration':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Access Issues':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'Active': return 'bg-green-100 text-green-800 border-green-200';
+      case 'Pending Registration': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'Access Issues': return 'bg-red-100 text-red-800 border-red-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const DetailRow = ({ icon: Icon, label, value, isPassword = false }) => {
     if (!value || (value === '$0' && label === 'Annual Cost')) return null;
-    
     return (
       <div className="py-3 border-b border-gray-200 last:border-0">
         <div className="flex items-start gap-3">
@@ -67,15 +53,12 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                   {showPassword ? value : '••••••••••••'}
                 </p>
                 <button
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword(v => !v)}
                   className="p-1 hover:bg-gray-100 rounded"
                   title={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  {showPassword ? (
-                    <EyeOff size={16} className="text-gray-600" />
-                  ) : (
-                    <Eye size={16} className="text-gray-600" />
-                  )}
+                  {showPassword ? <EyeOff size={16} className="text-gray-600" /> : <Eye size={16} className="text-gray-600" />}
                 </button>
               </div>
             ) : (
@@ -88,7 +71,7 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
@@ -118,10 +101,7 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                 )}
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors ml-4"
-            >
+            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors ml-4" aria-label="Close">
               <X size={24} />
             </button>
           </div>
@@ -132,8 +112,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
           {/* Quick Actions */}
           <div className="mb-6 flex gap-3">
             {system.loginUrl && (
-              
-                <a href={system.loginUrl}
+              <a
+                href={system.loginUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
@@ -143,8 +123,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
               </a>
             )}
             {system.websiteUrl && !system.loginUrl && (
-              
-                <a href={system.websiteUrl}
+              <a
+                href={system.websiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-semibold"
@@ -154,8 +134,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
               </a>
             )}
             {system.websiteUrl && system.loginUrl && (
-              
-                <a href={system.websiteUrl}
+              <a
+                href={system.websiteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
@@ -229,7 +209,7 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                           {system.codeType === 'NIGP' && ' (National Institute of Governmental Purchasing)'}
                           {system.codeType === 'UNSPSC' && ' (United Nations Standard Products and Services)'}
                           {system.codeType === 'PSC' && ' (Product Service Code - Federal)'}
-                          {system.codeType === 'SIN' && ' (Special Item Number - GSA Schedule)'}
+                          {system.codeType === 'SIN' && ' (Special Item Number - GSA)'}
                           {system.codeType === 'FSC' && ' (Federal Supply Classification)'}
                           {system.codeType === 'Custom' && ' (Custom/Other Classification)'}
                         </p>
@@ -244,7 +224,7 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                   </div>
                   <div className="mt-3 pt-3 border-t border-indigo-200">
                     <p className="text-xs text-indigo-700 bg-indigo-100 rounded p-2">
-                      ℹ️ These codes are monitored for relevant opportunities in this procurement system
+                      ℹ️ These codes are monitored for relevant opportunities in this system.
                     </p>
                   </div>
                 </div>
@@ -258,12 +238,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                     Login Credentials
                   </h3>
                   <div className="space-y-0">
-                    {system.username && (
-                      <DetailRow icon={null} label="Username" value={system.username} />
-                    )}
-                    {system.password && (
-                      <DetailRow icon={null} label="Password" value={system.password} isPassword={true} />
-                    )}
+                    {system.username && <DetailRow icon={null} label="Username" value={system.username} />}
+                    {system.password && <DetailRow icon={null} label="Password" value={system.password} isPassword />}
                   </div>
                 </div>
               )}
@@ -276,9 +252,7 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                 </h3>
                 <div className="space-y-0">
                   <DetailRow icon={null} label="Alerts Enabled" value={system.emailAlertsEnabled || 'No'} />
-                  {system.alertEmailAddress && (
-                    <DetailRow icon={null} label="Alert Email" value={system.alertEmailAddress} />
-                  )}
+                  {system.alertEmailAddress && <DetailRow icon={null} label="Alert Email" value={system.alertEmailAddress} />}
                 </div>
               </div>
             </div>
@@ -296,8 +270,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                     {system.websiteUrl && (
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Website URL</p>
-                        
-                          <a href={system.websiteUrl}
+                        <a
+                          href={system.websiteUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 hover:underline text-sm break-all"
@@ -309,8 +283,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                     {system.loginUrl && (
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Login URL</p>
-                        
-                          <a href={system.loginUrl}
+                        <a
+                          href={system.loginUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 hover:underline text-sm break-all"
@@ -330,21 +304,11 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                   Important Dates
                 </h3>
                 <div className="space-y-0">
-                  {system.registrationDate && (
-                    <DetailRow icon={null} label="Registration Date" value={system.registrationDate} />
-                  )}
-                  {system.lastLoginDate && (
-                    <DetailRow icon={null} label="Last Login" value={system.lastLoginDate} />
-                  )}
-                  {system.renewalDate && (
-                    <DetailRow icon={null} label="Renewal Date" value={system.renewalDate} />
-                  )}
-                  {system.dateAdded && (
-                    <DetailRow icon={null} label="Date Added to System" value={system.dateAdded} />
-                  )}
-                  {system.lastUpdated && (
-                    <DetailRow icon={null} label="Last Updated" value={system.lastUpdated} />
-                  )}
+                  {system.registrationDate && <DetailRow icon={null} label="Registration Date" value={system.registrationDate} />}
+                  {system.lastLoginDate && <DetailRow icon={null} label="Last Login" value={system.lastLoginDate} />}
+                  {system.renewalDate && <DetailRow icon={null} label="Renewal Date" value={system.renewalDate} />}
+                  {system.dateAdded && <DetailRow icon={null} label="Date Added to System" value={system.dateAdded} />}
+                  {system.lastUpdated && <DetailRow icon={null} label="Last Updated" value={system.lastUpdated} />}
                 </div>
                 {!system.registrationDate && !system.lastLoginDate && !system.renewalDate && (
                   <p className="text-sm text-gray-500 italic">No dates recorded</p>
@@ -359,10 +323,9 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
                 </h3>
                 <div className="space-y-0">
                   <DetailRow icon={null} label="Subscription Type" value={system.subscriptionType || 'Free'} />
-                  {system.annualCost && system.annualCost !== '$0' && (
+                  {system.annualCost && system.annualCost !== '$0' ? (
                     <DetailRow icon={null} label="Annual Cost" value={system.annualCost} />
-                  )}
-                  {(!system.annualCost || system.annualCost === '$0') && (
+                  ) : (
                     <div className="py-3">
                       <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Annual Cost</p>
                       <p className="text-base text-gray-900">Free / $0</p>
@@ -427,7 +390,7 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
             </div>
           )}
 
-          {/* Notes Section - Full Width */}
+          {/* Notes */}
           {system.notes && (
             <div className="mt-6 bg-yellow-50 rounded-lg p-4 border border-yellow-200">
               <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
@@ -449,8 +412,8 @@ const BidSystemDetailModal = ({ system, allBids, onClose }) => {
               Close
             </button>
             {system.loginUrl && (
-              
-                <a href={system.loginUrl}
+              <a
+                href={system.loginUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"

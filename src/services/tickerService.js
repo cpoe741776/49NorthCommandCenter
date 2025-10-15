@@ -1,7 +1,6 @@
 // src/services/tickerService.js
 // Centralized ticker utilities: fetching, pushing, and generating
-// items from multiple data sources. Safe, defensive, and exhaustive
-// exports so builds don't fail on missing named exports.
+// items from multiple data sources. Defensive, normalized outputs.
 
 function withAuthHeaders(init = {}) {
   const headers = new Headers(init.headers || {});
@@ -18,22 +17,48 @@ function normalizeItems(data) {
   return [];
 }
 
+/** Map existing urgency -> priority (App.jsx expects "priority") */
+function mapUrgencyToPriority(u) {
+  const v = String(u || '').toLowerCase();
+  if (v === 'critical' || v === 'high') return 'high';
+  if (v === 'med' || v === 'medium' || v === 'warn') return 'medium';
+  if (v === 'info' || v === 'low' || v === '') return 'low';
+  return 'low';
+}
+
+/** Ensure an item has the keys the UI expects */
+function normalizeForUI(item = {}) {
+  const priority = item.priority || mapUrgencyToPriority(item.urgency);
+  return {
+    message: String(item.message || '').trim(),
+    priority,
+    category: item.category || 'General',
+    source: item.source || 'unknown',
+    createdAt: item.createdAt || item.timestamp || new Date().toISOString(),
+    link: item.link || '',
+    target: item.target || item.route || null, // App checks either
+    status: item.status || 'active',
+    // keep original in case other views use it
+    ...item,
+  };
+}
+
 export async function fetchTickerItems() {
   try {
     const res = await fetch('/.netlify/functions/getTickerFeed', withAuthHeaders());
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const items = normalizeItems(data);
+    const items = normalizeItems(data)
+      .map(normalizeForUI)
+      .filter(i => i.status.toLowerCase() !== 'archived' && i.message.length > 0);
 
-    const active = items.filter(i => (String(i?.status || '')).toLowerCase() !== 'archived');
-
-    active.sort((a, b) => {
-      const aTs = Date.parse(a?.createdAt || a?.timestamp || 0) || 0;
-      const bTs = Date.parse(b?.createdAt || b?.timestamp || 0) || 0;
+    items.sort((a, b) => {
+      const aTs = Date.parse(a.createdAt) || 0;
+      const bTs = Date.parse(b.createdAt) || 0;
       return bTs - aTs;
     });
 
-    return active;
+    return items;
   } catch (err) {
     console.error('Error fetching ticker items:', err);
     return [];
@@ -42,7 +67,8 @@ export async function fetchTickerItems() {
 
 export async function pushAutoTickerItems(items, source = 'auto') {
   try {
-    const payload = { items: Array.isArray(items) ? items : [], source };
+    const safeItems = (Array.isArray(items) ? items : []).map(normalizeForUI);
+    const payload = { items: safeItems, source };
     const res = await fetch(
       '/.netlify/functions/refreshAutoTickerItems',
       withAuthHeaders({ method: 'POST', body: JSON.stringify(payload) })
@@ -59,33 +85,39 @@ export async function pushAutoTickerItems(items, source = 'auto') {
   }
 }
 
-/** ===== Generators (AI Insights) ===== */
+/** ---------- Generators (AI Insights) ---------- */
 export function generateAIInsightsTickerItems(insights) {
   if (!insights || typeof insights !== 'object') return [];
   const nowIso = new Date().toISOString();
-  const items = [];
+  const out = [];
 
   if (insights.executiveSummary) {
-    items.push({
-      createdAt: nowIso,
-      message: truncate(`Executive Summary: ${insights.executiveSummary}`, 220),
-      category: 'AI',
-      source: 'auto-ai',
-      urgency: 'info'
-    });
+    out.push(
+      normalizeForUI({
+        createdAt: nowIso,
+        message: truncate(`Executive Summary: ${insights.executiveSummary}`, 220),
+        category: 'AI',
+        source: 'auto-ai',
+        priority: 'medium',
+        target: 'dashboard',
+      })
+    );
   }
 
   if (Array.isArray(insights.topPriorities)) {
     insights.topPriorities.slice(0, 3).forEach((p) => {
       const title = p?.title ? `Priority: ${p.title}` : 'Priority';
       const action = p?.action ? ` → ${p.action}` : '';
-      items.push({
-        createdAt: nowIso,
-        message: truncate(`${title}${action}`, 180),
-        category: 'Priority',
-        source: 'auto-ai',
-        urgency: p?.urgency || 'medium'
-      });
+      out.push(
+        normalizeForUI({
+          createdAt: nowIso,
+          message: truncate(`${title}${action}`, 180),
+          category: 'Priority',
+          source: 'auto-ai',
+          priority: mapUrgencyToPriority(p?.urgency || 'medium'),
+          target: 'dashboard',
+        })
+      );
     });
   }
 
@@ -93,101 +125,103 @@ export function generateAIInsightsTickerItems(insights) {
     insights.priorityBids.slice(0, 3).forEach((b) => {
       const dueTxt = b?.dueDate ? ` (Due: ${b.dueDate})` : '';
       const lead = b?.entity || b?.bidSystem || 'Opportunity';
-      items.push({
-        createdAt: nowIso,
-        message: truncate(`${lead}: ${b?.subject || 'No subject'}${dueTxt}`, 180),
-        category: 'Bids',
-        source: 'auto-ai',
-        urgency: (b?.daysUntilDue != null && b.daysUntilDue <= 3) ? 'high'
-              : (b?.daysUntilDue != null && b.daysUntilDue <= 7) ? 'medium'
-              : 'low',
-        link: b?.url || ''
-      });
+      const pr =
+        b?.daysUntilDue != null && b.daysUntilDue <= 3 ? 'high' :
+        b?.daysUntilDue != null && b.daysUntilDue <= 7 ? 'medium' : 'low';
+      out.push(
+        normalizeForUI({
+          createdAt: nowIso,
+          message: truncate(`${lead}: ${b?.subject || 'No subject'}${dueTxt}`, 180),
+          category: 'Bids',
+          source: 'auto-ai',
+          priority: pr,
+          link: b?.url || '',
+          target: 'bids',
+        })
+      );
     });
   }
 
   if (Array.isArray(insights.newsArticles)) {
     insights.newsArticles.slice(0, 2).forEach((n) => {
-      items.push({
-        createdAt: nowIso,
-        message: truncate(`News: ${n?.title || 'Untitled'}`, 180),
-        category: 'News',
-        source: 'auto-ai',
-        urgency: 'info',
-        link: n?.link || ''
-      });
+      out.push(
+        normalizeForUI({
+          createdAt: nowIso,
+          message: truncate(`News: ${n?.title || 'Untitled'}`, 180),
+          category: 'News',
+          source: 'auto-ai',
+          priority: 'low',
+          link: n?.link || '',
+          target: 'dashboard',
+        })
+      );
     });
   }
 
-  return items;
+  return out;
 }
 
-/** ===== Generators (System Admin) ===== */
+/** ---------- Generators (System Admin) ---------- */
 export function generateSystemAdminTickerItems(input) {
   const nowIso = new Date().toISOString();
-  const items = [];
+  const mk = (count) =>
+    normalizeForUI({
+      createdAt: nowIso,
+      message: `System Admin: ${count} new alert${count > 1 ? 's' : ''}`,
+      category: 'System',
+      source: 'auto-admin',
+      priority: count >= 5 ? 'high' : count >= 2 ? 'medium' : 'low',
+      target: 'bid-systems',
+    });
+
   if (input && !Array.isArray(input) && typeof input === 'object') {
     const count = Number(input.newAdminEmailsCount ?? input?.systemAdmin?.newCount ?? 0) || 0;
-    if (count > 0) {
-      items.push({
-        createdAt: nowIso,
-        message: `System Admin: ${count} new alert${count > 1 ? 's' : ''}`,
-        category: 'System',
-        source: 'auto-admin',
-        urgency: count >= 5 ? 'high' : count >= 2 ? 'medium' : 'low'
-      });
-    }
-    return items;
+    return count > 0 ? [mk(count)] : [];
   }
   if (Array.isArray(input)) {
     const fresh = input.filter(e => String(e?.status || '').toLowerCase() === 'new');
     const count = fresh.length;
-    if (count > 0) {
-      items.push({
-        createdAt: nowIso,
-        message: `System Admin: ${count} new alert${count > 1 ? 's' : ''}`,
-        category: 'System',
-        source: 'auto-admin',
-        urgency: count >= 5 ? 'high' : count >= 2 ? 'medium' : 'low'
-      });
-    }
+    return count > 0 ? [mk(count)] : [];
   }
-  return items;
+  return [];
 }
 
-/** ===== Generators (Bids: Respond) ===== */
+/** ---------- Generators (Bids: Respond) ---------- */
 export function generateTickerItemsFromBids(bids, limit = 5) {
   if (!Array.isArray(bids) || bids.length === 0) return [];
   const nowIso = new Date().toISOString();
 
   const normalized = bids
-    .filter(b => (b?.recommendation || '').toLowerCase() === 'respond')
+    .filter(b => (String(b?.recommendation || '')).toLowerCase() === 'respond')
     .sort((a, b) => toSafeDays(a?.daysUntilDue) - toSafeDays(b?.daysUntilDue))
     .slice(0, limit);
 
   return normalized.map((b) => {
     const dueTxt = b?.dueDate ? ` (Due: ${b.dueDate})` : '';
     const lead = b?.entity || b?.bidSystem || 'Opportunity';
-    return {
+    const priority =
+      b?.daysUntilDue != null && b.daysUntilDue <= 3 ? 'high' :
+      b?.daysUntilDue != null && b.daysUntilDue <= 7 ? 'medium' : 'low';
+
+    return normalizeForUI({
       createdAt: nowIso,
       message: truncate(`${lead}: ${b?.subject || 'No subject'}${dueTxt}`, 180),
       category: 'Bids',
       source: 'auto-bids',
-      urgency: (b?.daysUntilDue != null && b.daysUntilDue <= 3) ? 'high'
-            : (b?.daysUntilDue != null && b.daysUntilDue <= 7) ? 'medium'
-            : 'low',
-      link: b?.url || ''
-    };
+      priority,
+      link: b?.url || '',
+      target: 'bids',
+    });
   });
 }
 
-/** ===== Generators (Bids: Submitted) ===== */
+/** ---------- Generators (Bids: Submitted) ---------- */
 export function generateSubmittedBidItems(bids, limit = 5) {
   if (!Array.isArray(bids) || bids.length === 0) return [];
   const nowIso = new Date().toISOString();
 
   const submitted = bids
-    .filter(b => (b?.status || '').toLowerCase() === 'submitted')
+    .filter(b => (String(b?.status || '')).toLowerCase() === 'submitted')
     .sort((a, b) => {
       const aTs = Date.parse(a?.dateAdded || a?.emailDateReceived || 0) || 0;
       const bTs = Date.parse(b?.dateAdded || b?.emailDateReceived || 0) || 0;
@@ -201,60 +235,95 @@ export function generateSubmittedBidItems(bids, limit = 5) {
         ? ` (Sent: ${(b.dateAdded || b.emailDateReceived).slice(0, 10)})`
         : '';
     const lead = b?.entity || b?.bidSystem || 'Submission';
-    return {
+    return normalizeForUI({
       createdAt: nowIso,
       message: truncate(`${lead}: ${b?.subject || 'Untitled submission'}${when}`, 180),
       category: 'Submitted',
       source: 'auto-bids',
-      urgency: 'info',
-      link: b?.url || ''
-    };
+      priority: 'low', // informational
+      link: b?.url || '',
+      target: 'bids',
+    });
   });
 }
 
-/** ===== Optional Generators (to avoid future “missing export”s) ===== */
+/** ---------- Generators (Bids: Disregarded) ---------- */
 export function generateDisregardedBidItems(bids, limit = 5) {
   if (!Array.isArray(bids) || bids.length === 0) return [];
   const nowIso = new Date().toISOString();
   return bids
-    .filter(b => (b?.status || '').toLowerCase() === 'disregarded')
+    .filter(b => (String(b?.status || '')).toLowerCase() === 'disregarded')
     .slice(0, limit)
-    .map(b => ({
-      createdAt: nowIso,
-      message: truncate(`Disregarded: ${b?.subject || 'Opportunity'} — ${b?.aiReasoning || 'No reason'}`, 180),
-      category: 'Bids',
-      source: 'auto-bids',
-      urgency: 'low',
-      link: b?.url || ''
-    }));
+    .map(b =>
+      normalizeForUI({
+        createdAt: nowIso,
+        message: truncate(`Disregarded: ${b?.subject || 'Opportunity'} — ${b?.aiReasoning || 'No reason'}`, 180),
+        category: 'Bids',
+        source: 'auto-bids',
+        priority: 'low',
+        link: b?.url || '',
+        target: 'bids',
+      })
+    );
 }
 
+/** ---------- Generators (Webinars) ---------- */
 export function generateWebinarTickerItems(webinars, limit = 3) {
   if (!Array.isArray(webinars) || webinars.length === 0) return [];
   const nowIso = new Date().toISOString();
   return webinars
-    .sort((a, b) => Date.parse(a?.date || 0) - Date.parse(b?.date || 0))
+    .sort((a, b) => Date.parse(a?.startTime || a?.date || 0) - Date.parse(b?.startTime || b?.date || 0))
     .slice(0, limit)
-    .map(w => ({
-      createdAt: nowIso,
-      message: truncate(`Webinar: ${w?.title || 'Untitled'} (${w?.date || 'TBA'})`, 180),
-      category: 'Webinar',
-      source: 'auto-webinars',
-      urgency: 'info'
-    }));
+    .map(w =>
+      normalizeForUI({
+        createdAt: nowIso,
+        message: truncate(`Webinar: ${w?.title || 'Untitled'} (${(w?.startTime || w?.date || 'TBA').toString().slice(0, 10)})`, 180),
+        category: 'Webinar',
+        source: 'auto-webinars',
+        priority: 'low',
+        target: 'webinars',
+        link: w?.registrationUrl || '',
+      })
+    );
 }
 
+/** ---------- Generators (News) ---------- */
 export function generateNewsTickerItems(articles, limit = 3) {
   if (!Array.isArray(articles) || articles.length === 0) return [];
   const nowIso = new Date().toISOString();
-  return articles.slice(0, limit).map(n => ({
-    createdAt: nowIso,
-    message: truncate(`News: ${n?.title || 'Untitled'}`, 180),
-    category: 'News',
-    source: 'auto-news',
-    urgency: 'info',
-    link: n?.link || ''
-  }));
+  return articles.slice(0, limit).map(n =>
+    normalizeForUI({
+      createdAt: nowIso,
+      message: truncate(`News: ${n?.title || 'Untitled'}`, 180),
+      category: 'News',
+      source: 'auto-news',
+      priority: 'low',
+      link: n?.link || '',
+      target: 'dashboard',
+    })
+  );
+}
+
+/** ---------- Generators (Social - NEW) ---------- */
+export function generateSocialMediaTickerItems(posts, limit = 5) {
+  if (!Array.isArray(posts) || posts.length === 0) return [];
+  const nowIso = new Date().toISOString();
+  return posts
+    .slice(0, limit)
+    .map(p =>
+      normalizeForUI({
+        createdAt: nowIso,
+        message: truncate(
+          `Social: ${p?.platform ? `[${p.platform}] ` : ''}${p?.title || p?.text || 'New post'}`,
+          180
+        ),
+        category: 'Social',
+        source: 'auto-social',
+        priority: 'medium',
+        link: p?.url || p?.permalink || '',
+        target: 'social',
+      })
+    );
 }
 
 /* ---------- helpers ---------- */

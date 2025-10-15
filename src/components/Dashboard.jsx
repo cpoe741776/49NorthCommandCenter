@@ -17,87 +17,71 @@ import {
 } from 'lucide-react';
 import { fetchAIInsights } from '../services/aiInsightsService';
 
+const CACHE_KEY = 'aiInsightsCache';
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiInsights, setAiInsights] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
 
-  // 1) Memoized loader – handles cache + fetch
+  // Memoized loader with local TTL cache + service caching
   const loadAIInsights = useCallback(
     async (bypassCache = false) => {
       try {
         setAiLoading(true);
         setAiError(null);
 
-        let data;
-        const cachedInsights = localStorage.getItem('aiInsightsCache');
-
-        // Check client-side cache first (unless bypassing)
-        if (cachedInsights && !bypassCache) {
+        // Client-side TTL cache
+        if (!bypassCache) {
           try {
-            const entry = JSON.parse(cachedInsights);
-            const fiveMinutes = 5 * 60 * 1000;
-
-            if (Date.now() - entry.timestamp < fiveMinutes) {
-              console.log(
-                '[Dashboard] Using fresh local cache from loadAIInsights check. Exiting fetch.'
-              );
-              setAiInsights(entry.data);
-              setAiLoading(false);
-              return;
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+              const entry = JSON.parse(cached);
+              if (Date.now() - (entry.timestamp || 0) < CACHE_TTL_MS) {
+                setAiInsights(entry.data);
+                setAiLoading(false);
+                return;
+              }
+              localStorage.removeItem(CACHE_KEY);
             }
-            // Cache expired – clear and continue to fetch
-            localStorage.removeItem('aiInsightsCache');
-          } catch (err) {
-            console.error('Error parsing local cache during check:', err);
-            localStorage.removeItem('aiInsightsCache');
+          } catch (e) {
+            console.warn('[Dashboard] Cache parse failed, clearing.', e);
+            localStorage.removeItem(CACHE_KEY);
           }
         }
 
-        // Fetch fresh
-        data = await fetchAIInsights(bypassCache);
+        // Fetch fresh (fast by default; your button triggers bypassCache=true)
+        const data = await fetchAIInsights(bypassCache);
 
-        // Timeout/fallback handling
+        // If server signals limited mode
         const analysisSkipped = data.note && data.note.includes('Full AI analysis unavailable');
 
-        if (analysisSkipped) {
-          setAiInsights(data);
-          setAiError(data.note);
-          console.warn('[Dashboard] AI Analysis skipped due to timeout:', data.note);
-        } else {
-          setAiInsights(data);
-          setAiError(null);
-          console.log('[Dashboard] Full AI Analysis successful.');
+        setAiInsights(data);
+        setAiError(analysisSkipped ? data.note : null);
 
-          // Save cache
+        // Save TTL cache
+        try {
           localStorage.setItem(
-            'aiInsightsCache',
-            JSON.stringify({
-              data,
-              timestamp: Date.now()
-            })
+            CACHE_KEY,
+            JSON.stringify({ data, timestamp: Date.now() })
           );
+        } catch {
+          /* ignore quota */
         }
 
-        // Ticker Update
-        if (data.summary || data.executiveSummary) {
-          const { generateAIInsightsTickerItems } = await import('../services/tickerService');
+        // Ticker enrichment
+        if (data.executiveSummary || (data.topPriorities && data.topPriorities.length)) {
+          const { generateAIInsightsTickerItems, pushAutoTickerItems } = await import('../services/tickerService');
           const aiTickerItems = generateAIInsightsTickerItems(data);
-
           if (aiTickerItems.length > 0) {
-            await fetch('/.netlify/functions/refreshAutoTickerItems', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ items: aiTickerItems, source: 'auto-ai' })
-            });
-
-            if (onTickerUpdate) {
-              await onTickerUpdate();
-            }
+            // Prefer centralized helper; falls back to POST inside
+            await pushAutoTickerItems(aiTickerItems, 'auto-ai');
+            if (onTickerUpdate) await onTickerUpdate();
           }
         }
       } catch (err) {
-        setAiError(err.message || 'A network error occurred.');
+        setAiError(err?.message || 'A network error occurred.');
         setAiInsights(null);
       } finally {
         setAiLoading(false);
@@ -106,40 +90,28 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     [onTickerUpdate]
   );
 
-  // 2) Initial load check (once on mount)
+  // Initial load (no auto fetch; uses cached if present)
   useEffect(() => {
-  const cachedInsights = localStorage.getItem('aiInsightsCache');
-
-  if (cachedInsights) {
     try {
-      const entry = JSON.parse(cachedInsights);
-      const fiveMinutes = 5 * 60 * 1000;
-
-      // Show cached immediately to prevent blank flash
-      setAiInsights(entry.data);
-
-      if (Date.now() - entry.timestamp < fiveMinutes) {
-        console.log('[Dashboard] Using fresh local cache for initial load. Skipping fetch.');
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const entry = JSON.parse(cached);
+        setAiInsights(entry.data);
+        if (Date.now() - (entry.timestamp || 0) < CACHE_TTL_MS) {
+          console.log('[Dashboard] Using fresh local cache for initial load.');
+        } else {
+          console.log('[Dashboard] Local cache expired. (Auto-load disabled)');
+        }
       } else {
-        console.log('[Dashboard] Local cache expired. (Auto-load disabled)');
-        // If you want auto-load, uncomment next line:
-        // loadAIInsights(true);
+        console.log('[Dashboard] No cache found. (Auto-load disabled)');
       }
-    } catch (err) {
-      console.error('Initial cache check failed.', err);
-      localStorage.removeItem('aiInsightsCache');
-      // Optional auto-load:
-      // loadAIInsights(true);
+    } catch (e) {
+      console.warn('[Dashboard] Initial cache check failed; clearing.', e);
+      localStorage.removeItem(CACHE_KEY);
     }
-  } else {
-    console.log('[Dashboard] No cache found. (Auto-load disabled)');
-    // Optional auto-load:
-    // loadAIInsights(true);
-  }
 
-  console.log('[Dashboard] AI Insights temporarily disabled for testing');
-}, [loadAIInsights]);
-
+    console.log('[Dashboard] AI Insights temporarily disabled for testing');
+  }, []);
 
   if (loading) {
     return (
@@ -154,7 +126,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const totalActive = summary?.totalActive ?? 0;
 
   const getUrgencyColor = (urgency) => {
-    switch (urgency) {
+    switch (String(urgency).toLowerCase()) {
       case 'high':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'medium':
@@ -166,7 +138,6 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     }
   };
 
-  // --- Main Render ---
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -175,9 +146,9 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         <p className="text-gray-600 mt-1">49 North Business Operations Dashboard</p>
       </div>
 
-      {/* Top Stats Cards - 4 Column Grid */}
+      {/* Top Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* System Admin Alerts Card - FIXED: Uses summary prop */}
+        {/* System Admin Alerts */}
         <div
           onClick={() => onNavigate('bid-systems')}
           className={`p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow ${
@@ -185,6 +156,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               ? 'bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-400'
               : 'bg-white'
           }`}
+          aria-label="Open System Admin"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -216,10 +188,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </div>
         </div>
 
-        {/* Active Bids Card (summary source) */}
+        {/* Active Bids */}
         <div
           onClick={() => onNavigate('bids')}
           className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+          aria-label="Open Bids"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -235,10 +208,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </div>
         </div>
 
-        {/* Webinars Card */}
+        {/* Webinars (static placeholder; wire to webinarService when ready) */}
         <div
           onClick={() => onNavigate('webinars')}
           className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+          aria-label="Open Webinars"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -250,10 +224,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="mt-4 text-sm text-gray-600">Next: Oct 30, 2025</div>
         </div>
 
-        {/* Social Posts Card (from aiInsights if available; fallback to summary totals) */}
+        {/* Social Posts */}
         <div
           onClick={() => onNavigate('social')}
-          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-colors"
+          aria-label="Open Social"
         >
           <div className="flex items-center justify-between">
             <div>
@@ -284,7 +259,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         </div>
       </div>
 
-      {/* AI Strategic Insights Section */}
+      {/* AI Strategic Insights */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -292,8 +267,8 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             <h2 className="text-xl font-bold text-gray-900">AI Strategic Insights</h2>
           </div>
           <button
-            onClick={() => loadAIInsights(true)} // Explicitly bypass cache on button click
-            enabled={aiLoading}
+            onClick={() => loadAIInsights(true)}
+            disabled={aiLoading}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
           >
             <RefreshCw size={16} className={aiLoading ? 'animate-spin' : ''} />
@@ -301,7 +276,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </button>
         </div>
 
-        {/* Empty State */}
+        {/* Empty */}
         {!aiLoading && !aiError && (!aiInsights || !aiInsights.executiveSummary) && (
           <div className="text-center py-12">
             <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
@@ -351,12 +326,12 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               <p className="text-gray-700">{aiInsights.executiveSummary}</p>
               <p className="text-xs text-gray-500 mt-2">
                 Generated:{' '}
-                {new Date(aiInsights.timestamp || Date.now()).toLocaleString()}
+                {new Date(aiInsights.generatedAt || Date.now()).toLocaleString()}
               </p>
             </div>
 
             {/* Top Priorities */}
-            {aiInsights.topPriorities?.length > 0 && (
+            {Array.isArray(aiInsights.topPriorities) && aiInsights.topPriorities.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Target size={18} className="text-blue-600" />
@@ -371,8 +346,13 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h4 className="font-semibold">{priority.title}</h4>
-                          <p className="text-sm mt-1">{priority.description}</p>
-                          <p className="text-sm mt-2 font-medium">→ {priority.action}</p>
+                          {/* description may not exist in normalized payload */}
+                          {priority.description && (
+                            <p className="text-sm mt-1">{priority.description}</p>
+                          )}
+                          {priority.action && (
+                            <p className="text-sm mt-2 font-medium">→ {priority.action}</p>
+                          )}
                         </div>
                         <span className="text-xs uppercase font-bold px-2 py-1 rounded">
                           {priority.urgency}
@@ -385,108 +365,73 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             )}
 
             {/* Priority Bids */}
-            {aiInsights.priorityBids?.length > 0 && (
+            {Array.isArray(aiInsights.priorityBids) && aiInsights.priorityBids.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <FileText size={18} className="text-blue-600" />
                   Priority Bids ({aiInsights.priorityBids.length} with "Respond" Status)
                 </h3>
                 <div className="space-y-2">
-                  {aiInsights.priorityBids.slice(0, 5).map((bid, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-                      onClick={() => onNavigate('bids')}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          {bid.entity && (
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-                                {bid.entity}
-                              </span>
+                  {aiInsights.priorityBids.slice(0, 5).map((bid, idx) => {
+                    const days = Number.isFinite(Number(bid.daysUntilDue)) ? Number(bid.daysUntilDue) : null;
+                    return (
+                      <div
+                        key={idx}
+                        className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
+                        onClick={() => onNavigate('bids')}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            {bid.entity && (
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
+                                  {bid.entity}
+                                </span>
+                              </div>
+                            )}
+                            <h4 className="font-semibold text-gray-900">
+                              {bid.subject || 'Untitled Opportunity'}
+                            </h4>
+                            {/* Optional tags */}
+                            <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                              {bid.dueDate && (
+                                <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
+                                  📅 Due: {bid.dueDate}
+                                </span>
+                              )}
+                              {days !== null && days >= 0 && (
+                                <span
+                                  className={`px-2 py-1 rounded font-medium ${
+                                    days <= 3
+                                      ? 'bg-red-100 text-red-800'
+                                      : days <= 7
+                                      ? 'bg-orange-100 text-orange-800'
+                                      : 'bg-yellow-100 text-yellow-800'
+                                  }`}
+                                >
+                                  ⏰ {days} days left
+                                </span>
+                              )}
+                              {bid.bidSystem && (
+                                <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
+                                  🏢 {bid.bidSystem}
+                                </span>
+                              )}
                             </div>
-                          )}
-                          <h4 className="font-semibold text-gray-900">{bid.subject}</h4>
-                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{bid.summary}</p>
-                          <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                            {bid.dueDate && (
-                              <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
-                                📅 Due: {bid.dueDate}
-                              </span>
-                            )}
-                            {bid.daysUntilDue !== null && bid.daysUntilDue >= 0 && (
-                              <span
-                                className={`px-2 py-1 rounded font-medium ${
-                                  bid.daysUntilDue <= 3
-                                    ? 'bg-red-100 text-red-800'
-                                    : bid.daysUntilDue <= 7
-                                    ? 'bg-orange-100 text-orange-800'
-                                    : 'bg-yellow-100 text-yellow-800'
-                                }`}
-                              >
-                                ⏰ {bid.daysUntilDue} days left
-                              </span>
-                            )}
-                            {bid.score && (
-                              <span className="px-2 py-1 bg-green-50 text-green-700 rounded font-medium">
-                                ⭐ Score: {bid.score}
-                              </span>
-                            )}
-                            {bid.bidSystem && (
-                              <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
-                                🏢 {bid.bidSystem}
-                              </span>
-                            )}
-                            {bid.emailFrom && !bid.entity && (
-                              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                                From: {bid.emailFrom}
-                              </span>
-                            )}
                           </div>
-                          {bid.keywords && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {bid.keywords
-                                .split(',')
-                                .slice(0, 5)
-                                .map((kw, i) => (
-                                  <span
-                                    key={i}
-                                    className="px-2 py-1 bg-blue-50 text-blue-600 rounded text-xs"
-                                  >
-                                    {kw.trim()}
-                                  </span>
-                                ))}
-                            </div>
-                          )}
+                          <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
                         </div>
-                        <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-
-                {aiInsights.bidRecommendations?.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Recommendations:</h4>
-                    <div className="space-y-2">
-                      {aiInsights.bidRecommendations.map((rec, idx) => (
-                        <div key={idx} className="text-sm bg-blue-50 p-2 rounded">
-                          <p className="font-medium text-gray-900">
-                            {rec.entity} - {rec.subject}
-                          </p>
-                          <p className="text-gray-600 text-xs mt-1">{rec.reason}</p>
-                          <p className="text-blue-600 text-xs mt-1">→ {rec.action}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
             {/* Social Media Activity */}
-            {aiInsights?.socialPosts?.length > 0 && (
+            {Array.isArray(aiInsights.socialPosts) && aiInsights.socialPosts.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Share2 size={18} className="text-blue-600" />
@@ -494,7 +439,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 </h3>
                 <div className="space-y-2">
                   {aiInsights.socialPosts
-                    .filter((p) => p.status === 'Published')
+                    .filter((p) => String(p.status).toLowerCase() === 'published')
                     .map((post, idx) => (
                       <div
                         key={idx}
@@ -503,15 +448,17 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900">{post.title}</h4>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{post.body}</p>
-                            <div className="flex gap-2 mt-2">
-                              {post.platforms?.split(',').map((p) => (
-                                <span key={p} className="text-xs bg-blue-50 px-2 py-1 rounded">
-                                  {p.trim()}
-                                </span>
-                              ))}
-                            </div>
+                            <h4 className="font-semibold text-gray-900">{post.title || 'Post'}</h4>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{post.body || post.text}</p>
+                            {post.platforms && (
+                              <div className="flex gap-2 mt-2">
+                                {post.platforms.split(',').map((p) => (
+                                  <span key={p} className="text-xs bg-blue-50 px-2 py-1 rounded">
+                                    {p.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {post.publishedDate && (
                               <p className="text-xs text-gray-500 mt-1">
                                 Published: {new Date(post.publishedDate).toLocaleDateString()}
@@ -526,31 +473,33 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               </div>
             )}
 
-            {/* Two Column Grid: Content Insights & Risk Alerts */}
+            {/* Content & Risks */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Content Insights */}
               {aiInsights.contentInsights && (
                 <div className="bg-white rounded-lg p-4 border border-blue-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Content Strategy</h3>
                   <div className="space-y-2">
-                    <div>
-                      <p className="text-xs text-gray-600 uppercase font-semibold">Top Performing</p>
-                      <p className="text-sm text-gray-700 mt-1">
-                        {aiInsights.contentInsights.topPerforming}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-600 uppercase font-semibold mt-3">Suggestions</p>
-                      <p className="text-sm text-gray-700 mt-1">
-                        {aiInsights.contentInsights.suggestions}
-                      </p>
-                    </div>
+                    {aiInsights.contentInsights.topPerforming && (
+                      <div>
+                        <p className="text-xs text-gray-600 uppercase font-semibold">Top Performing</p>
+                        <p className="text-sm text-gray-700 mt-1">
+                          {aiInsights.contentInsights.topPerforming}
+                        </p>
+                      </div>
+                    )}
+                    {aiInsights.contentInsights.suggestions && (
+                      <div>
+                        <p className="text-xs text-gray-600 uppercase font-semibold mt-3">Suggestions</p>
+                        <p className="text-sm text-gray-700 mt-1">
+                          {aiInsights.contentInsights.suggestions}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Risk Alerts */}
-              {aiInsights.riskAlerts?.length > 0 && (
+              {Array.isArray(aiInsights.riskAlerts) && aiInsights.riskAlerts.length > 0 && (
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
                   <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                     <AlertTriangle size={18} className="text-orange-600" />
@@ -572,7 +521,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             </div>
 
             {/* News Opportunities */}
-            {aiInsights.newsArticles?.length > 0 && (
+            {Array.isArray(aiInsights.newsArticles) && aiInsights.newsArticles.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Newspaper size={18} className="text-blue-600" />
@@ -580,10 +529,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 </h3>
                 <div className="space-y-2">
                   {aiInsights.newsArticles.map((article, idx) => (
-                    <div
-                      key={idx}
-                      className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors"
-                    >
+                    <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
                       <a
                         href={article.link}
                         target="_blank"
@@ -594,30 +540,34 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                           {article.title}
                         </h4>
                         <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                          <span>{article.source}</span>
-                          <span>•</span>
-                          <span>
-                            Published:{' '}
-                            {new Date(article.pubDate).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </span>
-                          <span>•</span>
-                          <span className="text-blue-600">
-                            {Math.floor(
-                              (Date.now() - Date.parse(article.pubDate)) / (1000 * 60 * 60 * 24)
-                            )}{' '}
-                            days ago
-                          </span>
+                          {article.source && <span>{article.source}</span>}
+                          {article.publishedAt && (
+                            <>
+                              <span>•</span>
+                              <span>
+                                Published:{' '}
+                                {new Date(article.publishedAt).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </span>
+                              <span>•</span>
+                              <span className="text-blue-600">
+                                {Math.floor(
+                                  (Date.now() - Date.parse(article.publishedAt)) / (1000 * 60 * 60 * 24)
+                                )}{' '}
+                                days ago
+                              </span>
+                            </>
+                          )}
                         </div>
                       </a>
                     </div>
                   ))}
                 </div>
 
-                {aiInsights.newsOpportunities?.length > 0 && (
+                {Array.isArray(aiInsights.newsOpportunities) && aiInsights.newsOpportunities.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Analysis:</h4>
                     <div className="space-y-2">

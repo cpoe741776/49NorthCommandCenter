@@ -1,5 +1,22 @@
-import React, { useState } from 'react';
+// src/components/AddBidSystemForm.jsx
+import React, { useCallback, useState } from 'react';
+import PropTypes from 'prop-types';
 import { X, Save } from 'lucide-react';
+
+// normalize URL to include protocol
+const withHttp = (url) => {
+  if (!url) return '';
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
+// normalize money like "$0", "0", "  $120  " -> "$120"
+const normalizeMoney = (val) => {
+  if (val == null) return '$0';
+  const s = String(val).trim().replace(/^\$/, '');
+  if (s === '' || Number.isNaN(Number(s))) return '$0';
+  return `$${s}`;
+};
 
 const AddBidSystemForm = ({ onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -10,11 +27,11 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
     loginUrl: '',
     username: '',
     password: '',
-    registrationDate: '',              // NEW: User-entered
+    registrationDate: '',              // user-entered
     emailAlertsEnabled: 'No',
     alertEmailAddress: 'automation@mymentalarmor.com',
-    codeType: 'NAICS',                 // NEW: Type of code
-    codeNumbers: '611430',             // NEW: Actual codes
+    codeType: 'NAICS',
+    codeNumbers: '611430',
     geographicCoverage: '',
     subscriptionType: 'Free',
     renewalDate: '',
@@ -24,45 +41,54 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleChange = (e) => {
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-    
-    if (!formData.systemName || !formData.geographicCoverage) {
+    if (saving) return;
+
+    const requiredMissing =
+      !formData.systemName.trim() || !formData.geographicCoverage.trim();
+    if (requiredMissing) {
       setError('System Name and Geographic Coverage are required');
       return;
     }
 
-    try {
-      setSaving(true);
-      setError(null);
+    setError(null);
+    setSaving(true);
 
-      const response = await fetch('/.netlify/functions/addBidSystem', {
+    // build payload with normalized values
+    const payload = {
+      ...formData,
+      systemName: formData.systemName.trim(),
+      geographicCoverage: formData.geographicCoverage.trim(),
+      websiteUrl: withHttp(formData.websiteUrl),
+      loginUrl: withHttp(formData.loginUrl),
+      annualCost: normalizeMoney(formData.annualCost),
+      // keep other fields as-is
+    };
+
+    try {
+      const res = await fetch('/.netlify/functions/addBidSystem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        onSuccess();
-      } else {
-        setError(data.error || 'Failed to add system');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to add system');
       }
+      onSuccess?.();
     } catch (err) {
-      setError('Failed to add system: ' + err.message);
+      setError(err.message || 'Failed to add system');
     } finally {
       setSaving(false);
     }
-  };
+  }, [formData, onSuccess, saving]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -71,8 +97,10 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <h2 className="text-2xl font-bold text-gray-900">Add New Bid System</h2>
           <button
+            type="button"
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            aria-label="Close"
           >
             <X size={24} />
           </button>
@@ -152,11 +180,9 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Registration Date - NEW */}
+          {/* Registration Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Registration Date
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Registration Date</label>
             <input
               type="date"
               name="registrationDate"
@@ -217,7 +243,7 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Commodity Codes - UPDATED */}
+          {/* Commodity Codes */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Code Type</label>
@@ -355,6 +381,11 @@ const AddBidSystemForm = ({ onClose, onSuccess }) => {
       </div>
     </div>
   );
+};
+
+AddBidSystemForm.propTypes = {
+  onClose: PropTypes.func,
+  onSuccess: PropTypes.func,
 };
 
 export default AddBidSystemForm;

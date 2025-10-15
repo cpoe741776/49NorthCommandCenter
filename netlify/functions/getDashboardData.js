@@ -1,166 +1,181 @@
 // netlify/functions/getDashboardData.js
-// Responsibility: Fetch ALL sheets data and return ONLY simple counts/KPIs (Analog Data).
-// This runs fast to populate the dashboard cards immediately and correctly.
+// Fetch minimal counts/KPIs for dashboard, fast & cache-friendly.
+
 const { google } = require('googleapis');
 
-// =======================
-// Config & Setup
-// =======================
+// ---------- Config ----------
 const CFG = {
-  GOOGLE_SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  GOOGLE_TIMEOUT_MS: 8000,
-  CACHE_TTL_MS: 5 * 60 * 1000 
+  SCOPES: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  TIMEOUT_MS: 8000,
+  CACHE_TTL_MS: 5 * 60 * 1000,
 };
 
-// Simple in-memory cache (will reset on cold starts)
-const cache = new Map();
-function getCacheKey(spreadsheetId, ranges) { return `${spreadsheetId}-${ranges.join(',')}`; }
-function getCached(key) {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > CFG.CACHE_TTL_MS) { cache.delete(key); return null; }
-  return entry.data;
+// ---------- CORS ----------
+function corsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=60',
+  };
 }
-function setCache(key, data) { cache.set(key, { data, timestamp: Date.now() }); } 
 
-const withTimeout = async (promise, label, ms) => {
-  const controller = new AbortController();
-  const t = setTimeout(() => { console.warn(`[DashboardData] Timeout for ${label} after ${ms}ms`); controller.abort(); }, ms);
-  try {
-    const result = await promise;
-    clearTimeout(t);
-    return result;
-  } catch (error) {
-    clearTimeout(t);
-    return null; 
-  }
+// ---------- Tiny cache ----------
+const cache = new Map();
+const makeCacheKey = (ids, ranges) => `${ids.join('|')}::${ranges.join('|')}`;
+const getCached = (k) => {
+  const e = cache.get(k);
+  if (!e) return null;
+  if (Date.now() - e.ts > CFG.CACHE_TTL_MS) { cache.delete(k); return null; }
+  return e.data;
 };
+const setCached = (k, data) => cache.set(k, { ts: Date.now(), data });
 
-// =======================
-// MAIN HANDLER
-// =======================
-exports.handler = async (event, context) => {
+// ---------- Soft-timeout helper ----------
+async function withTimeout(promise, label, ms) {
+  let timeout;
   try {
-    let serviceAccountKey;
-    try {
-      if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-        serviceAccountKey = JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'));
-      } else {
-        serviceAccountKey = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-      }
-    } catch (parseError) { throw new Error('Invalid service account credentials'); }
+    const race = Promise.race([
+      promise,
+      new Promise((_, rej) => (timeout = setTimeout(() => rej(new Error(`${label} timeout`)), ms))),
+    ]);
+    const res = await race;
+    clearTimeout(timeout);
+    return res;
+  } catch (e) {
+    clearTimeout(timeout);
+    console.warn(`[getDashboardData] ${label} -> ${e.message}`);
+    return null; // soft-fail
+  }
+}
+
+// ---------- Parsers (minimal fields only) ----------
+const parseBids = (rows = []) => rows.map((r) => ({ recommendation: r[0] || '' }));
+const parseAdmin = (rows = []) => rows.map((r) => ({ status: r[9] || '' })); // col J
+const parseWebinars = (rows = []) => rows.map((r) => ({ status: r[6] || '' })); // col G
+const parseSocial = (rows = []) => rows.map((r) => ({ status: r[1] || '' })); // col B
+
+exports.handler = async (event) => {
+  const headers = corsHeaders(event.headers?.origin);
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
+  if (event.httpMethod !== 'GET') {
+    return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
+  }
+
+  try {
+    // --- Credentials ---
+    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
+      ? Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
+      : process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    const svc = JSON.parse(keyRaw);
 
     const auth = new google.auth.JWT({
-      email: serviceAccountKey.client_email,
-      key: serviceAccountKey.private_key,
-      scopes: CFG.GOOGLE_SCOPES
+      email: svc.client_email,
+      key: svc.private_key,
+      scopes: CFG.SCOPES,
     });
-
     const sheets = google.sheets({ version: 'v4', auth });
-    
-    // Define all data ranges
+
+    // --- Sheet IDs ---
+    const BID_SHEET = process.env.GOOGLE_SHEET_ID;
+    const WEB_SHEET = process.env.WEBINAR_SHEET_ID;
+    const SOC_SHEET = process.env.SOCIAL_MEDIA_SHEET_ID;
+
+    if (!BID_SHEET || !WEB_SHEET) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ success: false, error: 'GOOGLE_SHEET_ID and WEBINAR_SHEET_ID are required' }),
+      };
+    }
+
+    // --- Ranges ---
     const bidRanges = ['Active_Bids!A2:U', 'Submitted!A2:U', 'Disregarded!A2:U', 'Active_Admin!A2:J'];
     const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F'];
     const socialRanges = ['MainPostData!A2:R'];
 
-    const cacheKey = getCacheKey(process.env.GOOGLE_SHEET_ID, bidRanges.concat(webinarRanges, socialRanges)); 
-    
-    // Check Backend Cache
-    const bypassBackendCache = event.queryStringParameters && event.queryStringParameters.t;
-    let cachedResponse = bypassBackendCache ? null : getCached(cacheKey);
-
-    if (cachedResponse) {
-      return { statusCode: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' }, body: JSON.stringify(cachedResponse) };
+    // --- Cache ---
+    const cacheKey = makeCacheKey(
+      [BID_SHEET, WEB_SHEET, SOC_SHEET || ''],
+      [...bidRanges, ...webinarRanges, ...(SOC_SHEET ? socialRanges : [])]
+    );
+    const bypass = !!(event.queryStringParameters && event.queryStringParameters.t);
+    if (!bypass) {
+      const hit = getCached(cacheKey);
+      if (hit) return { statusCode: 200, headers, body: JSON.stringify(hit) };
     }
 
-    // Fetch all sheets
+    // --- Fetch in parallel with soft timeouts ---
     const [bidsRes, webinarRes, socialRes] = await Promise.all([
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.GOOGLE_SHEET_ID, ranges: bidRanges }), 'bidsBatchGet', CFG.GOOGLE_TIMEOUT_MS),
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.WEBINAR_SHEET_ID, ranges: webinarRanges }), 'webinarBatchGet', CFG.GOOGLE_TIMEOUT_MS),
-      withTimeout(sheets.spreadsheets.values.batchGet({ spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID, ranges: socialRanges }), 'socialBatchGet', CFG.GOOGLE_TIMEOUT_MS),
+      withTimeout(
+        sheets.spreadsheets.values.batchGet({ spreadsheetId: BID_SHEET, ranges: bidRanges }),
+        'bidsBatchGet',
+        CFG.TIMEOUT_MS
+      ),
+      withTimeout(
+        sheets.spreadsheets.values.batchGet({ spreadsheetId: WEB_SHEET, ranges: webinarRanges }),
+        'webinarBatchGet',
+        CFG.TIMEOUT_MS
+      ),
+      SOC_SHEET
+        ? withTimeout(
+            sheets.spreadsheets.values.batchGet({ spreadsheetId: SOC_SHEET, ranges: socialRanges }),
+            'socialBatchGet',
+            CFG.TIMEOUT_MS
+          )
+        : Promise.resolve(null),
     ]);
-    
-    if (!bidsRes || !webinarRes) throw new Error('Failed to fetch critical sheet data.');
 
-    // Parse Data (only fields needed for counts)
-    const activeBids = parseBids(bidsRes?.data.valueRanges[0]?.values || []);
-    const adminEmails = parseAdminEmails(bidsRes?.data.valueRanges[3]?.values || []); 
-    const webinars = parseWebinars(webinarRes?.data.valueRanges[0]?.values || []);
-    const socialPosts = parseSocialPosts(socialRes?.data.valueRanges[0]?.values || []);
+    if (!bidsRes || !webinarRes) {
+      // Critical sheets failed; return a safe empty payload.
+      const payload = { success: true, summary: {
+        adminEmailsCount: 0, newAdminEmailsCount: 0,
+        activeBidsCount: 0, respondCount: 0, gatherInfoCount: 0,
+        completedWebinars: 0, totalWebinars: 0,
+        socialPostsTotal: 0, socialPostsPublished: 0, socialPostsDrafts: 0,
+      }};
+      return { statusCode: 200, headers, body: JSON.stringify(payload) };
+    }
 
-    // --------------------------------
-    // Aggregate Counts (FIXES ADMIN COUNT ISSUE)
-    // --------------------------------
-    const respondBids = activeBids.filter(b => b.recommendation === 'Respond').length;
-    const gatherInfoBids = activeBids.filter(b => b.recommendation === 'Gather More Information').length;
+    // --- Parse just what we need ---
+    const activeBids = parseBids(bidsRes?.data?.valueRanges?.[0]?.values || []);
+    const adminEmails = parseAdmin(bidsRes?.data?.valueRanges?.[3]?.values || []);
+    const webinars = parseWebinars(webinarRes?.data?.valueRanges?.[0]?.values || []);
 
-    const finalSummary = {
-      // FIX: Admin count is now accurately derived from the parsed rows array length
-      adminEmailsCount: adminEmails.length, 
+    const socialPosts = SOC_SHEET
+      ? parseSocial(socialRes?.data?.valueRanges?.[0]?.values || [])
+      : [];
+
+    // --- Aggregate KPIs ---
+    const respondCount = activeBids.filter(b => b.recommendation === 'Respond').length;
+    const gatherInfoCount = activeBids.filter(b => b.recommendation === 'Gather More Information').length;
+
+    const summary = {
+      adminEmailsCount: adminEmails.length,
       newAdminEmailsCount: adminEmails.filter(e => e.status === 'New').length,
-      
+
       activeBidsCount: activeBids.length,
-      respondCount: respondBids,
-      gatherInfoCount: gatherInfoBids,
-      
+      respondCount,
+      gatherInfoCount,
+
       completedWebinars: webinars.filter(w => w.status === 'Completed').length,
       totalWebinars: webinars.length,
-      
+
       socialPostsTotal: socialPosts.length,
       socialPostsPublished: socialPosts.filter(p => p.status === 'Published').length,
       socialPostsDrafts: socialPosts.filter(p => p.status === 'Draft').length,
     };
-    
-    const responsePayload = { summary: finalSummary, success: true };
-    setCache(cacheKey, responsePayload);
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=60' },
-      body: JSON.stringify(responsePayload)
-    };
+    const responsePayload = { success: true, summary };
+    setCached(cacheKey, responsePayload);
 
+    return { statusCode: 200, headers, body: JSON.stringify(responsePayload) };
   } catch (error) {
-    console.error('[DashboardData] Error:', error.message);
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: false, error: error.message })
-    };
+    console.error('[getDashboardData] Error:', error?.message);
+    return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: error.message }) };
   }
 };
-
-// --- UTILITY FUNCTIONS (Copied from getAIInsights.js for self-containment) ---
-
-// Minimal Bids Parser (only need recommendation for the card counts)
-function parseBids(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ 
-    recommendation: row[0] || '', // Needed for respond/gather counts
-  })); 
-}
-
-// Admin Emails Parser (Needs status and sourceEmailId if used elsewhere, but mainly status)
-function parseAdminEmails(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ 
-    status: row[9] || '', // Status is column J (index 9)
-    // We only need status to filter for 'New', and the length for the total count.
-  })); 
-}
-
-// Webinars Parser
-function parseWebinars(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ 
-    status: row[6] || '', 
-  })); 
-}
-
-// Social Posts Parser
-function parseSocialPosts(rows) { 
-  if (!rows) return [];
-  return rows.map((row) => ({ 
-    status: row[1] || '', 
-  })); 
-}

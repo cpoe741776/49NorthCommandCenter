@@ -1,19 +1,19 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense, lazy } from 'react';
 import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2 } from 'lucide-react';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
-// ✅ FIX: Add fetchBids to the import
-import { fetchDashboardData, fetchBids } from './services/bidService'; 
-
+import { fetchDashboardData, fetchBids } from './services/bidService';
 import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, generateSystemAdminTickerItems } from './services/tickerService';
 import RadioPlayer from './components/RadioPlayer';
-import Dashboard from './components/Dashboard';
-import BidOperations from './components/BidOperations';
-import WebinarOperations from './components/WebinarOperations';
-import SocialMediaOperations from './components/SocialMediaOperations';
-import BidSystemsManager from './components/BidSystemsManager';
-import CompanyDataVault from './components/CompanyDataVault';
+
+// 🔻 Code-split feature modules (keeps initial bundle lean)
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const BidOperations = lazy(() => import('./components/BidOperations'));
+const WebinarOperations = lazy(() => import('./components/WebinarOperations'));
+const SocialMediaOperations = lazy(() => import('./components/SocialMediaOperations'));
+const BidSystemsManager = lazy(() => import('./components/BidSystemsManager'));
+const CompanyDataVault = lazy(() => import('./components/CompanyDataVault'));
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -38,7 +38,7 @@ const App = () => {
   const [tickerItems, setTickerItems] = useState([]);
   const tickerRef = useRef(null);
 
-  // Ticker styles once
+  // Inject ticker CSS once
   useEffect(() => {
     const styleId = 'ticker-animation-styles';
     if (!document.getElementById(styleId)) {
@@ -56,11 +56,8 @@ const App = () => {
 
   const loadTickerFeed = useCallback(async () => {
     try {
-      console.log('🎯 Loading ticker feed...');
       const items = await fetchTickerItems();
-      console.log('✅ Ticker items loaded:', items.length, 'items');
-      console.log('📋 Items:', items);
-      setTickerItems(items);
+      setTickerItems(Array.isArray(items) ? items : []);
     } catch (error) {
       console.error('❌ Ticker feed error:', error);
       setTickerItems([
@@ -71,130 +68,132 @@ const App = () => {
   }, []);
 
   const loadAdminEmails = useCallback(async () => {
-  try {
-    const response = await fetch('/.netlify/functions/getSystemAdminEmails');
-    const data = await response.json();
-    if (data.success) {
-      // Don't store in state - just use for ticker generation
-      const adminTickerItems = generateSystemAdminTickerItems(data.emails || []);
-      if (adminTickerItems.length > 0) {
-        try {
-          await fetch('/.netlify/functions/refreshAutoTickerItems', {
+    try {
+      const resp = await fetch('/.netlify/functions/getSystemAdminEmails', { method: 'GET' });
+      if (!resp.ok) {
+        console.warn('getSystemAdminEmails non-200:', resp.status);
+        return;
+      }
+      const data = await resp.json().catch(() => ({}));
+      if (data?.success) {
+        const adminTickerItems = generateSystemAdminTickerItems(data.emails || []);
+        if (Array.isArray(adminTickerItems) && adminTickerItems.length > 0) {
+          const r = await fetch('/.netlify/functions/refreshAutoTickerItems', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items: adminTickerItems, source: 'admin' })
           });
-        } catch (err) {
-          console.error('Failed to refresh admin ticker items:', err);
+          if (!r.ok) console.warn('refreshAutoTickerItems (admin) non-200:', r.status);
         }
       }
+    } catch (err) {
+      console.error('Failed to load admin emails:', err);
     }
-  } catch (err) {
-    console.error('Failed to load admin emails:', err);
-  }
-}, []);
+  }, []);
 
   const loadBids = useCallback(async () => {
-  try {
+    const aborter = new AbortController();
+    let mounted = true;
     setLoading(true);
     setError(null);
-    
-    // ✅ STEP 1: Get FAST summary counts for dashboard cards
-    const dashboardData = await fetchDashboardData(); 
-    setSummary(dashboardData.summary || {});
-    
-    // ✅ STEP 2: Get FULL bid arrays for BidOperations component
-    const fullBidsData = await fetchBids();
-    
-    if (fullBidsData.success) {
-      setBids(fullBidsData.activeBids || []); 
-      setDisregardedBids(fullBidsData.disregardedBids || []);
-      setSubmittedBids(fullBidsData.submittedBids || []);
-      
-      // ✅ STEP 3: Generate ticker items from actual bid data
+
+    try {
+      // FAST summary for dashboard
+      const dashboardData = await fetchDashboardData({ signal: aborter.signal }).catch(e => {
+        console.warn('fetchDashboardData failed:', e);
+        return {};
+      });
+      if (mounted) setSummary(dashboardData?.summary || {});
+
+      // FULL bid arrays
+      const fullBidsData = await fetchBids({ signal: aborter.signal });
+      if (!fullBidsData?.success) throw new Error(fullBidsData?.error || 'Failed to fetch bids');
+
+      if (mounted) {
+        setBids(fullBidsData.activeBids || []);
+        setDisregardedBids(fullBidsData.disregardedBids || []);
+        setSubmittedBids(fullBidsData.submittedBids || []);
+      }
+
+      // Generate ticker from bids
       const autoTickerItems = generateTickerItemsFromBids(fullBidsData.activeBids || []);
       const submittedTickerItems = generateSubmittedBidItems(fullBidsData.submittedBids || []);
-
       try {
-        await fetch('/.netlify/functions/refreshAutoTickerItems', {
+        const r = await fetch('/.netlify/functions/refreshAutoTickerItems', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            items: [...autoTickerItems, ...submittedTickerItems],
-            source: 'auto-bid'
-          })
+          body: JSON.stringify({ items: [...autoTickerItems, ...submittedTickerItems], source: 'auto-bid' })
         });
+        if (!r.ok) console.warn('refreshAutoTickerItems (bids) non-200:', r.status);
       } catch (tickerErr) {
         console.warn('Ticker update failed (non-fatal):', tickerErr);
       }
-    } else {
-      throw new Error(fullBidsData.error || 'Failed to fetch bids');
+
+      await loadTickerFeed();
+    } catch (err) {
+      console.error('Error loading bids:', err);
+      if (mounted) setError(err?.message || 'Unknown error');
+    } finally {
+      if (mounted) setLoading(false);
     }
 
-    await loadTickerFeed();
-    
-  } catch (err) {
-    console.error('Error loading bids:', err);
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-}, [loadTickerFeed]);
-const loadSocialPosts = useCallback(async () => {
-  try {
-    // Dynamically import the social service
-    const mod = await import('./services/socialMediaService');
+    return () => {
+      mounted = false;
+      aborter.abort();
+    };
+  }, [loadTickerFeed]);
 
-    // Support both: named export and default export
-    const fetchSocialMediaContent =
-      mod.fetchSocialMediaContent || mod.default;
+  const loadSocialPosts = useCallback(async () => {
+    try {
+      const mod = await import('./services/socialMediaService');
+      const fetchSocialMediaContent = mod.fetchSocialMediaContent || mod.default;
+      if (typeof fetchSocialMediaContent !== 'function') throw new Error('fetchSocialMediaContent is not a function');
 
-    if (typeof fetchSocialMediaContent !== 'function') {
-      throw new Error('fetchSocialMediaContent is not a function (check default vs named export)');
-    }
-
-    const data = await fetchSocialMediaContent();
-
-    // Normalize posts array safely
-    const posts = Array.isArray(data?.posts)
-      ? data.posts
-      : Array.isArray(data?.items)
-      ? data.items
-      : [];
-
-    // Generate ticker items from social posts (support both named/default again)
-    const tmod = await import('./services/tickerService');
-    const generateSocialMediaTickerItems =
-      tmod.generateSocialMediaTickerItems || tmod.default?.generateSocialMediaTickerItems;
-
-    if (typeof generateSocialMediaTickerItems === 'function' && posts.length) {
-      const socialTickerItems = generateSocialMediaTickerItems(posts);
-
-      if (Array.isArray(socialTickerItems) && socialTickerItems.length > 0) {
-        await fetch('/.netlify/functions/refreshAutoTickerItems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: socialTickerItems, source: 'auto-social' })
-        });
+      const data = await fetchSocialMediaContent();
+      const posts = Array.isArray(data?.posts) ? data.posts : Array.isArray(data?.items) ? data.items : [];
+      if (!posts.length) {
+        console.info('No social posts available.');
+        return await loadTickerFeed();
       }
+
+      const tmod = await import('./services/tickerService');
+      const generateSocialMediaTickerItems =
+        tmod.generateSocialMediaTickerItems || tmod.default?.generateSocialMediaTickerItems;
+
+      if (typeof generateSocialMediaTickerItems === 'function') {
+        const socialTickerItems = generateSocialMediaTickerItems(posts);
+        if (Array.isArray(socialTickerItems) && socialTickerItems.length > 0) {
+          const r = await fetch('/.netlify/functions/refreshAutoTickerItems', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ items: socialTickerItems, source: 'auto-social' })
+          });
+          if (!r.ok) console.warn('refreshAutoTickerItems (social) non-200:', r.status);
+        }
+      }
+
+      await loadTickerFeed();
+    } catch (err) {
+      console.error('Failed to load social posts:', err);
     }
+  }, [loadTickerFeed]);
 
-    await loadTickerFeed();
-  } catch (err) {
-    console.error('Failed to load social posts:', err);
-  }
-}, [loadTickerFeed]);
-
-
+  // Initial boot after auth
   useEffect(() => {
-  if (user) {
-    loadBids();
-    loadSocialPosts(); // NEW
+    if (!user) return;
+    let cleanupFns = [];
+    // Allow loaders to provide abort/cleanup
+    const bidCleanup = loadBids();
+    if (typeof bidCleanup === 'function') cleanupFns.push(bidCleanup);
+    loadSocialPosts();
     loadTickerFeed();
     loadAdminEmails();
-  }
-}, [user, loadBids, loadSocialPosts, loadTickerFeed, loadAdminEmails]);
+    return () => {
+      cleanupFns.forEach(fn => { try { fn(); } catch {} });
+    };
+  }, [user, loadBids, loadSocialPosts, loadTickerFeed, loadAdminEmails]);
 
+  // Build ordered ticker items by priority
   const displayItems = useMemo(() => {
     const normalized = (tickerItems || [])
       .map(i => ({
@@ -232,6 +231,7 @@ const loadSocialPosts = useCallback(async () => {
     return out;
   }, [tickerItems]);
 
+  // Compute ticker duration from visible content width
   useEffect(() => {
     if (!tickerRef.current) return;
     const SPEED_PX_PER_SEC = 120;
@@ -239,7 +239,8 @@ const loadSocialPosts = useCallback(async () => {
     const id = requestAnimationFrame(() => {
       const width = el.scrollWidth || 0;
       if (!width) return;
-      const distancePx = width * 0.5;
+      // include padding (8rem per item approx). 0.55 gives a slightly slower, smoother loop.
+      const distancePx = width * 0.55;
       const durationSec = Math.max(10, distancePx / SPEED_PX_PER_SEC);
       el.style.setProperty('--ticker-duration', `${durationSec}s`);
     });
@@ -248,7 +249,7 @@ const loadSocialPosts = useCallback(async () => {
 
   const navigateFromTicker = useCallback((item) => {
     const explicit = (item?.target || '').toLowerCase();
-    if (['bids', 'webinars', 'social', 'dashboard', 'bid-systems'].includes(explicit)) {
+    if (['bids', 'webinars', 'social', 'dashboard', 'bid-systems', 'company-data'].includes(explicit)) {
       setCurrentPage(explicit);
       return;
     }
@@ -274,21 +275,21 @@ const loadSocialPosts = useCallback(async () => {
       </div>
     );
   }
-  
+
   if (!user) return <LoginPage onLogin={login} />;
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'dashboard': 
+      case 'dashboard':
         return (
-          <Dashboard 
-            summary={summary} 
-            loading={loading} 
+          <Dashboard
+            summary={summary}
+            loading={loading}
             onNavigate={setCurrentPage}
             onTickerUpdate={loadTickerFeed}
           />
         );
-      case 'bids': 
+      case 'bids':
         return (
           <BidOperations
             bids={bids}
@@ -299,19 +300,19 @@ const loadSocialPosts = useCallback(async () => {
             onNavigate={setCurrentPage}
           />
         );
-      case 'webinars': 
+      case 'webinars':
         return <WebinarOperations />;
-      case 'social': 
+      case 'social':
         return <SocialMediaOperations />;
       case 'bid-systems':
         return <BidSystemsManager allBids={[...bids, ...submittedBids]} />;
       case 'company-data':
         return <CompanyDataVault />;
-      default: 
+      default:
         return (
-          <Dashboard 
-            summary={summary} 
-            loading={loading} 
+          <Dashboard
+            summary={summary}
+            loading={loading}
             onNavigate={setCurrentPage}
             onTickerUpdate={loadTickerFeed}
           />
@@ -327,17 +328,17 @@ const loadSocialPosts = useCallback(async () => {
         <div className="p-4 flex items-center justify-between border-b border-blue-800">
           {sidebarOpen ? (
             <div className="flex-1 pr-2">
-              <img 
-                src="/images/49NLogo.png" 
-                alt="49 North Logo" 
+              <img
+                src="/images/49NLogo.png"
+                alt="49 North Logo"
                 className="w-full h-auto max-w-[240px]"
               />
             </div>
           ) : (
             <div className="flex items-center justify-center w-full">
-              <img 
-                src="/images/49NLogo.png" 
-                alt="49 North" 
+              <img
+                src="/images/49NLogo.png"
+                alt="49 North"
                 className="w-8 h-8 object-contain"
               />
             </div>
@@ -391,11 +392,19 @@ const loadSocialPosts = useCallback(async () => {
       <div className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-8 pb-20">
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-              Error loading data: {error}
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 flex items-center justify-between">
+              <div>⚠️ Error loading data: {error}</div>
+              <button
+                onClick={() => { setError(null); loadBids(); loadSocialPosts(); loadTickerFeed(); }}
+                className="ml-4 px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+              >
+                Retry
+              </button>
             </div>
           )}
-          {renderPage()}
+          <Suspense fallback={<div className="text-gray-600">Loading module…</div>}>
+            {renderPage()}
+          </Suspense>
         </div>
 
         {/* Ticker */}
@@ -403,7 +412,12 @@ const loadSocialPosts = useCallback(async () => {
           <div className="flex items-center">
             <div className="bg-[#003049] px-4 font-semibold shrink-0 relative z-10">Latest Updates:</div>
             <div className="flex-1 overflow-hidden">
-              <div ref={tickerRef} className="ticker-animate inline-flex whitespace-nowrap">
+              <div
+                ref={tickerRef}
+                className="ticker-animate inline-flex whitespace-nowrap"
+                aria-live="polite"
+                aria-label="Latest updates ticker"
+              >
                 {displayItems.length > 0 ? (
                   <>
                     {displayItems.map((item, index) => (

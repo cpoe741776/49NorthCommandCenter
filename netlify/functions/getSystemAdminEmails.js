@@ -49,6 +49,8 @@ exports.handler = async (event, context) => {
       status: row[9] || 'New'
     }));
 
+    
+
     // Count only "New" status
     const newCount = adminEmails.filter(e => e.status === 'New').length;
 

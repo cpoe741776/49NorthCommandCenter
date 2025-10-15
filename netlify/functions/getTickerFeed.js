@@ -1,5 +1,5 @@
 // netlify/functions/getTickerFeed.js
-// Reads ticker rows from Google Sheets (Ticker!A2:F) and returns normalized items.
+// Reads ticker rows from Google Sheets (TickerFeed!A2:F) and returns normalized items.
 // Columns: A timestamp | B message | C priority | D source | E active | F expiresOn
 
 const { google } = require('googleapis');
@@ -10,13 +10,12 @@ const { getGoogleAuth } = require('./_utils/google');
 const CFG = {
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '7000', 10),
   SHEET_ID: process.env.GOOGLE_SHEET_ID || '',
-  RANGE: process.env.TICKER_RANGE || 'Ticker!A2:F',
-  DEFAULT_LIMIT: 200
+  RANGE: process.env.TICKER_RANGE || 'TickerFeed!A2:F', // align with refreshAutoTickerItems
+  DEFAULT_LIMIT: 200,
+  REQUIRE_AUTH: String(process.env.REQUIRE_TICKER_AUTH ?? 'true').toLowerCase() === 'true'
 };
 
 // ---- Utils ----
-
-
 async function withTimeout(promise, label, ms) {
   const timer = setTimeout(() => console.warn(`[Timeout] ${label} > ${ms}ms`), ms + 1);
   try {
@@ -66,24 +65,32 @@ function parseRows(rows) {
   // A timestamp | B message | C priority | D source | E active | F expiresOn
   const items = rows
     .map((r) => {
-      const message = (r[1] || '').toString().trim();     // col B
-      const priority = normalizePriority(r[2]);           // col C
-      const source = (r[3] || '').toString().trim();      // col D
-      const active = toBool(r[4]);                         // col E
-      const expiresOn = (r[5] || '').toString().trim();   // col F
-
-      return { message, priority, source, active, expiresOn };
+      const timestamp = (r[0] || '').toString().trim();
+      const message   = (r[1] || '').toString().trim();
+      const priority  = normalizePriority(r[2]);
+      const source    = (r[3] || '').toString().trim();
+      const active    = toBool(r[4]);
+      const expiresOn = (r[5] || '').toString().trim();
+      return { timestamp, message, priority, source, active, expiresOn };
     })
-    .filter((i) => i.message.length > 0)
-    .filter((i) => i.active)
-    .filter((i) => notExpired(i.expiresOn));
+    .filter((i) => i.message.length > 0 && i.active && notExpired(i.expiresOn));
 
-  // De-duplicate on message
+  // De-duplicate by message
   const seen = new Map();
-  for (const it of items) {
-    if (!seen.has(it.message)) seen.set(it.message, it);
-  }
-  return Array.from(seen.values());
+  for (const it of items) if (!seen.has(it.message)) seen.set(it.message, it);
+  const deduped = Array.from(seen.values());
+
+  // Sort: priority (high>med>low), then timestamp desc
+  const rank = { high: 3, medium: 2, low: 1 };
+  deduped.sort((a, b) => {
+    const pr = (rank[b.priority] || 0) - (rank[a.priority] || 0);
+    if (pr !== 0) return pr;
+    const tb = parseDate(b.timestamp)?.getTime() ?? 0;
+    const ta = parseDate(a.timestamp)?.getTime() ?? 0;
+    return tb - ta;
+  });
+
+  return deduped;
 }
 
 // ---- Handler ----
@@ -94,8 +101,7 @@ exports.handler = async (event, context) => {
   const guard = methodGuard(event, headers, 'GET', 'OPTIONS');
   if (guard) return guard;
 
-  // If you want this endpoint open to unauthenticated users, comment out the next block.
-  if (!checkAuth(event)) {
+  if (CFG.REQUIRE_AUTH && !checkAuth(event)) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
@@ -120,11 +126,7 @@ exports.handler = async (event, context) => {
       await auth.authorize();
     } catch (err) {
       console.error('[getTickerFeed] Google auth failure:', err?.message);
-      return ok(headers, {
-        success: true,
-        items: [],
-        note: 'Google authentication failed (check service account sharing).'
-      });
+      return ok(headers, { success: true, items: [], note: 'Google authentication failed.' });
     }
 
     const sheets = google.sheets({ version: 'v4', auth });
@@ -155,12 +157,7 @@ exports.handler = async (event, context) => {
       items
     });
   } catch (e) {
-    // Hardened: never 500 for expected sheet issues—still return a body clients can use
     console.error('[getTickerFeed] Fatal error:', e?.message || e);
-    return ok(headers, {
-      success: true,
-      items: [],
-      note: 'Unexpected error while loading ticker items.'
-    });
+    return ok(headers, { success: true, items: [], note: 'Unexpected error while loading ticker items.' });
   }
 };

@@ -1,5 +1,4 @@
-// SystemsCorrespondenceModal.jsx //
-
+// src/components/SystemsCorrespondenceModal.jsx
 import React, { useState } from 'react';
 import { X, Mail, Calendar, Building2, Eye, Trash2 } from 'lucide-react';
 
@@ -11,10 +10,10 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
 
   const handleDelete = async (email) => {
     if (!window.confirm(`Delete this message from ${email.bidSystem}? This action cannot be undone.`)) return;
-    
+
     setDeleting(email.id);
     try {
-      await onArchive(email); // Still uses onArchive prop for backend compatibility
+      await onArchive(email);
       onRefresh();
     } catch (err) {
       alert('Failed to delete: ' + err.message);
@@ -26,11 +25,7 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
   const formatDate = (dateStr) => {
     if (!dateStr) return 'No date';
     try {
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      });
+      return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     } catch {
       return dateStr;
     }
@@ -39,25 +34,17 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Systems Correspondence</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Administrative notifications from bid systems
-            </p>
+            <p className="text-sm text-gray-600 mt-1">Administrative notifications from bid systems</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X size={24} />
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-hidden flex">
-          {/* Email List */}
           <div className="w-2/5 border-r border-gray-200 overflow-y-auto">
             {emails.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
@@ -71,26 +58,18 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
                     key={email.id}
                     onClick={() => setSelectedEmail(email)}
                     className={`p-4 cursor-pointer transition-colors ${
-                      selectedEmail?.id === email.id
-                        ? 'bg-blue-50 border-l-4 border-blue-600'
-                        : 'hover:bg-gray-50'
+                      selectedEmail?.id === email.id ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <Building2 size={14} className="text-gray-500 shrink-0" />
-                          <span className="text-xs font-semibold text-gray-700 truncate">
-                            {email.bidSystem}
-                          </span>
+                          <span className="text-xs font-semibold text-gray-700 truncate">{email.bidSystem}</span>
                         </div>
-                        <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">
-                          {email.emailSubject}
-                        </h3>
+                        <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{email.emailSubject}</h3>
                       </div>
-                      {email.status === 'New' && (
-                        <span className="ml-2 shrink-0 w-2 h-2 bg-blue-600 rounded-full"></span>
-                      )}
+                      {email.status === 'New' && <span className="ml-2 shrink-0 w-2 h-2 bg-blue-600 rounded-full" />}
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
                       <Calendar size={12} />
@@ -102,17 +81,13 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
             )}
           </div>
 
-          {/* Email Detail */}
           <div className="flex-1 overflow-y-auto">
             {selectedEmail ? (
               <div className="p-6">
-                {/* Email Header */}
                 <div className="mb-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2">
-                        {selectedEmail.emailSubject}
-                      </h3>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">{selectedEmail.emailSubject}</h3>
                       <div className="space-y-1 text-sm">
                         <div className="flex items-center gap-2 text-gray-600">
                           <span className="font-semibold">From:</span>
@@ -141,11 +116,8 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
                   </div>
                 </div>
 
-                {/* Email Body */}
                 <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {selectedEmail.emailBody}
-                  </p>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{selectedEmail.emailBody}</p>
                 </div>
               </div>
             ) : (

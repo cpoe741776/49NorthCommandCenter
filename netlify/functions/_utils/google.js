@@ -1,42 +1,43 @@
-// netlify/functions/_utils/google.js
+// Shared Google auth + client factories
+
 const { google } = require('googleapis');
 
 function loadServiceAccount() {
-  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64;
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-
-  if (!b64 && !raw) {
-    throw new Error('No key or keyFile set.');
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
+    const decoded = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8');
+    return JSON.parse(decoded);
   }
-
-  let json;
-  try {
-    const txt = b64 ? Buffer.from(b64, 'base64').toString('utf-8') : raw;
-    json = JSON.parse(txt);
-  } catch (e) {
-    throw new Error('Invalid service account JSON');
-  }
-
-  // Fix escaped newlines in private key if needed
-  if (json.private_key && json.private_key.includes('\\n')) {
-    json.private_key = json.private_key.replace(/\\n/g, '\n');
-  }
-  return json;
+  return JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
 }
 
 /**
- * getGoogleAuth(scopes?)
- * Default scopes: Sheets read-only
+ * Returns a GoogleAuth instance (JWT) suitable for both Sheets & Drive.
+ * Use `.authorize()` before creating clients when required.
  */
-function getGoogleAuth(
-  scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-) {
-  const creds = loadServiceAccount();
-  return new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes
-  });
+function getGoogleAuth(scopes) {
+  const credentials = loadServiceAccount();
+  const usedScopes = scopes && scopes.length
+    ? scopes
+    : [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive',
+        'https://www.googleapis.com/auth/drive.file',
+      ];
+  return new google.auth.GoogleAuth({ credentials, scopes: usedScopes });
 }
 
-module.exports = { getGoogleAuth };
+/** Convenience: Sheets API client */
+function sheetsClient(auth) {
+  return google.sheets({ version: 'v4', auth });
+}
+
+/** Convenience: Drive API client */
+function driveClient(auth) {
+  return google.drive({ version: 'v3', auth });
+}
+
+module.exports = {
+  getGoogleAuth,
+  sheetsClient,
+  driveClient,
+};
