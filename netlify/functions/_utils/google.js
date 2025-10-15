@@ -12,7 +12,7 @@ function loadServiceAccount() {
 
 /**
  * Returns a GoogleAuth instance (JWT) suitable for both Sheets & Drive.
- * Use `.authorize()` before creating clients when required.
+ * Use `.getClient()` to get the auth client.
  */
 function getGoogleAuth(scopes) {
   const credentials = loadServiceAccount();
@@ -23,7 +23,10 @@ function getGoogleAuth(scopes) {
         'https://www.googleapis.com/auth/drive',
         'https://www.googleapis.com/auth/drive.file',
       ];
-  return new google.auth.GoogleAuth({ credentials, scopes: usedScopes });
+  return new google.auth.GoogleAuth({ 
+    credentials, 
+    scopes: usedScopes 
+  });
 }
 
 /** Convenience: Sheets API client */

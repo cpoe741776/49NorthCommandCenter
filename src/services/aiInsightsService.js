@@ -1,6 +1,6 @@
 // src/services/aiInsightsService.js
 
-const BASE = '/.netlify/functions/getAIInsights';
+const BASE = '/.netlify/functions/getAIInsightsSimple';
 const CACHE_KEY_FAST = 'ai.insights.v1.fast';
 const CACHE_KEY_FULL = 'ai.insights.v1.full';
 

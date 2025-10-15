@@ -21,9 +21,24 @@ const CACHE_KEY = 'aiInsightsCache';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
-  const [aiInsights, setAiInsights] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
+  const [aiInsights, setAiInsights] = useState({
+    bids: null,
+    webinars: null,
+    social: null,
+    news: null
+  });
+  const [aiLoading, setAiLoading] = useState({
+    bids: false,
+    webinars: false,
+    social: false,
+    news: false
+  });
+  const [aiError, setAiError] = useState({
+    bids: null,
+    webinars: null,
+    social: null,
+    news: null
+  });
 
   // Memoized loader with local TTL cache + service caching
   const loadAIInsights = useCallback(
