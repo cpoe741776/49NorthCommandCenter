@@ -204,13 +204,16 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   // sort oldest -> newest (kept your behavior); flip the sign if you want newest first
   const respondBids = useMemo(() => (
     bids
-      .filter((b) => b.recommendation === 'Respond')
+      .filter((b) => String(b.recommendation || '').trim().toLowerCase() === 'respond')
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
   ), [bids]);
 
   const gatherInfoBids = useMemo(() => (
     bids
-      .filter((b) => b.recommendation === 'Gather More Information')
+      .filter((b) => {
+        const s = String(b.recommendation || '').trim().toLowerCase();
+        return s === 'gather more information' || s === 'gather info' || s === 'need info' || s === 'needs info' || s === 'research';
+      })
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
   ), [bids]);
 

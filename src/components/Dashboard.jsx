@@ -123,7 +123,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
 
   const respondCount = summary?.respondCount ?? 0;
   const gatherInfoCount = summary?.gatherInfoCount ?? 0;
-  const totalActive = summary?.totalActive ?? 0;
+  const totalActive = summary?.activeBidsCount ?? summary?.totalActive ?? 0;
 
   const getUrgencyColor = (urgency) => {
     switch (String(urgency).toLowerCase()) {
