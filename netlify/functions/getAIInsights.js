@@ -12,10 +12,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const CFG = {
   OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '6000', 10),
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '8000', 10),
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '25000', 10),
 
-  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '8000', 10),
+  GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
 
   NEWS_QUERY:
     process.env.NEWS_QUERY ||
@@ -33,7 +33,7 @@ const CFG = {
     DISREGARDED_SAMPLE: 8
   },
 
-  FUNCTION_TIMEOUT_MS: 24000,
+  FUNCTION_TIMEOUT_MS: 30000,
   ENABLE_CACHING: true,
   CACHE_TTL_MS: 5 * 60 * 1000
 };
@@ -685,7 +685,7 @@ exports.handler = async (event, context) => {
       };
 
       // Early time check
-      if (Date.now() - started > 15000) {
+      if (Date.now() - started > 20000) {
         console.warn('[Insights] Time nearly exceeded; skipping AI.');
         return ok(headers, {
           executiveSummary: 'AI Analysis skipped due to time constraints. Basic data loaded successfully.',
