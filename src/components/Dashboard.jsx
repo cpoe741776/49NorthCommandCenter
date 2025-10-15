@@ -15,7 +15,12 @@ import {
   Target,
   Newspaper
 } from 'lucide-react';
-import { fetchAIInsights } from '../services/aiInsightsService';
+import { 
+  fetchBidsAnalysis, 
+  fetchWebinarAnalysis, 
+  fetchSocialAnalysis, 
+  fetchNewsAnalysis 
+} from '../services/separateAnalysisService';
 
 const CACHE_KEY = 'aiInsightsCache';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -40,92 +45,75 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     news: null
   });
 
-  // Memoized loader with local TTL cache + service caching
-  const loadAIInsights = useCallback(
-    async (bypassCache = false) => {
-      try {
-        setAiLoading(true);
-        setAiError(null);
-
-        // Client-side TTL cache
-        if (!bypassCache) {
-          try {
-            const cached = localStorage.getItem(CACHE_KEY);
-            if (cached) {
-              const entry = JSON.parse(cached);
-              if (Date.now() - (entry.timestamp || 0) < CACHE_TTL_MS) {
-                setAiInsights(entry.data);
-                setAiLoading(false);
-                return;
-              }
-              localStorage.removeItem(CACHE_KEY);
-            }
-          } catch (e) {
-            console.warn('[Dashboard] Cache parse failed, clearing.', e);
-            localStorage.removeItem(CACHE_KEY);
-          }
-        }
-
-        // Fetch fresh (fast by default; your button triggers bypassCache=true)
-        const data = await fetchAIInsights(bypassCache);
-
-        // If server signals limited mode
-        const analysisSkipped = data.note && data.note.includes('Full AI analysis unavailable');
-
-        setAiInsights(data);
-        setAiError(analysisSkipped ? data.note : null);
-
-        // Save TTL cache
-        try {
-          localStorage.setItem(
-            CACHE_KEY,
-            JSON.stringify({ data, timestamp: Date.now() })
-          );
-        } catch {
-          /* ignore quota */
-        }
-
-        // Ticker enrichment
-        if (data.executiveSummary || (data.topPriorities && data.topPriorities.length)) {
-          const { generateAIInsightsTickerItems, pushAutoTickerItems } = await import('../services/tickerService');
-          const aiTickerItems = generateAIInsightsTickerItems(data);
-          if (aiTickerItems.length > 0) {
-            // Prefer centralized helper; falls back to POST inside
-            await pushAutoTickerItems(aiTickerItems, 'auto-ai');
-            if (onTickerUpdate) await onTickerUpdate();
-          }
-        }
-      } catch (err) {
-        setAiError(err?.message || 'A network error occurred.');
-        setAiInsights(null);
-      } finally {
-        setAiLoading(true);
-      }
-    },
-    [onTickerUpdate]
-  );
-
-  // Initial load (no auto fetch; uses cached if present)
-  useEffect(() => {
+  // Individual section loaders
+  const loadBidsAnalysis = useCallback(async (bypassCache = false) => {
     try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const entry = JSON.parse(cached);
-        setAiInsights(entry.data);
-        if (Date.now() - (entry.timestamp || 0) < CACHE_TTL_MS) {
-          console.log('[Dashboard] Using fresh local cache for initial load.');
-        } else {
-          console.log('[Dashboard] Local cache expired. (Auto-load disabled)');
-        }
-      } else {
-        console.log('[Dashboard] No cache found. (Auto-load disabled)');
-      }
-    } catch (e) {
-      console.warn('[Dashboard] Initial cache check failed; clearing.', e);
-      localStorage.removeItem(CACHE_KEY);
+      setAiLoading(prev => ({ ...prev, bids: true }));
+      setAiError(prev => ({ ...prev, bids: null }));
+      const data = await fetchBidsAnalysis(bypassCache);
+      setAiInsights(prev => ({ ...prev, bids: data }));
+    } catch (err) {
+      setAiError(prev => ({ ...prev, bids: err?.message || 'Failed to load bids analysis' }));
+    } finally {
+      setAiLoading(prev => ({ ...prev, bids: false }));
     }
+  }, []);
 
-    console.log('[Dashboard] AI Insights temporarily disabled for testing');
+  const loadWebinarAnalysis = useCallback(async (bypassCache = false) => {
+    try {
+      setAiLoading(prev => ({ ...prev, webinars: true }));
+      setAiError(prev => ({ ...prev, webinars: null }));
+      const data = await fetchWebinarAnalysis(bypassCache);
+      setAiInsights(prev => ({ ...prev, webinars: data }));
+    } catch (err) {
+      setAiError(prev => ({ ...prev, webinars: err?.message || 'Failed to load webinar analysis' }));
+    } finally {
+      setAiLoading(prev => ({ ...prev, webinars: false }));
+    }
+  }, []);
+
+  const loadSocialAnalysis = useCallback(async (bypassCache = false) => {
+    try {
+      setAiLoading(prev => ({ ...prev, social: true }));
+      setAiError(prev => ({ ...prev, social: null }));
+      const data = await fetchSocialAnalysis(bypassCache);
+      setAiInsights(prev => ({ ...prev, social: data }));
+    } catch (err) {
+      setAiError(prev => ({ ...prev, social: err?.message || 'Failed to load social analysis' }));
+    } finally {
+      setAiLoading(prev => ({ ...prev, social: false }));
+    }
+  }, []);
+
+  const loadNewsAnalysis = useCallback(async (bypassCache = false) => {
+    try {
+      setAiLoading(prev => ({ ...prev, news: true }));
+      setAiError(prev => ({ ...prev, news: null }));
+      const data = await fetchNewsAnalysis(bypassCache);
+      setAiInsights(prev => ({ ...prev, news: data }));
+      } catch (err) {
+      setAiError(prev => ({ ...prev, news: err?.message || 'Failed to load news analysis' }));
+      } finally {
+      setAiLoading(prev => ({ ...prev, news: false }));
+      }
+  }, []);
+
+  // Initial load - load all sections in parallel
+  useEffect(() => {
+    const loadAllSections = async () => {
+      try {
+        await Promise.all([
+          fetchBidsAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, bids: data }))).catch(() => {}),
+          fetchWebinarAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, webinars: data }))).catch(() => {}),
+          fetchSocialAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, social: data }))).catch(() => {}),
+          fetchNewsAnalysis(false).then(data => setAiInsights(prev => ({ ...prev, news: data }))).catch(() => {})
+        ]);
+      } catch (e) {
+        console.warn('[Dashboard] Initial load failed:', e);
+      }
+    };
+    
+    loadAllSections();
   }, []);
 
   if (loading) {
@@ -274,54 +262,39 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         </div>
       </div>
 
-      {/* AI Strategic Insights */}
+      {/* AI Strategic Insights - Separate Sections */}
+      <div className="space-y-6">
+        {/* Bids Analysis Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Sparkles className="text-blue-600" size={24} />
-            <h2 className="text-xl font-bold text-gray-900">AI Strategic Insights</h2>
+              <FileText className="text-blue-600" size={24} />
+              <h2 className="text-xl font-bold text-gray-900">Bids Analysis</h2>
           </div>
           <button
-            onClick={() => loadAIInsights(true)}
-            disabled={aiLoading}
+              onClick={() => loadBidsAnalysis(true)}
+              disabled={aiLoading.bids}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
           >
-            <RefreshCw size={16} className={aiLoading ? 'animate-spin' : ''} />
-            {aiLoading ? 'Analyzing...' : 'Refresh Analysis'}
+              <RefreshCw size={16} className={aiLoading.bids ? 'animate-spin' : ''} />
+              {aiLoading.bids ? 'Analyzing...' : 'Refresh Analysis'}
           </button>
         </div>
 
-        {/* Empty */}
-        {!aiLoading && !aiError && (!aiInsights || !aiInsights.executiveSummary) && (
-          <div className="text-center py-12">
-            <Sparkles className="text-blue-400 mx-auto mb-3" size={48} />
-            <p className="text-gray-600 mb-2">No analysis loaded</p>
-            <p className="text-sm text-gray-500">Click "Refresh Analysis" to generate strategic insights</p>
-          </div>
-        )}
-
-        {/* Loading */}
-        {aiLoading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={32} />
-              <p className="text-gray-600 font-semibold">Performing comprehensive AI analysis...</p>
-              <p className="text-sm text-gray-500 mt-1">
-                This may take up to <strong>45 seconds</strong> for detailed insights
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                Analyzing bids, leads, webinars, and market opportunities
-              </p>
+          {aiLoading.bids && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={24} />
+                <p className="text-gray-600">Analyzing bids data...</p>
             </div>
           </div>
         )}
 
-        {/* Error */}
-        {aiError && (
+          {aiError.bids && (
           <div className="bg-red-50 border border-red-200 rounded p-4">
-            <p className="text-red-700">Error loading insights: {aiError}</p>
+              <p className="text-red-700">Error loading bids analysis: {aiError.bids}</p>
             <button
-              onClick={() => loadAIInsights(true)}
+                onClick={() => loadBidsAnalysis(true)}
               className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
             >
               Try again
@@ -329,268 +302,235 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </div>
         )}
 
-        {/* Content */}
-        {!aiLoading && !aiError && aiInsights?.executiveSummary && (
-          <div className="space-y-6">
-            {/* Executive Summary */}
-            <div className="bg-white rounded-lg p-4 border border-blue-200">
-              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                <TrendingUp size={18} className="text-blue-600" />
-                Executive Summary
-              </h3>
-              <p className="text-gray-700">{aiInsights.executiveSummary}</p>
-              <p className="text-xs text-gray-500 mt-2">
-                Generated:{' '}
-                {new Date(aiInsights.generatedAt || Date.now()).toLocaleString()}
-              </p>
-            </div>
-
-            {/* Top Priorities */}
-            {Array.isArray(aiInsights.topPriorities) && aiInsights.topPriorities.length > 0 && (
+          {!aiLoading.bids && !aiError.bids && aiInsights.bids && (
+            <div className="space-y-4">
               <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Target size={18} className="text-blue-600" />
-                  Top Priorities
-                </h3>
-                <div className="space-y-3">
-                  {aiInsights.topPriorities.map((priority, idx) => (
-                    <div
-                      key={idx}
-                      className={`border rounded-lg p-3 ${getUrgencyColor(priority.urgency)}`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
+                <h3 className="font-semibold text-gray-900 mb-2">Executive Summary</h3>
+                <p className="text-gray-700">{aiInsights.bids.executiveSummary}</p>
+              </div>
+
+              {Array.isArray(aiInsights.bids.topPriorities) && aiInsights.bids.topPriorities.length > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-blue-200">
+                  <h3 className="font-semibold text-gray-900 mb-3">Top Priorities</h3>
+                  <div className="space-y-2">
+                    {aiInsights.bids.topPriorities.map((priority, idx) => (
+                      <div key={idx} className={`border rounded-lg p-3 ${getUrgencyColor(priority.urgency)}`}>
                           <h4 className="font-semibold">{priority.title}</h4>
-                          {/* description may not exist in normalized payload */}
-                          {priority.description && (
-                            <p className="text-sm mt-1">{priority.description}</p>
-                          )}
-                          {priority.action && (
-                            <p className="text-sm mt-2 font-medium">→ {priority.action}</p>
-                          )}
-                        </div>
-                        <span className="text-xs uppercase font-bold px-2 py-1 rounded">
-                          {priority.urgency}
-                        </span>
-                      </div>
+                        {priority.action && <p className="text-sm mt-1">→ {priority.action}</p>}
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Priority Bids */}
-            {Array.isArray(aiInsights.priorityBids) && aiInsights.priorityBids.length > 0 && (
+              {Array.isArray(aiInsights.bids.priorityBids) && aiInsights.bids.priorityBids.length > 0 && (
               <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <FileText size={18} className="text-blue-600" />
-                  Priority Bids ({aiInsights.priorityBids.length} with "Respond" Status)
-                </h3>
+                  <h3 className="font-semibold text-gray-900 mb-3">Priority Bids</h3>
                 <div className="space-y-2">
-                  {aiInsights.priorityBids.slice(0, 5).map((bid, idx) => {
-                    const days = Number.isFinite(Number(bid.daysUntilDue)) ? Number(bid.daysUntilDue) : null;
-                    return (
-                      <div
-                        key={idx}
-                        className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-                        onClick={() => onNavigate('bids')}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            {bid.entity && (
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
-                                  {bid.entity}
-                                </span>
-                              </div>
-                            )}
-                            <h4 className="font-semibold text-gray-900">
-                              {bid.subject || 'Untitled Opportunity'}
-                            </h4>
-                            {/* Optional tags */}
-                            <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                              {bid.dueDate && (
-                                <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
-                                  📅 Due: {bid.dueDate}
-                                </span>
-                              )}
-                              {days !== null && days >= 0 && (
-                                <span
-                                  className={`px-2 py-1 rounded font-medium ${
-                                    days <= 3
-                                      ? 'bg-red-100 text-red-800'
-                                      : days <= 7
-                                      ? 'bg-orange-100 text-orange-800'
-                                      : 'bg-yellow-100 text-yellow-800'
-                                  }`}
-                                >
-                                  ⏰ {days} days left
-                                </span>
-                              )}
-                              {bid.bidSystem && (
-                                <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
-                                  🏢 {bid.bidSystem}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
-                        </div>
+                    {aiInsights.bids.priorityBids.slice(0, 3).map((bid, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded p-3">
+                        <h4 className="font-semibold text-gray-900">{bid.subject || 'Untitled'}</h4>
+                        <p className="text-sm text-gray-600">{bid.entity}</p>
+                        {bid.dueDate && <p className="text-xs text-red-600">Due: {bid.dueDate}</p>}
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Webinar Analysis Section */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg shadow-lg border border-green-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Video className="text-green-600" size={24} />
+              <h2 className="text-xl font-bold text-gray-900">Webinar Analysis</h2>
+            </div>
+            <button
+              onClick={() => loadWebinarAnalysis(true)}
+              disabled={aiLoading.webinars}
+              className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50 text-sm"
+            >
+              <RefreshCw size={16} className={aiLoading.webinars ? 'animate-spin' : ''} />
+              {aiLoading.webinars ? 'Analyzing...' : 'Refresh Analysis'}
+            </button>
+          </div>
+
+          {aiLoading.webinars && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <RefreshCw className="animate-spin text-green-600 mx-auto mb-2" size={24} />
+                <p className="text-gray-600">Analyzing webinar data...</p>
                 </div>
               </div>
             )}
 
-            {/* Social Media Activity */}
-            {Array.isArray(aiInsights.socialPosts) && aiInsights.socialPosts.length > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Share2 size={18} className="text-blue-600" />
-                  Recent Social Media Activity
-                </h3>
-                <div className="space-y-2">
-                  {aiInsights.socialPosts
-                    .filter((p) => String(p.status).toLowerCase() === 'published')
-                    .map((post, idx) => (
-                      <div
-                        key={idx}
-                        className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer"
-                        onClick={() => onNavigate('social')}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900">{post.title || 'Post'}</h4>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{post.body || post.text}</p>
-                            {post.platforms && (
-                              <div className="flex gap-2 mt-2">
-                                {post.platforms.split(',').map((p) => (
-                                  <span key={p} className="text-xs bg-blue-50 px-2 py-1 rounded">
-                                    {p.trim()}
-                                  </span>
-                                ))}
+          {aiError.webinars && (
+            <div className="bg-red-50 border border-red-200 rounded p-4">
+              <p className="text-red-700">Error loading webinar analysis: {aiError.webinars}</p>
+              <button
+                onClick={() => loadWebinarAnalysis(true)}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Try again
+              </button>
                               </div>
                             )}
-                            {post.publishedDate && (
-                              <p className="text-xs text-gray-500 mt-1">
-                                Published: {new Date(post.publishedDate).toLocaleDateString()}
-                              </p>
-                            )}
+
+          {!aiLoading.webinars && !aiError.webinars && aiInsights.webinars && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg p-4 border border-green-200">
+                <h3 className="font-semibold text-gray-900 mb-2">Executive Summary</h3>
+                <p className="text-gray-700">{aiInsights.webinars.executiveSummary}</p>
                           </div>
-                          <ChevronRight size={20} className="text-gray-400 shrink-0 ml-2" />
-                        </div>
+
+              {Array.isArray(aiInsights.webinars.hotLeads) && aiInsights.webinars.hotLeads.length > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-green-200">
+                  <h3 className="font-semibold text-gray-900 mb-3">Hot Leads</h3>
+                  <div className="space-y-2">
+                    {aiInsights.webinars.hotLeads.slice(0, 3).map((lead, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded p-3">
+                        <h4 className="font-semibold text-gray-900">{lead.name}</h4>
+                        <p className="text-sm text-gray-600">{lead.organization}</p>
+                        <p className="text-xs text-green-600">Score: {lead.score}</p>
                       </div>
                     ))}
                 </div>
               </div>
             )}
+            </div>
+          )}
+        </div>
 
-            {/* Content & Risks */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {aiInsights.contentInsights && (
-                <div className="bg-white rounded-lg p-4 border border-blue-200">
+        {/* Social Media Analysis Section */}
+        <div className="bg-gradient-to-br from-purple-50 to-violet-50 p-6 rounded-lg shadow-lg border border-purple-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Share2 className="text-purple-600" size={24} />
+              <h2 className="text-xl font-bold text-gray-900">Social Media Analysis</h2>
+            </div>
+            <button
+              onClick={() => loadSocialAnalysis(true)}
+              disabled={aiLoading.social}
+              className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50 text-sm"
+            >
+              <RefreshCw size={16} className={aiLoading.social ? 'animate-spin' : ''} />
+              {aiLoading.social ? 'Analyzing...' : 'Refresh Analysis'}
+            </button>
+          </div>
+
+          {aiLoading.social && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <RefreshCw className="animate-spin text-purple-600 mx-auto mb-2" size={24} />
+                <p className="text-gray-600">Analyzing social media data...</p>
+              </div>
+            </div>
+          )}
+
+          {aiError.social && (
+            <div className="bg-red-50 border border-red-200 rounded p-4">
+              <p className="text-red-700">Error loading social analysis: {aiError.social}</p>
+              <button
+                onClick={() => loadSocialAnalysis(true)}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!aiLoading.social && !aiError.social && aiInsights.social && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg p-4 border border-purple-200">
+                <h3 className="font-semibold text-gray-900 mb-2">Executive Summary</h3>
+                <p className="text-gray-700">{aiInsights.social.executiveSummary}</p>
+              </div>
+
+              {aiInsights.social.contentInsights && (
+                <div className="bg-white rounded-lg p-4 border border-purple-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Content Strategy</h3>
                   <div className="space-y-2">
-                    {aiInsights.contentInsights.topPerforming && (
+                    {aiInsights.social.contentInsights.topPerforming && (
                       <div>
                         <p className="text-xs text-gray-600 uppercase font-semibold">Top Performing</p>
-                        <p className="text-sm text-gray-700 mt-1">
-                          {aiInsights.contentInsights.topPerforming}
-                        </p>
+                        <p className="text-sm text-gray-700 mt-1">{aiInsights.social.contentInsights.topPerforming}</p>
                       </div>
                     )}
-                    {aiInsights.contentInsights.suggestions && (
+                    {aiInsights.social.contentInsights.suggestions && (
                       <div>
                         <p className="text-xs text-gray-600 uppercase font-semibold mt-3">Suggestions</p>
-                        <p className="text-sm text-gray-700 mt-1">
-                          {aiInsights.contentInsights.suggestions}
-                        </p>
+                        <p className="text-sm text-gray-700 mt-1">{aiInsights.social.contentInsights.suggestions}</p>
                       </div>
                     )}
-                  </div>
-                </div>
-              )}
-
-              {Array.isArray(aiInsights.riskAlerts) && aiInsights.riskAlerts.length > 0 && (
-                <div className="bg-white rounded-lg p-4 border border-orange-200">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <AlertTriangle size={18} className="text-orange-600" />
-                    Risk Alerts
-                  </h3>
-                  <div className="space-y-2">
-                    {aiInsights.riskAlerts.map((risk, idx) => (
-                      <div key={idx} className="border-l-4 border-orange-400 pl-3 py-1">
-                        <p className="text-sm font-semibold text-gray-900">{risk.issue}</p>
-                        <p className="text-xs text-gray-600 mt-1">{risk.impact}</p>
-                        <p className="text-xs text-orange-600 mt-1 font-medium">
-                          → {risk.mitigation}
-                        </p>
-                      </div>
-                    ))}
                   </div>
                 </div>
               )}
             </div>
+          )}
+        </div>
 
-            {/* News Opportunities */}
-            {Array.isArray(aiInsights.newsArticles) && aiInsights.newsArticles.length > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Newspaper size={18} className="text-blue-600" />
-                  Market Opportunities from News (Last 60 Days)
-                </h3>
-                <div className="space-y-2">
-                  {aiInsights.newsArticles.map((article, idx) => (
-                    <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors">
-                      <a
-                        href={article.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <h4 className="font-semibold text-gray-900 hover:text-blue-600 transition-colors">
-                          {article.title}
-                        </h4>
-                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
-                          {article.source && <span>{article.source}</span>}
-                          {article.publishedAt && (
-                            <>
-                              <span>•</span>
-                              <span>
-                                Published:{' '}
-                                {new Date(article.publishedAt).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
-                              </span>
-                              <span>•</span>
-                              <span className="text-blue-600">
-                                {Math.floor(
-                                  (Date.now() - Date.parse(article.publishedAt)) / (1000 * 60 * 60 * 24)
-                                )}{' '}
-                                days ago
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </a>
-                    </div>
-                  ))}
-                </div>
+        {/* News Analysis Section */}
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 p-6 rounded-lg shadow-lg border border-orange-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Newspaper className="text-orange-600" size={24} />
+              <h2 className="text-xl font-bold text-gray-900">News Analysis</h2>
+            </div>
+            <button
+              onClick={() => loadNewsAnalysis(true)}
+              disabled={aiLoading.news}
+              className="flex items-center gap-2 px-3 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 transition-colors disabled:opacity-50 text-sm"
+            >
+              <RefreshCw size={16} className={aiLoading.news ? 'animate-spin' : ''} />
+              {aiLoading.news ? 'Analyzing...' : 'Refresh Analysis'}
+            </button>
+          </div>
 
-                {Array.isArray(aiInsights.newsOpportunities) && aiInsights.newsOpportunities.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-2">AI Analysis:</h4>
-                    <div className="space-y-2">
-                      {aiInsights.newsOpportunities.map((opp, idx) => (
-                        <div key={idx} className="text-sm bg-green-50 p-2 rounded">
-                          <p className="font-medium text-gray-900">{opp.headline}</p>
-                          <p className="text-gray-600 text-xs mt-1">{opp.relevance}</p>
-                          <p className="text-green-600 text-xs mt-1">→ {opp.action}</p>
+          {aiLoading.news && (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <RefreshCw className="animate-spin text-orange-600 mx-auto mb-2" size={24} />
+                <p className="text-gray-600">Analyzing news data...</p>
+              </div>
+            </div>
+          )}
+
+          {aiError.news && (
+            <div className="bg-red-50 border border-red-200 rounded p-4">
+              <p className="text-red-700">Error loading news analysis: {aiError.news}</p>
+              <button
+                onClick={() => loadNewsAnalysis(true)}
+                className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+
+          {!aiLoading.news && !aiError.news && aiInsights.news && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg p-4 border border-orange-200">
+                <h3 className="font-semibold text-gray-900 mb-2">Executive Summary</h3>
+                <p className="text-gray-700">{aiInsights.news.executiveSummary}</p>
+              </div>
+
+              {Array.isArray(aiInsights.news.articles) && aiInsights.news.articles.length > 0 && (
+                <div className="bg-white rounded-lg p-4 border border-orange-200">
+                  <h3 className="font-semibold text-gray-900 mb-3">Recent News</h3>
+                  <div className="space-y-2">
+                    {aiInsights.news.articles.slice(0, 3).map((article, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded p-3">
+                        <a href={article.link} target="_blank" rel="noopener noreferrer" className="block">
+                          <h4 className="font-semibold text-gray-900 hover:text-orange-600 transition-colors">
+                            {article.title}
+                          </h4>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {article.source} • {article.daysAgo} days ago
+                          </p>
+                        </a>
                         </div>
                       ))}
                     </div>
@@ -599,7 +539,6 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               </div>
             )}
           </div>
-        )}
       </div>
 
       {/* Quick Actions */}
