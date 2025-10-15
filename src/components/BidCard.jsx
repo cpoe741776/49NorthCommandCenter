@@ -92,32 +92,39 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
               <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
             </div>
 
-            <h3 className="font-semibold text-gray-900 mb-2">{bid.emailSubject}</h3>
+            <h3 className="font-semibold text-gray-900 mb-2 overflow-hidden" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{bid.subject || bid.emailSubject}</h3>
             
-            {/* Enhanced summary section - always visible */}
-            <div className="space-y-2">
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {bid.aiSummary || bid.emailSummary || 'No summary available'}
-              </p>
+            {/* Clean summary section */}
+            <div className="space-y-3">
+              {/* Email Summary */}
+              <div className="text-sm text-gray-700 leading-relaxed">
+                <span className="font-medium text-gray-600">Summary:</span> {bid.aiEmailSummary || bid.emailSummary || bid.aiSummary || 'No summary available'}
+              </div>
               
-              {/* Key details row */}
-              <div className="flex items-center gap-4 text-xs text-gray-500">
-                {bid.entity && (
-                  <span className="flex items-center gap-1">
-                    <span className="font-medium">Agency:</span>
-                    <span className="truncate max-w-32">{bid.entity}</span>
-                  </span>
-                )}
-                
-                {bid.dueDate && bid.dueDate !== 'Not specified' && (
-                  <span className="flex items-center gap-1">
-                    <span className="font-medium">Due:</span>
-                    <span>{bid.dueDate}</span>
-                  </span>
-                )}
-                
+              {/* Key Information Grid */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <span className="font-medium text-gray-600">Agency:</span>
+                  <div className="text-gray-800 truncate">{bid.entity || 'Unknown'}</div>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Due Date:</span>
+                  <div className="text-gray-800">{bid.dueDate || 'Not specified'}</div>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Keywords:</span>
+                  <div className="text-gray-800 truncate">{bid.keywordsFound || 'None'}</div>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Category:</span>
+                  <div className="text-gray-800 truncate">{bid.keywordsCategory || 'None'}</div>
+                </div>
+              </div>
+              
+              {/* Relevance and Score */}
+              <div className="flex items-center gap-3">
                 {bid.relevance && (
-                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
                     bid.relevance === 'High' ? 'bg-green-100 text-green-800'
                       : bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800'
                       : 'bg-gray-100 text-gray-800'
@@ -125,18 +132,16 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
                     {bid.relevance} Relevance
                   </span>
                 )}
+                
+                {bid.scoreDetails && (
+                  <span className={`px-2 py-1 rounded text-xs font-bold ${scorePillClass}`}>
+                    Score: {bid.scoreDetails}
+                  </span>
+                )}
               </div>
               
-              {/* AI Reasoning preview */}
-              {bid.aiReasoning && (
-                <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border-l-2 border-gray-300">
-                  <span className="font-medium">AI Analysis:</span> {bid.aiReasoning.substring(0, 120)}
-                  {bid.aiReasoning.length > 120 && '...'}
-                </div>
-              )}
-              
-              {/* Quick action links */}
-              <div className="flex items-center gap-2 text-xs">
+              {/* Quick Actions */}
+              <div className="flex items-center gap-3 text-xs">
                 {bid.url && bid.url !== 'Not provided' && (
                   <a
                     href={withHttp(bid.url)}
@@ -151,7 +156,7 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
                 )}
                 
                 {bid.emailFrom && (
-                  <span className="text-gray-500">
+                  <span className="text-gray-500 truncate">
                     From: {bid.emailFrom}
                   </span>
                 )}
@@ -169,112 +174,123 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
         </button>
       </div>
 
-      {/* Body */}
+      {/* Expanded Details */}
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 ml-7" onClick={(e) => e.stopPropagation()}>
-          {/* Score Badge */}
-          {bid.scoreDetails && (
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-semibold text-gray-600">Score:</label>
-              <span className={`px-3 py-1 rounded-full text-sm font-bold ${scorePillClass}`}>
-                {bid.scoreDetails}
-              </span>
+        <div className="mt-4 pt-4 border-t border-gray-200 space-y-4 ml-7" onClick={(e) => e.stopPropagation()}>
+          {/* AI Analysis Section */}
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <h4 className="text-sm font-semibold text-blue-900 mb-2">AI Analysis</h4>
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs font-semibold text-blue-700">Reasoning:</label>
+                <p className="text-sm text-blue-800 mt-1 leading-relaxed">
+                  {bid.aiReasoning || bid.reasoning || 'No reasoning available'}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-blue-700">Summary:</label>
+                <p className="text-sm text-blue-800 mt-1 leading-relaxed">
+                  {bid.aiEmailSummary || bid.emailSummary || bid.aiSummary || 'No summary available'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Bid Details Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Bid System:</label>
+                {bid.bidSystem && bid.bidSystem !== 'Unknown' ? (
+                  <button
+                    onClick={() => onSystemClick?.(bid.bidSystem)}
+                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1 mt-1"
+                  >
+                    <Database size={14} />
+                    {bid.bidSystem}
+                  </button>
+                ) : (
+                  <p className="text-sm text-gray-700 mt-1">{bid.bidSystem || 'Unknown'}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Country:</label>
+                <p className="text-sm text-gray-700 mt-1">{bid.country || 'Unknown'}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Email Domain:</label>
+                <p className="text-sm text-gray-700 mt-1">{bid.emailDomain || 'Unknown'}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Date Added:</label>
+                <p className="text-sm text-gray-700 mt-1">{bid.dateAdded || 'Unknown'}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600">From:</label>
+                <p className="text-sm text-gray-700 mt-1 break-words">{bid.emailFrom || 'Unknown'}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Entity/Agency:</label>
+                <p className="text-sm text-gray-700 mt-1 break-words">{bid.entity || 'Unknown'}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Status:</label>
+                <p className="text-sm text-gray-700 mt-1">{bid.status || 'Unknown'}</p>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Source Email ID:</label>
+                <p className="text-xs text-gray-700 mt-1 font-mono">{bid.sourceEmailId || 'Unknown'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Keywords and Categories */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
+              <p className="text-sm text-gray-700 mt-1 break-words">{bid.keywordsFound || 'None'}</p>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Keywords Category:</label>
+              <p className="text-sm text-gray-700 mt-1 break-words">{bid.keywordsCategory || 'None'}</p>
+            </div>
+          </div>
+
+          {/* Significant Snippet */}
+          {bid.significantSnippet && (
+            <div>
+              <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
+              <div className="text-sm text-gray-700 italic bg-gray-50 p-2 rounded mt-1 border-l-4 border-gray-300">
+                "{bid.significantSnippet}"
+              </div>
             </div>
           )}
 
-          {/* AI Email Summary */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Email Summary:</label>
-            <p className="text-sm text-gray-700 mt-1 leading-relaxed">
-              {bid.aiSummary || bid.emailSummary || 'No summary available'}
-            </p>
-          </div>
-
-          {/* AI Reasoning */}
-          <div>
-            <label className="text-xs font-semibold text-gray-600">AI Reasoning:</label>
-            <p className="text-sm text-gray-700 mt-1 leading-relaxed">
-              {bid.aiReasoning || bid.reasoning || 'No reasoning available'}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Relevance:</label>
-              <p className="text-sm text-gray-700">
-                <span
-                  className={`px-2 py-0.5 rounded text-xs font-medium ${
-                    bid.relevance === 'High' ? 'bg-green-100 text-green-800'
-                      : bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {bid.relevance || 'Unknown'}
-                </span>
-              </p>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Bid System:</label>
-              {bid.bidSystem && bid.bidSystem !== 'Unknown' ? (
-                <button
-                  onClick={() => onSystemClick?.(bid.bidSystem)}
-                  className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline flex items-center gap-1"
-                >
-                  <Database size={14} />
-                  {bid.bidSystem}
-                </button>
-              ) : (
-                <p className="text-sm text-gray-700">{bid.bidSystem || 'Unknown'}</p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Due Date:</label>
-              <p className="text-sm text-gray-700">{bid.dueDate}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600">From:</label>
-              <p className="text-sm text-gray-700 break-words">{bid.emailFrom}</p>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600">Entity/Agency:</label>
-              <p className="text-sm text-gray-700 break-words">{bid.entity || 'Unknown'}</p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Keywords Found:</label>
-            <p className="text-sm text-gray-700 break-words">{bid.keywordsFound}</p>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Categories:</label>
-            <p className="text-sm text-gray-700 break-words">{bid.keywordsCategory}</p>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600">Significant Snippet:</label>
-            <p className="text-sm text-gray-700 italic break-words">"{bid.significantSnippet}"</p>
-          </div>
-
-          {!!bid.url && bid.url !== 'Not provided' && (
+          {/* Original Source */}
+          {bid.url && bid.url !== 'Not provided' && (
             <div>
               <label className="text-xs font-semibold text-gray-600">Original Source:</label>
               <a
                 href={withHttp(bid.url)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all"
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 break-all mt-1"
               >
                 {withHttp(bid.url)} <ExternalLink size={14} className="flex-shrink-0" />
               </a>
             </div>
           )}
 
+          {/* Full Email Body */}
           <details className="border border-gray-200 rounded-lg">
             <summary className="cursor-pointer px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors text-xs font-semibold text-gray-600">
               Full Email Body
@@ -284,7 +300,8 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
             </div>
           </details>
 
-          <div className="flex flex-col gap-2 pt-2 mt-2 border-top border-gray-200">
+          {/* Action Buttons */}
+          <div className="flex flex-col gap-2 pt-2 mt-2 border-t border-gray-200">
             {!isRespond && (
               <button
                 onClick={() => onStatusChange?.(bid.id, 'respond')}
@@ -320,8 +337,10 @@ BidCard.propTypes = {
     bidSystem: PropTypes.string,
     emailDateReceived: PropTypes.string,
     emailSubject: PropTypes.string,
+    subject: PropTypes.string,
     aiSummary: PropTypes.string,
     emailSummary: PropTypes.string,
+    aiEmailSummary: PropTypes.string,
     aiReasoning: PropTypes.string,
     reasoning: PropTypes.string,
     relevance: PropTypes.string,
@@ -333,6 +352,11 @@ BidCard.propTypes = {
     significantSnippet: PropTypes.string,
     url: PropTypes.string,
     emailBody: PropTypes.string,
+    country: PropTypes.string,
+    emailDomain: PropTypes.string,
+    status: PropTypes.string,
+    dateAdded: PropTypes.string,
+    sourceEmailId: PropTypes.string,
   }).isRequired,
   onStatusChange: PropTypes.func,
   isSelected: PropTypes.bool,
