@@ -41,55 +41,37 @@ function sanitize(s) {
 
 async function fetchRelevantNews(query, limit) {
   try {
-    // Search multiple regions: US, Canada, UK
-    const regions = [
-      { gl: 'US', ceid: 'US:en', name: 'US' },
-      { gl: 'CA', ceid: 'CA:en', name: 'Canada' },
-      { gl: 'GB', ceid: 'GB:en', name: 'UK' }
-    ];
-    
-    const allArticles = [];
-    
-    for (const region of regions) {
-      try {
-        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=${region.gl}&ceid=${region.ceid}`;
-        const res = await withTimeout(fetch(url), `newsFetch-${region.name}`, CFG.NEWS_TIMEOUT_MS);
-        if (!res || !res.ok) continue;
-        const xml = await res.text();
-        
-        const items = [];
-        const regexes = [
-          /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g,
-          /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g
-        ];
+    // Search US only
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+    const res = await withTimeout(fetch(url), 'newsFetch-US', CFG.NEWS_TIMEOUT_MS);
+    if (!res || !res.ok) return [];
+    const xml = await res.text();
 
-        for (let rx of regexes) {
-          let m;
-          while ((m = rx.exec(xml)) && items.length < limit) {
-            items.push({
-              title: sanitize(m[1]),
-              link: sanitize(m[2]),
-              pubDate: sanitize(m[3]),
-              source: 'Google News',
-              region: region.name
-            });
-          }
-          if (items.length) break;
-        }
-        
-        allArticles.push(...items);
-      } catch (e) {
-        console.warn(`[News] Failed to fetch from ${region.name}:`, e?.message);
+    const items = [];
+    const regexes = [
+      /<item>[\s\S]*?<title><!\[CDATA\[(.*?)\]\]><\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g,
+      /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>[\s\S]*?<pubDate>(.*?)<\/pubDate>[\s\S]*?<\/item>/g
+    ];
+
+    for (let rx of regexes) {
+      let m;
+      while ((m = rx.exec(xml)) && items.length < limit * 2) {
+        items.push({
+          title: sanitize(m[1]),
+          link: sanitize(m[2]),
+          pubDate: sanitize(m[3]),
+          source: 'Google News',
+          region: 'US'
+        });
       }
+      if (items.length) break;
     }
-    
-    if (allArticles.length === 0) return [];
-    
+
     // Process and deduplicate articles
     const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
     const seen = new Map();
     
-    for (const article of allArticles) {
+    for (const article of items) {
       const key = (article.link || article.title).trim();
       const ts = Date.parse(article.pubDate || '') || 0;
       if (ts > 0 && ts < cutoff) continue;
@@ -153,7 +135,7 @@ function generateFallbackAnalysis(newsData) {
     a.title.toLowerCase().includes('department')
   );
 
-  const summary = `Found ${articles.length} relevant articles across six key sectors: ${corporateArticles.length} corporate/HR initiatives, ${communityArticles.length} municipal/community programs, ${educationArticles.length} education sector developments, ${firstResponderArticles.length} first responder programs, ${defenseArticles.length} military/defense initiatives, and ${federalArticles.length} federal agency programs.`;
+  const summary = `Found ${articles.length} relevant US articles across six key sectors: ${corporateArticles.length} corporate/HR initiatives, ${communityArticles.length} municipal/community programs, ${educationArticles.length} education sector developments, ${firstResponderArticles.length} first responder programs, ${defenseArticles.length} military/defense initiatives, and ${federalArticles.length} federal agency programs.`;
 
   const priorities = [];
   if (corporateArticles.length > 0) {

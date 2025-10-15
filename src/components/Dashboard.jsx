@@ -610,7 +610,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
 
               {Array.isArray(aiInsights.news.articles) && aiInsights.news.articles.length > 0 && (
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
-                  <h3 className="font-semibold text-gray-900 mb-3">Relevant News (Last 90 Days)</h3>
+                  <h3 className="font-semibold text-gray-900 mb-3">US News (Last 90 Days)</h3>
                   <div className="space-y-3">
                     {aiInsights.news.articles.slice(0, showAllNews ? aiInsights.news.articles.length : 5).map((article, idx) => (
                       <div key={idx} className="border border-gray-200 rounded p-3 hover:border-orange-400 transition-colors">
