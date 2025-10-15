@@ -4,7 +4,7 @@ import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
 import { fetchDashboardData, fetchBids } from './services/bidService';
-import { fetchTickerItems, generateTickerItemsFromBids, generateSubmittedBidItems, generateSystemAdminTickerItems } from './services/tickerService';
+import { fetchComprehensiveTicker, generateTickerItems, normalizeTickerItem } from './services/comprehensiveTickerService';
 import RadioPlayer from './components/RadioPlayer';
 
 // 🔻 Code-split feature modules (keeps initial bundle lean)
@@ -56,13 +56,14 @@ const App = () => {
 
   const loadTickerFeed = useCallback(async () => {
     try {
-      const items = await fetchTickerItems();
-      setTickerItems(Array.isArray(items) ? items : []);
+      const data = await fetchComprehensiveTicker();
+      const items = generateTickerItems(data);
+      setTickerItems(items.map(normalizeTickerItem));
     } catch (error) {
-      console.error('❌ Ticker feed error:', error);
+      console.error('❌ Comprehensive ticker error:', error);
       setTickerItems([
-        { message: '🔔 Welcome to 49 North Command Center!', priority: 'high' },
-        { message: '📊 Loading latest updates...', priority: 'medium' }
+        { message: '🔔 Welcome to 49 North Command Center!', priority: 'high', category: 'General', target: 'dashboard' },
+        { message: '📊 Loading latest updates...', priority: 'medium', category: 'General', target: 'dashboard' }
       ]);
     }
   }, []);
@@ -75,17 +76,8 @@ const App = () => {
         return;
       }
       const data = await resp.json().catch(() => ({}));
-      if (data?.success) {
-        const adminTickerItems = generateSystemAdminTickerItems(data.emails || []);
-        if (Array.isArray(adminTickerItems) && adminTickerItems.length > 0) {
-          const r = await fetch('/.netlify/functions/refreshAutoTickerItems', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: adminTickerItems, source: 'admin' })
-          });
-          if (!r.ok) console.warn('refreshAutoTickerItems (admin) non-200:', r.status);
-        }
-      }
+      // Generate ticker from admin emails - REMOVED (now handled by comprehensive ticker)
+      // The comprehensive ticker will handle all data aggregation
     } catch (err) {
       console.error('Failed to load admin emails:', err);
     }
@@ -115,19 +107,8 @@ const App = () => {
         setSubmittedBids(fullBidsData.submittedBids || []);
       }
 
-      // Generate ticker from bids
-      const autoTickerItems = generateTickerItemsFromBids(fullBidsData.activeBids || []);
-      const submittedTickerItems = generateSubmittedBidItems(fullBidsData.submittedBids || []);
-      try {
-        const r = await fetch('/.netlify/functions/refreshAutoTickerItems', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items: [...autoTickerItems, ...submittedTickerItems], source: 'auto-bid' })
-        });
-        if (!r.ok) console.warn('refreshAutoTickerItems (bids) non-200:', r.status);
-      } catch (tickerErr) {
-        console.warn('Ticker update failed (non-fatal):', tickerErr);
-      }
+      // Generate ticker from bids - REMOVED (now handled by comprehensive ticker)
+      // The comprehensive ticker will handle all data aggregation
 
       await loadTickerFeed();
     } catch (err) {
@@ -156,21 +137,8 @@ const App = () => {
         return await loadTickerFeed();
       }
 
-      const tmod = await import('./services/tickerService');
-      const generateSocialMediaTickerItems =
-        tmod.generateSocialMediaTickerItems || tmod.default?.generateSocialMediaTickerItems;
-
-      if (typeof generateSocialMediaTickerItems === 'function') {
-        const socialTickerItems = generateSocialMediaTickerItems(posts);
-        if (Array.isArray(socialTickerItems) && socialTickerItems.length > 0) {
-          const r = await fetch('/.netlify/functions/refreshAutoTickerItems', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ items: socialTickerItems, source: 'auto-social' })
-          });
-          if (!r.ok) console.warn('refreshAutoTickerItems (social) non-200:', r.status);
-        }
-      }
+      // Generate ticker from social media - REMOVED (now handled by comprehensive ticker)
+      // The comprehensive ticker will handle all data aggregation
 
       await loadTickerFeed();
     } catch (err) {
@@ -420,32 +388,64 @@ const App = () => {
               >
                 {displayItems.length > 0 ? (
                   <>
-                    {displayItems.map((item, index) => (
-                      <span
-                        key={`ticker-1-${index}`}
-                        className="inline-block px-8 underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 rounded"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => navigateFromTicker(item)}
-                        onKeyDown={(e) => onTickerKeyDown(e, item)}
-                        title="Open related section"
-                      >
-                        {item.message}
-                      </span>
-                    ))}
-                    {displayItems.map((item, index) => (
-                      <span
-                        key={`ticker-2-${index}`}
-                        className="inline-block px-8 underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 rounded"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => navigateFromTicker(item)}
-                        onKeyDown={(e) => onTickerKeyDown(e, item)}
-                        title="Open related section"
-                      >
-                        {item.message}
-                      </span>
-                    ))}
+                    {displayItems.map((item, index) => {
+                      const hasExternalLink = item.link && item.link.startsWith('http');
+                      const handleClick = () => {
+                        if (hasExternalLink) {
+                          window.open(item.link, '_blank', 'noopener,noreferrer');
+                        } else {
+                          navigateFromTicker(item);
+                        }
+                      };
+                      
+                      return (
+                        <span
+                          key={`ticker-1-${index}`}
+                          className="inline-block px-8 underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 rounded"
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleClick}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleClick();
+                            }
+                          }}
+                          title={hasExternalLink ? 'Open external link' : 'Open related section'}
+                        >
+                          {item.message}
+                        </span>
+                      );
+                    })}
+                    {displayItems.map((item, index) => {
+                      const hasExternalLink = item.link && item.link.startsWith('http');
+                      const handleClick = () => {
+                        if (hasExternalLink) {
+                          window.open(item.link, '_blank', 'noopener,noreferrer');
+                        } else {
+                          navigateFromTicker(item);
+                        }
+                      };
+                      
+                      return (
+                        <span
+                          key={`ticker-2-${index}`}
+                          className="inline-block px-8 underline-offset-2 hover:underline cursor-pointer focus:outline-none focus:ring-2 focus:ring-white/60 rounded"
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleClick}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleClick();
+                            }
+                          }}
+                          title={hasExternalLink ? 'Open external link' : 'Open related section'}
+                        >
+                          {item.message}
+                        </span>
+                      );
+                    })}
                   </>
                 ) : (
                   <>
