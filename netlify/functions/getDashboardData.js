@@ -2,6 +2,7 @@
 // Fetch minimal counts/KPIs for dashboard, fast & cache-friendly.
 
 const { google } = require('googleapis');
+const crypto = require('crypto');
 
 // ---------- Config ----------
 const CFG = {
@@ -21,16 +22,21 @@ function corsHeaders(origin) {
   };
 }
 
-// ---------- Tiny cache ----------
+// ---------- Tiny cache (with ETag) ----------
 const cache = new Map();
 const makeCacheKey = (ids, ranges) => `${ids.join('|')}::${ranges.join('|')}`;
 const getCached = (k) => {
   const e = cache.get(k);
   if (!e) return null;
   if (Date.now() - e.ts > CFG.CACHE_TTL_MS) { cache.delete(k); return null; }
-  return e.data;
+  return e;
 };
-const setCached = (k, data) => cache.set(k, { ts: Date.now(), data });
+const setCached = (k, entry) => cache.set(k, { ...entry, ts: Date.now() });
+
+function makeEtag(payload) {
+  const hash = crypto.createHash('sha1').update(JSON.stringify(payload)).digest('hex');
+  return `W/"${hash}"`;
+}
 
 // ---------- Soft-timeout helper ----------
 async function withTimeout(promise, label, ms) {
@@ -58,6 +64,7 @@ const parseSocial = (rows = []) => rows.map((r) => ({ status: r[1] || '' })); //
 
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin);
+  const ifNoneMatch = event.headers?.['if-none-match'] || event.headers?.['If-None-Match'];
 
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
@@ -106,7 +113,12 @@ exports.handler = async (event) => {
     const bypass = !!(event.queryStringParameters && event.queryStringParameters.t);
     if (!bypass) {
       const hit = getCached(cacheKey);
-      if (hit) return { statusCode: 200, headers, body: JSON.stringify(hit) };
+      if (hit) {
+        if (ifNoneMatch && ifNoneMatch === hit.etag) {
+          return { statusCode: 304, headers: { ...headers, ETag: hit.etag } };
+        }
+        return { statusCode: 200, headers: { ...headers, ETag: hit.etag }, body: JSON.stringify(hit.payload) };
+      }
     }
 
     // --- Fetch in parallel with soft timeouts ---
@@ -171,9 +183,10 @@ exports.handler = async (event) => {
     };
 
     const responsePayload = { success: true, summary };
-    setCached(cacheKey, responsePayload);
+    const etag = makeEtag(responsePayload);
+    setCached(cacheKey, { etag, payload: responsePayload });
 
-    return { statusCode: 200, headers, body: JSON.stringify(responsePayload) };
+    return { statusCode: 200, headers: { ...headers, ETag: etag }, body: JSON.stringify(responsePayload) };
   } catch (error) {
     console.error('[getDashboardData] Error:', error?.message);
     return { statusCode: 500, headers, body: JSON.stringify({ success: false, error: error.message }) };

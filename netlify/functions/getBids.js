@@ -1,7 +1,17 @@
 // netlify/functions/getBids.js
 const { google } = require('googleapis');
+const crypto = require('crypto');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+
+// simple in-memory cache with TTL and ETag
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let cache = { ts: 0, etag: '', payload: null };
+
+function makeEtag(payload) {
+  const hash = crypto.createHash('sha1').update(JSON.stringify(payload)).digest('hex');
+  return `W/"${hash}"`;
+}
 
 exports.handler = async (event) => {
   const headers = {
@@ -18,6 +28,16 @@ exports.handler = async (event) => {
   }
 
   try {
+    const ifNoneMatch = event.headers?.['if-none-match'] || event.headers?.['If-None-Match'];
+
+    // Serve from cache if fresh and ETag matches
+    if (cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
+      if (ifNoneMatch && ifNoneMatch === cache.etag) {
+        return { statusCode: 304, headers: { ...headers, ETag: cache.etag } };
+      }
+      return { statusCode: 200, headers: { ...headers, ETag: cache.etag }, body: JSON.stringify(cache.payload) };
+    }
+
     // Service account (JSON or base64)
     const creds = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
       ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
@@ -63,23 +83,23 @@ exports.handler = async (event) => {
     const respondCount = activeBids.filter((b) => recKey(b.recommendation) === 'respond').length;
     const gatherInfoCount = activeBids.filter((b) => recKey(b.recommendation) === 'gather more information').length;
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        success: true,
-        activeBids,
-        disregardedBids,
-        submittedBids,
-        summary: {
-          totalActive: activeBids.length,
-          respondCount,
-          gatherInfoCount,
-          totalDisregarded: disregardedBids.length,
-          totalSubmitted: submittedBids.length,
-        },
-      }),
+    const payload = {
+      success: true,
+      activeBids,
+      disregardedBids,
+      submittedBids,
+      summary: {
+        totalActive: activeBids.length,
+        respondCount,
+        gatherInfoCount,
+        totalDisregarded: disregardedBids.length,
+        totalSubmitted: submittedBids.length,
+      },
     };
+    const etag = makeEtag(payload);
+    cache = { ts: Date.now(), etag, payload };
+
+    return { statusCode: 200, headers: { ...headers, ETag: etag }, body: JSON.stringify(payload) };
   } catch (error) {
     console.error('Error fetching bids:', error);
     return {
