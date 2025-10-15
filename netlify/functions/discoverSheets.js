@@ -56,12 +56,12 @@ async function discoverSheet(sheets, spreadsheetId, sheetName) {
     // Get first few rows to see structure
     const dataRes = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
-      range: `${sheetName}!A1:Z10` // First 10 rows
+      range: `${sheetName}!A1:Z3` // Only first 3 rows (header + 2 data rows)
     });
     
     const rows = dataRes.data.values || [];
     const headers = rows[0] || [];
-    const sampleData = rows.slice(1, 4); // First 3 data rows
+    const sampleData = rows.slice(1, 3); // Only first 2 data rows, truncated
     
     return {
       exists: true,
@@ -74,13 +74,14 @@ async function discoverSheet(sheets, spreadsheetId, sheetName) {
         index: index
       })),
       sampleData: sampleData.map((row, rowIndex) => 
-        row.map((cell, colIndex) => ({
+        row.slice(0, 10).map((cell, colIndex) => ({ // Only first 10 columns
           column: String.fromCharCode(65 + colIndex),
-          value: cell || '',
+          value: cell ? cell.substring(0, 50) + (cell.length > 50 ? '...' : '') : '', // Truncate to 50 chars
           row: rowIndex + 2 // +2 because we skip header row
         }))
       ),
-      totalRows: rows.length
+      totalRows: rows.length,
+      note: "Sample data truncated for security - only first 10 columns, 50 chars max"
     };
     
   } catch (err) {
@@ -206,7 +207,8 @@ exports.handler = async (event, context) => {
         COMPANY_DATA_SHEET_ID: CFG.COMPANY_DATA_SHEET_ID ? 'SET' : 'NOT SET'
       },
       sheets: results,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      securityNote: "This script only shows sheet structure and truncated sample data for debugging purposes"
     });
 
   } catch (e) {
