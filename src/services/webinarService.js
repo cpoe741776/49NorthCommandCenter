@@ -8,7 +8,7 @@
  * - Light schema validation (defensive)
  */
 
-const BASE = '/.netlify/functions/fetchWebinars';
+const BASE = '/.netlify/functions/getWebinars';
 const CACHE_KEY = 'webinars.cache.v1';
 
 /** Build query string safely */

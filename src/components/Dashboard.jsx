@@ -316,14 +316,38 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             )}
 
               {Array.isArray(aiInsights.bids.priorityBids) && aiInsights.bids.priorityBids.length > 0 && (
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                  <h3 className="font-semibold text-gray-900 mb-3">Priority Bids</h3>
-                <div className="space-y-2">
-                    {aiInsights.bids.priorityBids.slice(0, 3).map((bid, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded p-3">
-                        <h4 className="font-semibold text-gray-900">{bid.subject || 'Untitled'}</h4>
-                        <p className="text-sm text-gray-600">{bid.entity}</p>
-                        {bid.dueDate && <p className="text-xs text-red-600">Due: {bid.dueDate}</p>}
+                <div className="bg-white rounded-lg p-4 border border-blue-200">
+                  <h3 className="font-semibold text-gray-900 mb-3">Top 5 Priority Bids</h3>
+                  <div className="space-y-2">
+                    {aiInsights.bids.priorityBids.slice(0, 5).map((bid, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer" onClick={() => onNavigate('bids')}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-900">{bid.subject || 'Untitled'}</h4>
+                            <p className="text-sm text-gray-600">{bid.entity}</p>
+                            <div className="flex gap-2 mt-2 text-xs">
+                              {bid.dueDate && (
+                                <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
+                                  📅 Due: {bid.dueDate}
+                                </span>
+                              )}
+                              {bid.daysUntilDue !== null && bid.daysUntilDue >= 0 && (
+                                <span className={`px-2 py-1 rounded font-medium ${
+                                  bid.daysUntilDue <= 3 ? 'bg-red-100 text-red-800' :
+                                  bid.daysUntilDue <= 7 ? 'bg-orange-100 text-orange-800' :
+                                  'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  ⏰ {bid.daysUntilDue} days left
+                                </span>
+                              )}
+                              {bid.bidSystem && (
+                                <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded">
+                                  🏢 {bid.bidSystem}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -380,18 +404,42 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
 
               {Array.isArray(aiInsights.webinars.hotLeads) && aiInsights.webinars.hotLeads.length > 0 && (
                 <div className="bg-white rounded-lg p-4 border border-green-200">
-                  <h3 className="font-semibold text-gray-900 mb-3">Hot Leads</h3>
-                  <div className="space-y-2">
-                    {aiInsights.webinars.hotLeads.slice(0, 3).map((lead, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded p-3">
-                        <h4 className="font-semibold text-gray-900">{lead.name}</h4>
-                        <p className="text-sm text-gray-600">{lead.organization}</p>
-                        <p className="text-xs text-green-600">Score: {lead.score}</p>
+                  <h3 className="font-semibold text-gray-900 mb-3">Top 5 Hot Leads</h3>
+                  <div className="space-y-3">
+                    {aiInsights.webinars.hotLeads.slice(0, 5).map((lead, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded p-3 hover:border-green-400 transition-colors cursor-pointer" onClick={() => onNavigate('webinars')}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-semibold text-gray-900">{lead.name}</h4>
+                              <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-semibold">
+                                Score: {lead.score}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-2">{lead.organization}</p>
+                            {lead.email && <p className="text-xs text-gray-500 mb-2">{lead.email}</p>}
+                            {Array.isArray(lead.factors) && lead.factors.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-xs text-gray-600 font-semibold">Why they're hot:</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {lead.factors.map((factor, factorIdx) => (
+                                    <span key={factorIdx} className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">
+                                      {factor}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {lead.comments && (
+                              <p className="text-xs text-gray-600 mt-2 italic">"{lead.comments}"</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             </div>
           )}
         </div>
@@ -511,23 +559,36 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
 
               {Array.isArray(aiInsights.news.articles) && aiInsights.news.articles.length > 0 && (
                 <div className="bg-white rounded-lg p-4 border border-orange-200">
-                  <h3 className="font-semibold text-gray-900 mb-3">Recent News</h3>
-                  <div className="space-y-2">
-                    {aiInsights.news.articles.slice(0, 3).map((article, idx) => (
-                      <div key={idx} className="border border-gray-200 rounded p-3">
+                  <h3 className="font-semibold text-gray-900 mb-3">Relevant News (Last 90 Days)</h3>
+                  <div className="space-y-3">
+                    {aiInsights.news.articles.slice(0, 5).map((article, idx) => (
+                      <div key={idx} className="border border-gray-200 rounded p-3 hover:border-orange-400 transition-colors">
                         <a href={article.link} target="_blank" rel="noopener noreferrer" className="block">
-                          <h4 className="font-semibold text-gray-900 hover:text-orange-600 transition-colors">
+                          <h4 className="font-semibold text-gray-900 hover:text-orange-600 transition-colors mb-2">
                             {article.title}
                           </h4>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {article.source} • {article.daysAgo} days ago
-                          </p>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded">
+                              {article.source}
+                            </span>
+                            <span>{article.daysAgo} days ago</span>
+                            {article.daysAgo <= 7 && (
+                              <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
+                                Recent
+                              </span>
+                            )}
+                          </div>
                         </a>
-                        </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+                  {aiInsights.news.articles.length > 5 && (
+                    <p className="text-xs text-gray-500 mt-3 text-center">
+                      Showing top 5 of {aiInsights.news.articles.length} relevant articles
+                    </p>
+                  )}
+                </div>
+              )}
               </div>
             )}
           </div>
