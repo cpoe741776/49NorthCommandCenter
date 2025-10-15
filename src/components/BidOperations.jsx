@@ -299,7 +299,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         {/* Respond */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Respond ({respondBids.length})</h2>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Respond ({respondBids.length})</h2>
+              <p className="text-sm text-gray-600 mt-1">High-priority bids requiring immediate action</p>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleSelectAll(respondBids)}
@@ -341,7 +344,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         {/* Gather More Info */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Gather More Information ({gatherInfoBids.length})</h2>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Gather More Information ({gatherInfoBids.length})</h2>
+              <p className="text-sm text-gray-600 mt-1">Bids requiring additional research or information</p>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => handleSelectAll(gatherInfoBids)}
@@ -383,7 +389,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         {/* Submitted */}
         <div className="bg-white p-6 rounded-lg shadow">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">Submitted ({submittedBids.length})</h2>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Submitted ({submittedBids.length})</h2>
+              <p className="text-sm text-gray-600 mt-1">Bids that have been submitted for consideration</p>
+            </div>
             <div className="w-3 h-3 bg-blue-500 rounded-full" />
           </div>
           <div className="space-y-3">

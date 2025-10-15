@@ -92,8 +92,71 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
               <span className="text-xs text-gray-500">{bid.emailDateReceived}</span>
             </div>
 
-            <h3 className="font-semibold text-gray-900">{bid.emailSubject}</h3>
-            <p className="text-sm text-gray-600 mt-1">{bid.aiSummary || bid.emailSummary}</p>
+            <h3 className="font-semibold text-gray-900 mb-2">{bid.emailSubject}</h3>
+            
+            {/* Enhanced summary section - always visible */}
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {bid.aiSummary || bid.emailSummary || 'No summary available'}
+              </p>
+              
+              {/* Key details row */}
+              <div className="flex items-center gap-4 text-xs text-gray-500">
+                {bid.entity && (
+                  <span className="flex items-center gap-1">
+                    <span className="font-medium">Agency:</span>
+                    <span className="truncate max-w-32">{bid.entity}</span>
+                  </span>
+                )}
+                
+                {bid.dueDate && bid.dueDate !== 'Not specified' && (
+                  <span className="flex items-center gap-1">
+                    <span className="font-medium">Due:</span>
+                    <span>{bid.dueDate}</span>
+                  </span>
+                )}
+                
+                {bid.relevance && (
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    bid.relevance === 'High' ? 'bg-green-100 text-green-800'
+                      : bid.relevance === 'Medium' ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {bid.relevance} Relevance
+                  </span>
+                )}
+              </div>
+              
+              {/* AI Reasoning preview */}
+              {bid.aiReasoning && (
+                <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded border-l-2 border-gray-300">
+                  <span className="font-medium">AI Analysis:</span> {bid.aiReasoning.substring(0, 120)}
+                  {bid.aiReasoning.length > 120 && '...'}
+                </div>
+              )}
+              
+              {/* Quick action links */}
+              <div className="flex items-center gap-2 text-xs">
+                {bid.url && bid.url !== 'Not provided' && (
+                  <a
+                    href={withHttp(bid.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+                  >
+                    <ExternalLink size={12} />
+                    View Source
+                  </a>
+                )}
+                
+                {bid.emailFrom && (
+                  <span className="text-gray-500">
+                    From: {bid.emailFrom}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
