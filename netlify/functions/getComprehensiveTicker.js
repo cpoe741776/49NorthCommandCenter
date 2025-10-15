@@ -446,10 +446,13 @@ exports.handler = async (event, context) => {
     // Authenticate with Google
     let auth;
     try {
+      console.log('[ComprehensiveTicker] Attempting Google authentication...');
       auth = getGoogleAuth();
-      await auth.authorize();
+      const client = await auth.getClient(); // Use getClient() instead of authorize()
+      console.log('[ComprehensiveTicker] Google auth successful');
     } catch (err) {
       console.error('[ComprehensiveTicker] Google auth failure:', err?.message);
+      console.error('[ComprehensiveTicker] Auth error details:', err);
       return ok(headers, { success: true, items: [], note: 'Google authentication failed.' });
     }
 
