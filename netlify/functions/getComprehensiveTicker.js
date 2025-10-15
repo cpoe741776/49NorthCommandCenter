@@ -423,12 +423,14 @@ async function fetchNewsData() {
 
 exports.handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
+  console.log('[ComprehensiveTicker] Starting handler...');
 
   const headers = corsHeaders(event.headers?.origin);
   const guard = methodGuard(event, headers, 'GET', 'OPTIONS');
   if (guard) return guard;
 
   if (!checkAuth(event)) {
+    console.log('[ComprehensiveTicker] Authentication failed');
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
@@ -452,6 +454,7 @@ exports.handler = async (event, context) => {
     }
 
     // Fetch all data in parallel
+    console.log('[ComprehensiveTicker] Fetching data from all sources...');
     const [bidsData, webinarData, socialData, bidSystemsData, newsData] = await Promise.all([
       fetchBidsData(auth),
       fetchWebinarData(auth),
@@ -459,6 +462,14 @@ exports.handler = async (event, context) => {
       fetchBidSystemsData(auth),
       fetchNewsData()
     ]);
+
+    console.log('[ComprehensiveTicker] Data fetched:', {
+      bids: bidsData.activeBidsCount,
+      webinars: webinarData.upcomingWebinars?.length || 0,
+      social: socialData.recentSocialPosts?.length || 0,
+      systems: bidSystemsData.activeBidSystemsCount,
+      news: newsData.newsArticles?.length || 0
+    });
 
     // Combine all data
     const comprehensiveData = {

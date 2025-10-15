@@ -17,13 +17,36 @@ function withAuthHeaders(init = {}) {
 export async function fetchComprehensiveTicker() {
   try {
     const res = await fetch('/.netlify/functions/getComprehensiveTicker', withAuthHeaders());
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      console.error('Comprehensive ticker failed:', res.status, res.statusText);
+      return getFallbackTickerData();
+    }
     const data = await res.json();
-    return data?.items || [];
+    console.log('Comprehensive ticker data:', data);
+    return data?.data || getFallbackTickerData();
   } catch (err) {
     console.error('Error fetching comprehensive ticker:', err);
-    return [];
+    return getFallbackTickerData();
   }
+}
+
+function getFallbackTickerData() {
+  return {
+    activeBidsCount: 0,
+    recentDisregardedCount: 0,
+    upcomingWebinars: [],
+    recentSocialPosts: [],
+    scheduledSocialCount: 0,
+    socialThisWeek: 0,
+    socialThisMonth: 0,
+    activeBidSystemsCount: 0,
+    recentBidSystemChanges: [],
+    newsArticles: [],
+    priorityBids: [],
+    upcomingWebinarRegistrations: 0,
+    recentWebinarRegistrations: 0,
+    surveyContactsToContact: []
+  };
 }
 
 /**

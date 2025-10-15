@@ -56,8 +56,11 @@ const App = () => {
 
   const loadTickerFeed = useCallback(async () => {
     try {
+      console.log('Loading comprehensive ticker...');
       const data = await fetchComprehensiveTicker();
+      console.log('Ticker data received:', data);
       const items = generateTickerItems(data);
+      console.log('Generated ticker items:', items);
       setTickerItems(items.map(normalizeTickerItem));
     } catch (error) {
       console.error('❌ Comprehensive ticker error:', error);
