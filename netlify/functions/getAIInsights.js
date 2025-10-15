@@ -6,7 +6,6 @@ const OpenAI = require('openai');
 const { corsHeaders, methodGuard, ok, bad, checkAuth, safeJson } = require('./_utils/http');
 const { getGoogleAuth } = require('./_utils/google');
 
-
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ---- Config ----
@@ -34,7 +33,7 @@ const CFG = {
     DISREGARDED_SAMPLE: 8
   },
 
-  FUNCTION_TIMEOUT_MS: 24000, // Netlify hard limit ~26s — keep headroom
+  FUNCTION_TIMEOUT_MS: 24000,
   ENABLE_CACHING: true,
   CACHE_TTL_MS: 5 * 60 * 1000
 };
@@ -55,7 +54,7 @@ async function withTimeoutPromise(promise, label, ms) {
     clearTimeout(t);
     if (err && String(err.message || '').includes('timeout')) {
       console.warn(`[Timeout] ${label} hit timeout`);
-      return null; // treat as soft-fail and continue
+      return null; // soft-fail
     }
     throw err;
   }
@@ -77,7 +76,7 @@ function sanitize(s) {
   return (s || '').replace(/<!\[CDATA\[|\]\]>/g, '').trim();
 }
 
-// ---- Parsers (unchanged semantics) ----
+// ---- Parsers ----
 function parseBids(rows) {
   if (!rows) return [];
   return rows.map((row) => ({
@@ -453,7 +452,6 @@ function buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { li
 
 // ---- OpenAI call (JSON only) ----
 async function getAIInsights(aiPayload, { model, temperature, max_tokens, timeoutMs }) {
-  // If OPENAI key is missing, return a structured "AI unavailable" block immediately
   if (!process.env.OPENAI_API_KEY) {
     return {
       executiveSummary: 'AI analysis unavailable (no API key configured). Data processed below.',
@@ -510,14 +508,13 @@ ${JSON.stringify(aiPayload, null, 2)}
 
   try {
     return await once();
-  } catch (e1) {
+  } catch {
     await sleep(1200);
     try {
       return await once();
-    } catch (e2) {
+    } catch {
       return {
-        executiveSummary:
-          'AI analysis unavailable. Data processed without strategic summary.',
+        executiveSummary: 'AI analysis unavailable. Data processed without strategic summary.',
         topPriorities: [],
         bidRecommendations: [],
         systemInsights: {
@@ -548,23 +545,20 @@ exports.handler = async (event, context) => {
   if (!checkAuth(event)) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
 
   try {
-    // Optional POST filters (ignored by default)
     if (event.httpMethod === 'POST' && event.body) {
-      const [, err] = safeJson(event.body); // ESLint-safe destructuring
+      const [, err] = safeJson(event.body);
       if (err) return bad(headers, 'Invalid JSON body');
     }
 
     // Google auth
-    // Google auth (explicit)
-let auth;
-try {
-   auth = getGoogleAuth();
-  await auth.authorize();
- } catch (authErr) {
-   console.error('[Insights] Google auth failure:', authErr?.message);
-   return { statusCode: 503, headers, body: JSON.stringify({ error: 'Google authentication failed' }) };
- }
-
+    let auth;
+    try {
+      auth = getGoogleAuth();
+      await auth.authorize();
+    } catch (authErr) {
+      console.error('[Insights] Google auth failure:', authErr?.message);
+      return { statusCode: 503, headers, body: JSON.stringify({ error: 'Google authentication failed' }) };
+    }
 
     const sheets = google.sheets({ version: 'v4', auth });
 
@@ -634,7 +628,7 @@ try {
 
     // Aggregations
     const contactLeads = extractContactLeads(surveys, registrations);
-    const respondBids = activeBids.filter((b) => (b.recommendation || '').toLowerCase() === 'respond');
+    const respondBids = activeBids.filter((b) => (b.recommendation || '').trim().toLowerCase() === 'respond');
     const newsArticles = (await fetchRelevantNews(CFG.NEWS_QUERY, CFG.NEWS_MAX)) || [];
     const bidUrgency = computeBidUrgencyBuckets(activeBids);
     const bidSystemDistribution = countByField(activeBids, (b) => b.bidSystem, 'Unknown');
@@ -766,15 +760,11 @@ try {
       stack: process.env.NODE_ENV !== 'production' ? e?.stack : undefined,
       timestamp: new Date().toISOString()
     };
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify(payload)
-    };
+    return { statusCode: 500, headers, body: JSON.stringify(payload) };
   }
-}; // closes exports.handler
+};
 
-// ---- Contact leads (unchanged semantics) ----
+// ---- Contact leads ----
 function extractContactLeads(surveys, registrations) {
   const leads = new Map();
   const regByEmail = new Map();

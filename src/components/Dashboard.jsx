@@ -84,7 +84,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         setAiError(err?.message || 'A network error occurred.');
         setAiInsights(null);
       } finally {
-        setAiLoading(false);
+        setAiLoading(true);
       }
     },
     [onTickerUpdate]

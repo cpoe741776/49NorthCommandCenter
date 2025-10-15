@@ -50,7 +50,12 @@ exports.handler = async (event) => {
       const webViewLink = r[4] || '';
       const webContentLink = r[5] || '';
       let meta = {};
-      try { meta = JSON.parse(r[6] || '{}'); } catch { meta = {}; }
+ try {
+   meta = JSON.parse(r[6] || '{}');
+ } catch (e) {
+   console.warn('Bad meta JSON at row', rowNumber, r[6]);
+   meta = {};
+ }
 
       return {
         id: rowNumber, // used by deleteDocument to delete the row

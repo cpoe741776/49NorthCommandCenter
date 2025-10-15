@@ -29,12 +29,14 @@ exports.handler = async (event) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
+    const nonEmpty = (r) => r && r.length && r.some((c) => String(c || '').trim() !== '');
+
     // ----- Active_Bids (A..U) -----
     const activeResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Active_Bids!A2:U',
     });
-    const activeRows = activeResp.data.values || [];
+    const activeRows = (activeResp.data.values || []).filter(nonEmpty);
     const activeBids = activeRows.map((row, i) => toBid(row, i + 2, 'New'));
 
     // ----- Disregarded (A..U) -----
@@ -42,7 +44,7 @@ exports.handler = async (event) => {
       spreadsheetId: SHEET_ID,
       range: 'Disregarded!A2:U',
     });
-    const disRows = disResp.data.values || [];
+    const disRows = (disResp.data.values || []).filter(nonEmpty);
     const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded'));
 
     // ----- Submitted (A..V, V = submissionDate) -----
@@ -50,11 +52,16 @@ exports.handler = async (event) => {
       spreadsheetId: SHEET_ID,
       range: 'Submitted!A2:V',
     });
-    const subRows = subResp.data.values || [];
+    const subRows = (subResp.data.values || []).filter(nonEmpty);
     const submittedBids = subRows.map((row, i) => ({
       ...toBid(row, i + 2, 'Submitted'),
       submissionDate: row[21] || '', // V
     }));
+
+    // Case-insensitive counts, trimmed
+    const recKey = (s) => String(s || '').trim().toLowerCase();
+    const respondCount = activeBids.filter((b) => recKey(b.recommendation) === 'respond').length;
+    const gatherInfoCount = activeBids.filter((b) => recKey(b.recommendation) === 'gather more information').length;
 
     return {
       statusCode: 200,
@@ -66,8 +73,8 @@ exports.handler = async (event) => {
         submittedBids,
         summary: {
           totalActive: activeBids.length,
-          respondCount: activeBids.filter(b => b.recommendation === 'Respond').length,
-          gatherInfoCount: activeBids.filter(b => b.recommendation === 'Gather More Information').length,
+          respondCount,
+          gatherInfoCount,
           totalDisregarded: disregardedBids.length,
           totalSubmitted: submittedBids.length,
         },
@@ -86,37 +93,32 @@ exports.handler = async (event) => {
 // Map a 21-column row (A..U) to a unified bid object.
 // Default `fallbackStatus` is used when the sheet’s Status col is empty.
 function toBid(row, sheetRowNumber, fallbackStatus) {
-  // Expecting:
-  // A Recommendation, B Score Details, C AI Reasoning, D AI Email Summary,
-  // E Email Date Received, F From, G Keywords Category, H Keywords Found,
-  // I Relevance, J Subject, K Body, L URL, M Due Date, N Snippet,
-  // O Email Domain, P Bid System, Q Country, R Entity/Agency,
-  // S Status, T Date Added, U Source Email ID
+  const v = (i) => (row && row[i] != null ? row[i] : '');
   return {
     id: sheetRowNumber,
-    recommendation: row[0] || '',
-    scoreDetails: row[1] || '',
-    aiReasoning: row[2] || '',
-    aiSummary: row[3] || '',
-    emailDateReceived: row[4] || '',
-    emailFrom: row[5] || '',
-    keywordsCategory: row[6] || '',
-    keywordsFound: row[7] || '',
-    relevance: row[8] || '',
-    emailSubject: row[9] || '',
-    emailBody: row[10] || '',
-    url: row[11] || '',
-    dueDate: row[12] || '',
-    significantSnippet: row[13] || '',
-    emailDomain: row[14] || '',
-    bidSystem: row[15] || '',
-    country: row[16] || '',
-    entity: row[17] || '',
-    status: row[18] || fallbackStatus,
-    dateAdded: row[19] || '',
-    sourceEmailId: row[20] || '',
+    recommendation: v(0),
+    scoreDetails: v(1),
+    aiReasoning: v(2),
+    aiSummary: v(3),
+    emailDateReceived: v(4),
+    emailFrom: v(5),
+    keywordsCategory: v(6),
+    keywordsFound: v(7),
+    relevance: v(8),
+    emailSubject: v(9),
+    emailBody: v(10),
+    url: v(11),
+    dueDate: v(12),
+    significantSnippet: v(13),
+    emailDomain: v(14),
+    bidSystem: v(15),
+    country: v(16),
+    entity: v(17),
+    status: v(18) || fallbackStatus,
+    dateAdded: v(19),
+    sourceEmailId: v(20),
     // Back-compat aliases
-    emailSummary: row[3] || '',  // maps to aiSummary
-    reasoning: row[2] || '',     // maps to aiReasoning
+    emailSummary: v(3),  // maps to aiSummary
+    reasoning: v(2),     // maps to aiReasoning
   };
 }
