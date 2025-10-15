@@ -73,10 +73,7 @@ exports.handler = async (event) => {
       range: 'Submitted!A2:V',
     });
     const subRows = (subResp.data.values || []).filter(nonEmpty);
-    const submittedBids = subRows.map((row, i) => ({
-      ...toBid(row, i + 2, 'Submitted'),
-      submissionDate: row[21] || '', // V
-    }));
+    const submittedBids = subRows.map((row, i) => toSubmittedBid(row, i + 2));
 
     // Case-insensitive counts, trimmed
     const recKey = (s) => String(s || '').trim().toLowerCase();
@@ -110,8 +107,41 @@ exports.handler = async (event) => {
   }
 };
 
+// Map a 21-column row (A..U) from Submitted tab to a unified bid object.
+function toSubmittedBid(row, sheetRowNumber) {
+  const v = (i) => (row && row[i] != null ? row[i] : '');
+  return {
+    id: sheetRowNumber,
+    recommendation: v(0),
+    reasoning: v(1), // B = Reasoning (not AI Reasoning)
+    emailSummary: v(2), // C = Email Summary (not AI Email Summary)
+    emailDateReceived: v(3),
+    emailFrom: v(4),
+    keywordsCategory: v(5),
+    keywordsFound: v(6),
+    relevance: v(7),
+    emailSubject: v(8),
+    emailBody: v(9),
+    url: v(10),
+    dueDate: v(11),
+    significantSnippet: v(12),
+    emailDomain: v(13),
+    bidSystem: v(14),
+    country: v(15),
+    entity: v(16),
+    status: v(17) || 'Submitted',
+    dateAdded: v(18),
+    sourceEmailId: v(19),
+    submissionDate: v(20), // U = Submission Date
+    // Back-compat aliases for BidCard compatibility
+    aiReasoning: v(1),     // maps to reasoning
+    aiEmailSummary: v(2),  // maps to emailSummary
+    aiSummary: v(2),       // maps to emailSummary
+  };
+}
+
 // Map a 21-column row (A..U) to a unified bid object.
-// Default `fallbackStatus` is used when the sheet’s Status col is empty.
+// Default `fallbackStatus` is used when the sheet's Status col is empty.
 function toBid(row, sheetRowNumber, fallbackStatus) {
   const v = (i) => (row && row[i] != null ? row[i] : '');
   return {
@@ -119,7 +149,7 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     recommendation: v(0),
     scoreDetails: v(1),
     aiReasoning: v(2),
-    aiSummary: v(3),
+    aiEmailSummary: v(3), // Column D = AI Email Summary
     emailDateReceived: v(4),
     emailFrom: v(5),
     keywordsCategory: v(6),
@@ -137,8 +167,9 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     status: v(18) || fallbackStatus,
     dateAdded: v(19),
     sourceEmailId: v(20),
-    // Back-compat aliases
-    emailSummary: v(3),  // maps to aiSummary
+    // Back-compat aliases for different tab structures
+    aiSummary: v(3),     // maps to aiEmailSummary
+    emailSummary: v(3),  // maps to aiEmailSummary
     reasoning: v(2),     // maps to aiReasoning
   };
 }
