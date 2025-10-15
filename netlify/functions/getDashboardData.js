@@ -58,6 +58,22 @@ async function withTimeout(promise, label, ms) {
 
 // ---------- Parsers (minimal fields only) ----------
 const parseBids = (rows = []) => rows.map((r) => ({ recommendation: r[0] || '' }));
+
+function normalizeRec(v) {
+  const s = String(v || '').trim().toLowerCase();
+  if (!s) return '';
+  // unify common variants
+  if (s === 'respond' || s === 'response' || s === 'recommended: respond') return 'respond';
+  if (
+    s === 'gather more information' ||
+    s === 'gather info' ||
+    s === 'need info' ||
+    s === 'needs info' ||
+    s === 'need more info' ||
+    s === 'research'
+  ) return 'gather';
+  return s;
+}
 const parseAdmin = (rows = []) => rows.map((r) => ({ status: r[9] || '' })); // col J
 const parseWebinars = (rows = []) => rows.map((r) => ({ status: r[6] || '' })); // col G
 const parseSocial = (rows = []) => rows.map((r) => ({ status: r[1] || '' })); // col B
@@ -162,9 +178,9 @@ exports.handler = async (event) => {
       ? parseSocial(socialRes?.data?.valueRanges?.[0]?.values || [])
       : [];
 
-    // --- Aggregate KPIs ---
-    const respondCount = activeBids.filter(b => b.recommendation === 'Respond').length;
-    const gatherInfoCount = activeBids.filter(b => b.recommendation === 'Gather More Information').length;
+    // --- Aggregate KPIs (normalized) ---
+    const respondCount = activeBids.filter(b => normalizeRec(b.recommendation) === 'respond').length;
+    const gatherInfoCount = activeBids.filter(b => normalizeRec(b.recommendation) === 'gather').length;
 
     const summary = {
       adminEmailsCount: adminEmails.length,
