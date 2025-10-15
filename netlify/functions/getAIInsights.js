@@ -551,207 +551,208 @@ exports.handler = async (event, context) => {
     }
 
     // Google auth
-    let auth;
     try {
-      auth = getGoogleAuth();
-      await auth.authorize();
-    } catch (authErr) {
-      console.error('[Insights] Google auth failure:', authErr?.message);
-      return { statusCode: 503, headers, body: JSON.stringify({ error: 'Google authentication failed' }) };
-    }
+      // getGoogleAuth returns a GoogleAuth; use getClient() per latest API
+      const googleAuth = getGoogleAuth();
+      const auth = await googleAuth.getClient();
+      const sheets = google.sheets({ version: 'v4', auth });
+      
+      // Fetch ranges (batch) with timeouts
+      const bidRanges = ['Active_Bids!A2:U', 'Submitted!A2:U', 'Disregarded!A2:U', 'Active_Admin!A2:J'];
+      const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F'];
+      const systemsRanges = ['_BidSystemsSync!A2:O'];
+      const socialRanges = ['MainPostData!A2:R'];
 
-    const sheets = google.sheets({ version: 'v4', auth });
+      const [bidsData, webinarData, systemsData, socialData] = await Promise.all([
+        withTimeoutPromise(
+          sheets.spreadsheets.values.batchGet({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            ranges: bidRanges
+          }),
+          'bidsBatchGet',
+          CFG.GOOGLE_TIMEOUT_MS
+        ),
+        withTimeoutPromise(
+          sheets.spreadsheets.values.batchGet({
+            spreadsheetId: process.env.WEBINAR_SHEET_ID,
+            ranges: webinarRanges
+          }),
+          'webinarBatchGet',
+          CFG.GOOGLE_TIMEOUT_MS
+        ),
+        withTimeoutPromise(
+          sheets.spreadsheets.values.batchGet({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            ranges: systemsRanges
+          }),
+          'systemsBatchGet',
+          CFG.GOOGLE_TIMEOUT_MS
+        ),
+        process.env.SOCIAL_MEDIA_SHEET_ID
+          ? withTimeoutPromise(
+              sheets.spreadsheets.values.batchGet({
+                spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID,
+                ranges: socialRanges
+              }),
+              'socialBatchGet',
+              CFG.GOOGLE_TIMEOUT_MS
+            )
+          : Promise.resolve(null)
+      ]);
 
-    // Fetch ranges (batch) with timeouts
-    const bidRanges = ['Active_Bids!A2:U', 'Submitted!A2:U', 'Disregarded!A2:U', 'Active_Admin!A2:J'];
-    const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F'];
-    const systemsRanges = ['_BidSystemsSync!A2:O'];
-    const socialRanges = ['MainPostData!A2:R'];
+      if (!bidsData || !webinarData) {
+        return {
+          statusCode: 503,
+          headers,
+          body: JSON.stringify({
+            error: 'Unable to fetch critical data',
+            details: 'Service temporarily unavailable',
+            timestamp: new Date().toISOString()
+          })
+        };
+      }
 
-    const [bidsData, webinarData, systemsData, socialData] = await Promise.all([
-      withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          ranges: bidRanges
-        }),
-        'bidsBatchGet',
-        CFG.GOOGLE_TIMEOUT_MS
-      ),
-      withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.WEBINAR_SHEET_ID,
-          ranges: webinarRanges
-        }),
-        'webinarBatchGet',
-        CFG.GOOGLE_TIMEOUT_MS
-      ),
-      withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          ranges: systemsRanges
-        }),
-        'systemsBatchGet',
-        CFG.GOOGLE_TIMEOUT_MS
-      ),
-      withTimeoutPromise(
-        sheets.spreadsheets.values.batchGet({
-          spreadsheetId: process.env.SOCIAL_MEDIA_SHEET_ID,
-          ranges: socialRanges
-        }),
-        'socialBatchGet',
-        CFG.GOOGLE_TIMEOUT_MS
-      )
-    ]);
+      // Parse
+      const activeBids = parseBids(bidsData.data.valueRanges[0]?.values || []);
+      const submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
+      const disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []);
+      const adminEmails = parseAdminEmails(bidsData.data.valueRanges[3]?.values || []);
+      const webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
+      const surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
+      const registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
+      const bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
+      const socialPosts = parseSocialPosts(socialData?.data?.valueRanges?.[0]?.values || []);
 
-    if (!bidsData || !webinarData) {
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({
-          error: 'Unable to fetch critical data',
-          details: 'Service temporarily unavailable',
-          timestamp: new Date().toISOString()
-        })
+      // Aggregations
+      const contactLeads = extractContactLeads(surveys, registrations);
+      const respondBids = activeBids.filter((b) => (b.recommendation || '').trim().toLowerCase() === 'respond');
+      const newsArticles = (await fetchRelevantNews(CFG.NEWS_QUERY, CFG.NEWS_MAX)) || [];
+      const bidUrgency = computeBidUrgencyBuckets(activeBids);
+      const bidSystemDistribution = countByField(activeBids, (b) => b.bidSystem, 'Unknown');
+      const agencyDistribution = countByField(activeBids, (b) => b.entity, 'Unknown');
+      const keywordDistribution = computeKeywordDistribution(activeBids);
+      const scoreDistribution = computeScoreDistribution(activeBids);
+      const adminBySystem = countByField(adminEmails, (e) => e.bidSystem, 'Unknown');
+      const newAdminCount = adminEmails.filter((e) => (e.status || '').toLowerCase() === 'new').length;
+      const disregardedByReason = analyzeDisregardedReasons(disregardedBids);
+      const revivedCandidates = findRevivalCandidates(disregardedBids);
+      const webinarKPIs = computeWebinarKPIs(webinars, surveys);
+
+      const aggregatedData = {
+        timestamp: new Date().toISOString(),
+        summary: {
+          activeBidsCount: activeBids.length,
+          respondBidsCount: respondBids.length,
+          submittedBidsCount: submittedBids.length,
+          disregardedBidsCount: disregardedBids.length,
+          adminEmailsCount: adminEmails.length,
+          newAdminEmailsCount: newAdminCount,
+          registeredSystemsCount: bidSystems.filter((s) => s.status === 'Active').length,
+          completedWebinars: webinars.filter((w) => w.status === 'Completed').length,
+          totalSurveyResponses: surveys.length,
+          contactRequests: contactLeads.length,
+          totalRegistrations: registrations.length,
+          socialPostsTotal: socialPosts.length,
+          socialPostsPublished: socialPosts.filter((p) => p.status === 'Published').length,
+          socialPostsDrafts: socialPosts.filter((p) => p.status === 'Draft').length
+        },
+        bidUrgency,
+        bidSystemDistribution,
+        agencyDistribution,
+        keywordDistribution,
+        scoreDistribution,
+        systemAdmin: { bySystem: adminBySystem, newCount: newAdminCount },
+        disregardedAnalysis: { byReason: disregardedByReason, revivedCandidates },
+        webinarKPIs,
+        priorityBids: respondBids.map((bid) => ({
+          recommendation: bid.recommendation,
+          score: bid.scoreDetails,
+          subject: bid.emailSubject || 'No Subject',
+          summary: bid.aiSummary || bid.significantSnippet || bid.emailSubject || 'No summary available',
+          entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null,
+          bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null,
+          dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null,
+          daysUntilDue: daysUntil(bestDate(bid.dueDate)),
+          relevance: bid.relevance,
+          keywords: bid.keywordsFound,
+          emailFrom: bid.emailFrom,
+          url: bid.url
+        })),
+        contactLeads,
+        newsArticles,
+        bidSystems: bidSystems.slice(0, CFG.AI_LIMITS.TOP_SYSTEMS),
+        socialPosts
       };
-    }
 
-    // Parse
-    const activeBids = parseBids(bidsData.data.valueRanges[0]?.values || []);
-    const submittedBids = parseBids(bidsData.data.valueRanges[1]?.values || []);
-    const disregardedBids = parseBids(bidsData.data.valueRanges[2]?.values || []);
-    const adminEmails = parseAdminEmails(bidsData.data.valueRanges[3]?.values || []);
-    const webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
-    const surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
-    const registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
-    const bidSystems = parseBidSystems(systemsData?.data.valueRanges[0]?.values || []);
-    const socialPosts = parseSocialPosts(socialData?.data.valueRanges[0]?.values || []);
+      // Early time check
+      if (Date.now() - started > 15000) {
+        console.warn('[Insights] Time nearly exceeded; skipping AI.');
+        return ok(headers, {
+          executiveSummary: 'AI Analysis skipped due to time constraints. Basic data loaded successfully.',
+          timestamp: new Date().toISOString(),
+          summary: aggregatedData.summary,
+          bids: aggregatedData.bidUrgency,
+          webinarKPIs: aggregatedData.webinarKPIs,
+          priorityBids: aggregatedData.priorityBids,
+          contactLeads: aggregatedData.contactLeads,
+          newsArticles: aggregatedData.newsArticles,
+          socialPosts: aggregatedData.socialPosts,
+          note: 'Full AI analysis unavailable due to time constraints',
+          processingTime: `${Date.now() - started}ms`
+        });
+      }
 
-    // Aggregations
-    const contactLeads = extractContactLeads(surveys, registrations);
-    const respondBids = activeBids.filter((b) => (b.recommendation || '').trim().toLowerCase() === 'respond');
-    const newsArticles = (await fetchRelevantNews(CFG.NEWS_QUERY, CFG.NEWS_MAX)) || [];
-    const bidUrgency = computeBidUrgencyBuckets(activeBids);
-    const bidSystemDistribution = countByField(activeBids, (b) => b.bidSystem, 'Unknown');
-    const agencyDistribution = countByField(activeBids, (b) => b.entity, 'Unknown');
-    const keywordDistribution = computeKeywordDistribution(activeBids);
-    const scoreDistribution = computeScoreDistribution(activeBids);
-    const adminBySystem = countByField(adminEmails, (e) => e.bidSystem, 'Unknown');
-    const newAdminCount = adminEmails.filter((e) => (e.status || '').toLowerCase() === 'new').length;
-    const disregardedByReason = analyzeDisregardedReasons(disregardedBids);
-    const revivedCandidates = findRevivalCandidates(disregardedBids);
-    const webinarKPIs = computeWebinarKPIs(webinars, surveys);
+      // Build AI payload + call
+      const aiPayload = buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { limits: CFG.AI_LIMITS });
+      let aiInsights;
+      try {
+        aiInsights = await getAIInsights(aiPayload, {
+          model: CFG.OPENAI_MODEL,
+          temperature: CFG.OPENAI_TEMPERATURE,
+          max_tokens: CFG.OPENAI_MAX_TOKENS,
+          timeoutMs: CFG.OPENAI_TIMEOUT_MS
+        });
+      } catch (aiErr) {
+        console.error('[Insights] OpenAI failed:', aiErr.message);
+        aiInsights = {
+          executiveSummary: 'AI analysis unavailable. Data has been processed and is displayed below.',
+          topPriorities: [],
+          bidRecommendations: [],
+          systemInsights: {
+            bidSystems: 'See distributions in data section.',
+            adminAlerts: 'Review system admin notifications',
+            suggestions: 'Monitor bid system performance'
+          },
+          contentInsights: { topPerforming: 'See webinar KPIs section', suggestions: 'Align with procurement trends' },
+          newsOpportunities: [],
+          riskAlerts: [],
+          revivedCandidates: []
+        };
+      }
 
-    const aggregatedData = {
-      timestamp: new Date().toISOString(),
-      summary: {
-        activeBidsCount: activeBids.length,
-        respondBidsCount: respondBids.length,
-        submittedBidsCount: submittedBids.length,
-        disregardedBidsCount: disregardedBids.length,
-        adminEmailsCount: adminEmails.length,
-        newAdminEmailsCount: newAdminCount,
-        registeredSystemsCount: bidSystems.filter((s) => s.status === 'Active').length,
-        completedWebinars: webinars.filter((w) => w.status === 'Completed').length,
-        totalSurveyResponses: surveys.length,
-        contactRequests: contactLeads.length,
-        totalRegistrations: registrations.length,
-        socialPostsTotal: socialPosts.length,
-        socialPostsPublished: socialPosts.filter((p) => p.status === 'Published').length,
-        socialPostsDrafts: socialPosts.filter((p) => p.status === 'Draft').length
-      },
-      bidUrgency,
-      bidSystemDistribution,
-      agencyDistribution,
-      keywordDistribution,
-      scoreDistribution,
-      systemAdmin: { bySystem: adminBySystem, newCount: newAdminCount },
-      disregardedAnalysis: { byReason: disregardedByReason, revivedCandidates },
-      webinarKPIs,
-      priorityBids: respondBids.map((bid) => ({
-        recommendation: bid.recommendation,
-        score: bid.scoreDetails,
-        subject: bid.emailSubject || 'No Subject',
-        summary: bid.aiSummary || bid.significantSnippet || bid.emailSubject || 'No summary available',
-        entity: bid.entity !== 'Unknown' && bid.entity ? bid.entity : null,
-        bidSystem: bid.bidSystem !== 'Unknown' && bid.bidSystem ? bid.bidSystem : null,
-        dueDate: bid.dueDate !== 'Not specified' ? bid.dueDate : null,
-        daysUntilDue: daysUntil(bestDate(bid.dueDate)),
-        relevance: bid.relevance,
-        keywords: bid.keywordsFound,
-        emailFrom: bid.emailFrom,
-        url: bid.url
-      })),
-      contactLeads,
-      newsArticles,
-      bidSystems: bidSystems.slice(0, CFG.AI_LIMITS.TOP_SYSTEMS),
-      socialPosts
-    };
-
-    // Early time check
-    if (Date.now() - started > 15000) {
-      console.warn('[Insights] Time nearly exceeded; skipping AI.');
       return ok(headers, {
-        executiveSummary: 'AI Analysis skipped due to time constraints. Basic data loaded successfully.',
+        executiveSummary: aiInsights.executiveSummary || 'AI analysis unavailable.',
+        topPriorities: aiInsights.topPriorities || [],
+        bidRecommendations: aiInsights.bidRecommendations || [],
+        systemInsights: aiInsights.systemInsights,
+        contentInsights: aiInsights.contentInsights,
+        newsOpportunities: aiInsights.newsOpportunities,
+        riskAlerts: aiInsights.riskAlerts,
+        revivedCandidates: aiInsights.revivedCandidates,
         timestamp: new Date().toISOString(),
         summary: aggregatedData.summary,
         bids: aggregatedData.bidUrgency,
         webinarKPIs: aggregatedData.webinarKPIs,
-        priorityBids: aggregatedData.priorityBids,
-        contactLeads: aggregatedData.contactLeads,
+        contactLeads: aggregatedData.contactLeads.slice(0, 50),
+        priorityBids: aggregatedData.priorityBids.slice(0, 25),
         newsArticles: aggregatedData.newsArticles,
-        socialPosts: aggregatedData.socialPosts,
-        note: 'Full AI analysis unavailable due to time constraints',
+        socialPosts: aggregatedData.socialPosts.slice(0, 10),
         processingTime: `${Date.now() - started}ms`
       });
+    } catch (authErr) {
+      console.error('[Insights] Google auth failure:', authErr?.message);
+      return { statusCode: 503, headers, body: JSON.stringify({ error: 'Google authentication failed' }) };
     }
-
-    // Build AI payload + call
-    const aiPayload = buildAIPayload(aggregatedData, webinars, surveys, disregardedBids, { limits: CFG.AI_LIMITS });
-    let aiInsights;
-    try {
-      aiInsights = await getAIInsights(aiPayload, {
-        model: CFG.OPENAI_MODEL,
-        temperature: CFG.OPENAI_TEMPERATURE,
-        max_tokens: CFG.OPENAI_MAX_TOKENS,
-        timeoutMs: CFG.OPENAI_TIMEOUT_MS
-      });
-    } catch (aiErr) {
-      console.error('[Insights] OpenAI failed:', aiErr.message);
-      aiInsights = {
-        executiveSummary: 'AI analysis unavailable. Data has been processed and is displayed below.',
-        topPriorities: [],
-        bidRecommendations: [],
-        systemInsights: {
-          bidSystems: 'See distributions in data section.',
-          adminAlerts: 'Review system admin notifications',
-          suggestions: 'Monitor bid system performance'
-        },
-        contentInsights: { topPerforming: 'See webinar KPIs section', suggestions: 'Align with procurement trends' },
-        newsOpportunities: [],
-        riskAlerts: [],
-        revivedCandidates: []
-      };
-    }
-
-    return ok(headers, {
-      executiveSummary: aiInsights.executiveSummary || 'AI analysis unavailable.',
-      topPriorities: aiInsights.topPriorities || [],
-      bidRecommendations: aiInsights.bidRecommendations || [],
-      systemInsights: aiInsights.systemInsights,
-      contentInsights: aiInsights.contentInsights,
-      newsOpportunities: aiInsights.newsOpportunities,
-      riskAlerts: aiInsights.riskAlerts,
-      revivedCandidates: aiInsights.revivedCandidates,
-      timestamp: new Date().toISOString(),
-      summary: aggregatedData.summary,
-      bids: aggregatedData.bidUrgency,
-      webinarKPIs: aggregatedData.webinarKPIs,
-      contactLeads: aggregatedData.contactLeads.slice(0, 50),
-      priorityBids: aggregatedData.priorityBids.slice(0, 25),
-      newsArticles: aggregatedData.newsArticles,
-      socialPosts: aggregatedData.socialPosts.slice(0, 10),
-      processingTime: `${Date.now() - started}ms`
-    });
   } catch (e) {
     console.error('[Insights] Fatal error:', e);
     const payload = {
