@@ -12,7 +12,7 @@ const CFG = {
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   NEWS_TIMEOUT_MS: parseInt(process.env.NEWS_TIMEOUT_MS ?? '8000', 10),
-  NEWS_QUERY: process.env.NEWS_QUERY || 'mental health OR psychological health OR resilience training OR employee wellbeing OR workplace mental health OR police mental health OR firefighter mental health OR military mental health OR veteran mental health OR school mental health OR university mental health OR corporate mental health OR government mental health OR community mental health',
+  NEWS_QUERY: process.env.NEWS_QUERY || '(corporate mental health OR workplace mental health OR employee wellbeing OR HR mental health) OR (police mental health OR firefighter mental health OR first responder mental health OR EMS mental health) OR (military mental health OR veteran mental health OR defense mental health OR army mental health) OR (school mental health OR university mental health OR student mental health OR education mental health) OR (city mental health OR county mental health OR state mental health OR municipal mental health) OR (federal mental health OR government mental health OR agency mental health OR department mental health)',
   NEWS_MAX: parseInt(process.env.NEWS_MAX ?? '10', 10),
 };
 
@@ -93,47 +93,55 @@ async function fetchRelevantNews(query, limit) {
 
 function generateFallbackAnalysis(newsData) {
   const articles = newsData.articles || [];
-  const corporateArticles = articles.filter(a => 
-    a.title.toLowerCase().includes('corporate') || 
-    a.title.toLowerCase().includes('workplace') || 
-    a.title.toLowerCase().includes('employee') ||
-    a.title.toLowerCase().includes('hr')
-  );
-  const communityArticles = articles.filter(a => 
-    a.title.toLowerCase().includes('city') || 
-    a.title.toLowerCase().includes('county') || 
-    a.title.toLowerCase().includes('state') ||
-    a.title.toLowerCase().includes('municipal') ||
-    a.title.toLowerCase().includes('community')
-  );
-  const educationArticles = articles.filter(a => 
-    a.title.toLowerCase().includes('school') || 
-    a.title.toLowerCase().includes('university') || 
-    a.title.toLowerCase().includes('college') ||
-    a.title.toLowerCase().includes('student') ||
-    a.title.toLowerCase().includes('education')
-  );
-  const firstResponderArticles = articles.filter(a => 
-    a.title.toLowerCase().includes('police') || 
-    a.title.toLowerCase().includes('firefighter') || 
-    a.title.toLowerCase().includes('ems') ||
-    a.title.toLowerCase().includes('first responder') ||
-    a.title.toLowerCase().includes('emergency')
-  );
-  const defenseArticles = articles.filter(a => 
-    a.title.toLowerCase().includes('military') || 
-    a.title.toLowerCase().includes('defense') || 
-    a.title.toLowerCase().includes('veteran') ||
-    a.title.toLowerCase().includes('army') ||
-    a.title.toLowerCase().includes('navy') ||
-    a.title.toLowerCase().includes('air force')
-  );
-  const federalArticles = articles.filter(a => 
-    a.title.toLowerCase().includes('federal') || 
-    a.title.toLowerCase().includes('government') || 
-    a.title.toLowerCase().includes('agency') ||
-    a.title.toLowerCase().includes('department')
-  );
+  
+  // More comprehensive sector filtering
+  const corporateArticles = articles.filter(a => {
+    const title = a.title.toLowerCase();
+    return title.includes('corporate') || title.includes('workplace') || 
+           title.includes('employee') || title.includes('hr') || 
+           title.includes('company') || title.includes('business') ||
+           title.includes('wellness') || title.includes('eap');
+  });
+  
+  const communityArticles = articles.filter(a => {
+    const title = a.title.toLowerCase();
+    return title.includes('city') || title.includes('county') || 
+           title.includes('state') || title.includes('municipal') ||
+           title.includes('community') || title.includes('local') ||
+           title.includes('town') || title.includes('district');
+  });
+  
+  const educationArticles = articles.filter(a => {
+    const title = a.title.toLowerCase();
+    return title.includes('school') || title.includes('university') || 
+           title.includes('college') || title.includes('student') ||
+           title.includes('education') || title.includes('campus') ||
+           title.includes('academic') || title.includes('teacher');
+  });
+  
+  const firstResponderArticles = articles.filter(a => {
+    const title = a.title.toLowerCase();
+    return title.includes('police') || title.includes('firefighter') || 
+           title.includes('ems') || title.includes('first responder') ||
+           title.includes('emergency') || title.includes('paramedic') ||
+           title.includes('sheriff') || title.includes('fire department');
+  });
+  
+  const defenseArticles = articles.filter(a => {
+    const title = a.title.toLowerCase();
+    return title.includes('military') || title.includes('defense') || 
+           title.includes('veteran') || title.includes('army') ||
+           title.includes('navy') || title.includes('air force') ||
+           title.includes('marines') || title.includes('pentagon');
+  });
+  
+  const federalArticles = articles.filter(a => {
+    const title = a.title.toLowerCase();
+    return title.includes('federal') || title.includes('government') || 
+           title.includes('agency') || title.includes('department') ||
+           title.includes('congress') || title.includes('senate') ||
+           title.includes('white house') || title.includes('cabinet');
+  });
 
   const summary = `Found ${articles.length} relevant US articles across six key sectors: ${corporateArticles.length} corporate/HR initiatives, ${communityArticles.length} municipal/community programs, ${educationArticles.length} education sector developments, ${firstResponderArticles.length} first responder programs, ${defenseArticles.length} military/defense initiatives, and ${federalArticles.length} federal agency programs.`;
 
@@ -205,24 +213,32 @@ async function getNewsAIInsights(newsData) {
   }
 
   const systemPrompt = `
-You are a market intelligence analyst for 49 North (Mental Armor™), specializing in psychological health and resilience training across education, corporate, and community sectors.
+You are a senior market intelligence analyst for 49 North (Mental Armor™), specializing in psychological health and resilience training across six key sectors.
 
-Analyze the news data and return JSON with:
-- executiveSummary: Brief overview of market opportunities and trends
-- topPriorities: Array of {title, action, urgency} for market engagement
-- newsOpportunities: Array of {headline, relevance, action} for specific opportunities
-- marketTrends: Array of {trend, impact, recommendation} for market insights
+Analyze the US news data and return detailed JSON with:
+- executiveSummary: Comprehensive 2-3 sentence overview of market opportunities, trends, and sector activity
+- topPriorities: Array of {title, action, urgency, sector} for immediate market engagement
+- newsOpportunities: Array of {headline, relevance, action, sector, potentialValue} for specific opportunities
+- marketTrends: Array of {trend, impact, recommendation, sector} for strategic insights
+- sectorAnalysis: Object with detailed breakdown of each sector's activity and opportunities
 
-Focus on:
-- K12 and Higher Education mental health programs and student resilience initiatives
-- Corporate HR programs for employee wellbeing, psychological health, and workplace resilience
-- City, county, and state funding for community mental health services
-- First responder mental health challenges and psychological health programs (police, fire, EMS)
-- Military and defense department mental health initiatives and veteran programs
-- Federal agency mental health programs and government employee wellbeing
-- Educational psychology services and school-based mental health programs
-- Corporate wellness trends and employee assistance programs
-- Municipal mental health initiatives and community resilience programs
+SECTORS TO ANALYZE:
+1. CORPORATE: Employee wellbeing, workplace mental health, HR programs, corporate wellness
+2. FIRST RESPONDER: Police, firefighter, EMS mental health, emergency services psychological health
+3. MILITARY/DEFENSE: Military mental health, veteran programs, defense department initiatives
+4. EDUCATION: K12 schools, universities, student mental health, educational psychology
+5. MUNICIPAL/COMMUNITY: City, county, state mental health funding, community programs
+6. FEDERAL: Government agencies, federal employee mental health, department initiatives
+
+For each sector, identify:
+- Funding announcements and budget allocations
+- Program expansions and new initiatives
+- Policy changes affecting mental health services
+- Market gaps and opportunities for 49 North
+- Competitive landscape and similar programs
+- Specific organizations, agencies, or companies mentioned
+
+Provide actionable insights that help 49 North identify specific opportunities for resilience training services.
 `.trim();
 
   const userPrompt = `
