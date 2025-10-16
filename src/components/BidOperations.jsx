@@ -6,7 +6,6 @@ import DisregardedArchiveModal from './DisregardedArchiveModal';
 
 const ITEMS_PER_PAGE = 10;
 
-/* helpers */
 const withAuthHeaders = (init = {}, jsonBody = null) => {
   const headers = new Headers(init.headers || {});
   headers.set('Content-Type', 'application/json');
@@ -18,11 +17,12 @@ const withAuthHeaders = (init = {}, jsonBody = null) => {
 };
 
 const parseDate = (d) => {
-  // fallbacks so bad inputs don’t turn into NaN
   if (!d || d === 'Not specified') return 0;
   const t = Date.parse(d);
   return Number.isNaN(t) ? 0 : t;
 };
+
+const normalizeRecommendation = (s) => String(s || '').trim().toLowerCase();
 
 const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], loading, onRefresh, onNavigate }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -32,7 +32,6 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const [gatherInfoPage, setGatherInfoPage] = useState(1);
   const [submittedPage, setSubmittedPage] = useState(1);
 
-  // Disregarded Archive Modal
   const [showDisregardedModal, setShowDisregardedModal] = useState(false);
   const [disregardedEmails, setDisregardedEmails] = useState([]);
   const [loadingDisregarded, setLoadingDisregarded] = useState(false);
@@ -57,34 +56,11 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
 
   const handleStatusChange = useCallback(async (bidId, status) => {
     try {
-      let dueDateToSend = null;
-
-      if (status === 'submitted') {
-        const all = [...bids, ...submittedBids];
-        const bid = all.find((b) => b.id === bidId);
-        if (!bid) {
-          alert('Error: Could not find bid');
-          return;
-        }
-
-        if (!bid.dueDate || bid.dueDate === 'Not specified' || bid.dueDate.trim() === '') {
-          const dueDate = prompt(
-            'This bid does not have a due date.\n\nWhen is the submission deadline?\n(Format: YYYY-MM-DD or December 31, 2025)'
-          );
-          if (!dueDate || dueDate.trim() === '') {
-            alert('Due date is required to mark as submitted');
-            return;
-          }
-          dueDateToSend = dueDate.trim();
-        }
-      }
-
       const response = await fetch(
         '/.netlify/functions/updateBidStatus',
-        withAuthHeaders({ method: 'POST' }, { bidId, status, ...(dueDateToSend && { dueDate: dueDateToSend }) })
+        withAuthHeaders({ method: 'POST' }, { bidId, status })
       );
       if (!response.ok) throw new Error('Failed to update bid status');
-
       const result = await response.json();
       alert(`Success! ${result.message}`);
       await onRefresh?.();
@@ -92,7 +68,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
       console.error('Error updating bid status:', err);
       alert('Error: Failed to update bid status');
     }
-  }, [bids, submittedBids, onRefresh]);
+  }, [onRefresh]);
 
   const handleToggleSelect = useCallback((bidId) => {
     setSelectedBids((prev) => (prev.includes(bidId) ? prev.filter((id) => id !== bidId) : [...prev, bidId]));
@@ -114,29 +90,33 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
     const confirmed = window.confirm(`Are you sure you want to mark ${selectedBids.length} bid(s) as ${status}?`);
     if (!confirmed) return;
 
-    setIsBulkProcessing(true);
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const bidId of selectedBids) {
-      try {
-        const response = await fetch(
-          '/.netlify/functions/updateBidStatus',
-          withAuthHeaders({ method: 'POST' }, { bidId, status })
-        );
-        if (response.ok) successCount++; else errorCount++;
-      } catch {
-        errorCount++;
+    try {
+      let dueDate = undefined;
+      if (status === 'submitted') {
+        // If any selected bid has no due date, ask once for a common due date
+        const allBids = [...bids, ...submittedBids];
+        const selected = allBids.filter(b => selectedBids.includes(b.id));
+        const needsDue = selected.some(b => !b?.dueDate || String(b.dueDate).trim() === '' || String(b.dueDate).toLowerCase() === 'not specified');
+        if (needsDue) {
+          const input = prompt('Some selected bids are missing a Due Date. Enter a due date to apply to all (YYYY-MM-DD or Month DD, YYYY). Leave blank to skip.');
+          if (input && input.trim() !== '') dueDate = input.trim();
+        }
       }
-    }
 
-    setIsBulkProcessing(false);
-    alert(`Bulk action complete!\nSuccess: ${successCount}\nErrors: ${errorCount}`);
-    setSelectedBids([]);
-    await onRefresh?.();
+      const res = await fetch('/.netlify/functions/updateBidStatus', withAuthHeaders({ method: 'POST' }, { bidIds: selectedBids, status, ...(dueDate ? { dueDate } : {}) }));
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || 'Bulk action failed');
+      }
+      alert(`Bulk action complete! Updated ${data.ok || selectedBids.length}/${data.total || selectedBids.length}.`);
+      setSelectedBids([]);
+      await onRefresh?.();
+    } catch (e) {
+      console.error('Bulk action error:', e);
+      alert('Error performing bulk action');
+    }
   }, [selectedBids, onRefresh]);
 
-  // Disregarded Emails
   const loadDisregardedEmails = useCallback(async () => {
     try {
       setLoadingDisregarded(true);
@@ -154,76 +134,20 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
     }
   }, []);
 
-  const handleReviveEmail = useCallback(async (email, newRecommendation) => {
-    try {
-      const response = await fetch(
-        '/.netlify/functions/reviveDisregardedEmail',
-        withAuthHeaders(
-          { method: 'POST' },
-          {
-            rowNumber: email.rowNumber,
-            newRecommendation,
-            emailData: {
-              scoreDetails: email.scoreDetails,
-              aiReasoning: email.aiReasoning,
-              aiSummary: email.aiSummary,
-              emailDateReceived: email.emailDateReceived,
-              emailFrom: email.emailFrom,
-              keywordsCategory: email.keywordsCategory,
-              keywordsFound: email.keywordsFound,
-              relevance: email.relevance,
-              emailSubject: email.emailSubject,
-              emailBody: email.emailBody,
-              url: email.url,
-              dueDate: email.dueDate,
-              significantSnippet: email.significantSnippet,
-              emailDomain: email.emailDomain,
-              bidSystem: email.bidSystem,
-              country: email.country,
-              entity: email.entity,
-              sourceEmailId: email.sourceEmailId
-            }
-          }
-        )
-      );
-
-      const result = await response.json();
-      if (result.success) {
-        alert(`Success! Email revived as "${newRecommendation}"`);
-        await loadDisregardedEmails(); // refresh modal list
-        await onRefresh?.(); // refresh active boards
-      } else {
-        throw new Error(result.error || 'Revive failed');
-      }
-    } catch (err) {
-      console.error('Failed to revive email:', err);
-      alert('Failed to revive email');
-    }
-  }, [loadDisregardedEmails, onRefresh]);
-
-  // sort oldest -> newest (kept your behavior); flip the sign if you want newest first
   const respondBids = useMemo(() => (
     bids
-      .filter((b) => String(b.recommendation || '').trim().toLowerCase() === 'respond')
+      .filter((b) => normalizeRecommendation(b.recommendation) === 'respond')
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
   ), [bids]);
 
   const gatherInfoBids = useMemo(() => (
     bids
       .filter((b) => {
-        const s = String(b.recommendation || '').trim().toLowerCase();
+        const s = normalizeRecommendation(b.recommendation);
         return s === 'gather more information' || s === 'gather info' || s === 'need info' || s === 'needs info' || s === 'research';
       })
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
   ), [bids]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading bids...</div>
-      </div>
-    );
-  }
 
   const paginatedRespondBids = respondBids.slice(0, respondPage * ITEMS_PER_PAGE);
   const paginatedGatherInfoBids = gatherInfoBids.slice(0, gatherInfoPage * ITEMS_PER_PAGE);
@@ -232,6 +156,14 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const hasMoreRespond = paginatedRespondBids.length < respondBids.length;
   const hasMoreGatherInfo = paginatedGatherInfoBids.length < gatherInfoBids.length;
   const hasMoreSubmitted = paginatedSubmittedBids.length < submittedBids.length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-600">Loading bids...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -267,30 +199,12 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
 
       {selectedBids.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
-          <span className="text-sm font-semibold text-blue-900">
-            {selectedBids.length} bid{selectedBids.length > 1 ? 's' : ''} selected
-          </span>
+          <span className="text-sm font-semibold text-blue-900">{selectedBids.length} bid{selectedBids.length > 1 ? 's' : ''} selected</span>
           <div className="flex gap-2">
-            <button
-              onClick={() => handleBulkAction('submitted')}
-              disabled={isBulkProcessing}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              Mark as Submitted
-            </button>
-            <button
-              onClick={() => handleBulkAction('disregard')}
-              disabled={isBulkProcessing}
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              Disregard Selected
-            </button>
-            <button
-              onClick={() => setSelectedBids([])}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm font-medium transition-colors"
-            >
-              Clear Selection
-            </button>
+            <button onClick={() => handleBulkAction('respond')} className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-medium">Move to Respond</button>
+            <button onClick={() => handleBulkAction('submitted')} className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium">Mark as Submitted</button>
+            <button onClick={() => handleBulkAction('disregard')} className="px-3 py-1.5 bg-gray-500 text-white rounded hover:bg-gray-600 text-xs font-medium">Disregard</button>
+            <button onClick={() => setSelectedBids([])} className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs font-medium">Clear</button>
           </div>
         </div>
       )}
@@ -304,10 +218,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
               <p className="text-sm text-gray-600 mt-1">High-priority bids requiring immediate action</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleSelectAll(respondBids)}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-              >
+              <button onClick={() => handleSelectAll(respondBids)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
                 {respondBids.length > 0 && respondBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
               </button>
               <div className="w-3 h-3 bg-green-500 rounded-full" />
@@ -329,10 +240,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                   />
                 ))}
                 {hasMoreRespond && (
-                  <button
-                    onClick={() => setRespondPage((p) => p + 1)}
-                    className="w-full mt-4 px-4 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-medium transition-colors"
-                  >
+                  <button onClick={() => setRespondPage((p) => p + 1)} className="w-full mt-4 px-4 py-2 bg-green-100 text-green-700 rounded hover:bg-green-200 text-sm font-medium transition-colors">
                     Load More ({paginatedRespondBids.length} of {respondBids.length} shown)
                   </button>
                 )}
@@ -349,10 +257,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
               <p className="text-sm text-gray-600 mt-1">Bids requiring additional research or information</p>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleSelectAll(gatherInfoBids)}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-              >
+              <button onClick={() => handleSelectAll(gatherInfoBids)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
                 {gatherInfoBids.length > 0 && gatherInfoBids.every((b) => selectedBids.includes(b.id)) ? 'Deselect All' : 'Select All'}
               </button>
               <div className="w-3 h-3 bg-yellow-500 rounded-full" />
@@ -374,10 +279,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                   />
                 ))}
                 {hasMoreGatherInfo && (
-                  <button
-                    onClick={() => setGatherInfoPage((p) => p + 1)}
-                    className="w-full mt-4 px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 text-sm font-medium transition-colors"
-                  >
+                  <button onClick={() => setGatherInfoPage((p) => p + 1)} className="w-full mt-4 px-4 py-2 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 text-sm font-medium transition-colors">
                     Load More ({paginatedGatherInfoBids.length} of {gatherInfoBids.length} shown)
                   </button>
                 )}
@@ -411,10 +313,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                   />
                 ))}
                 {hasMoreSubmitted && (
-                  <button
-                    onClick={() => setSubmittedPage((p) => p + 1)}
-                    className="w-full mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium transition-colors"
-                  >
+                  <button onClick={() => setSubmittedPage((p) => p + 1)} className="w-full mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm font-medium transition-colors">
                     Load More ({paginatedSubmittedBids.length} of {submittedBids.length} shown)
                   </button>
                 )}
@@ -429,13 +328,12 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         <p className="text-gray-600">Document library, templates, and proposal writing tools coming soon...</p>
       </div>
 
-      {/* Disregarded Archive Modal */}
       {showDisregardedModal && (
         <DisregardedArchiveModal
           isOpen={showDisregardedModal}
           onClose={() => setShowDisregardedModal(false)}
           emails={disregardedEmails}
-          onRevive={handleReviveEmail}
+          onRevive={loadDisregardedEmails}
           onRefresh={loadDisregardedEmails}
         />
       )}
