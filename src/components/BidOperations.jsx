@@ -27,7 +27,6 @@ const normalizeRecommendation = (s) => String(s || '').trim().toLowerCase();
 const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], loading, onRefresh, onNavigate }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedBids, setSelectedBids] = useState([]);
-  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [respondPage, setRespondPage] = useState(1);
   const [gatherInfoPage, setGatherInfoPage] = useState(1);
   const [submittedPage, setSubmittedPage] = useState(1);
@@ -115,7 +114,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
       console.error('Bulk action error:', e);
       alert('Error performing bulk action');
     }
-  }, [selectedBids, onRefresh]);
+  }, [selectedBids, onRefresh, bids, submittedBids]);
 
   const loadDisregardedEmails = useCallback(async () => {
     try {
