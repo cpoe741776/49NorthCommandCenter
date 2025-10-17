@@ -44,6 +44,15 @@ const WebinarOperations = () => {
     return webinars.filter((w) => new Date(w.date) >= DATA_QUALITY_CUTOFF);
   }, [webinars, showLegacyData]);
 
+  const registrations = useMemo(() => {
+    if (showLegacyData) return allRegistrations;
+    return allRegistrations.filter((r) => {
+      if (!r.timestamp) return false;
+      const regDate = new Date(r.timestamp);
+      return regDate >= DATA_QUALITY_CUTOFF;
+    });
+  }, [allRegistrations, showLegacyData]);
+
   const surveys = useMemo(() => {
     if (showLegacyData) return allSurveys;
     return allSurveys.filter((s) => {
@@ -76,7 +85,7 @@ const WebinarOperations = () => {
   const summary = useMemo(() => {
     const completed = completedWebinars;
     const totalAttendance = completed.reduce((sum, w) => sum + w.attendanceCount, 0);
-    const totalRegistrations = filteredWebinars.reduce((sum, w) => sum + w.registrationCount, 0);
+    const totalRegistrations = registrations.length;
     return {
       totalWebinars: filteredWebinars.length,
       completedCount: completed.length,
@@ -87,7 +96,7 @@ const WebinarOperations = () => {
       totalSurveys: surveys.length,
       surveyResponseRate: totalAttendance > 0 ? Math.round((surveys.length / totalAttendance) * 100) : 0,
     };
-  }, [filteredWebinars, completedWebinars, upcomingWebinars, surveys]);
+  }, [filteredWebinars, completedWebinars, upcomingWebinars, surveys, registrations]);
 
   const surveyAnalytics = useMemo(() => {
     if (surveys.length === 0) return null;
@@ -482,7 +491,7 @@ const WebinarOperations = () => {
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Webinar Registrants</h2>
-                <p className="text-sm text-gray-600 mt-1">{allRegistrations.length} total registrations across all webinars</p>
+                <p className="text-sm text-gray-600 mt-1">{registrations.length} total registrations{showLegacyData ? ' (including legacy)' : ' (Oct 2025+)'}</p>
               </div>
               <select
                 value={selectedWebinarForRegistrants || ''}
@@ -521,8 +530,8 @@ const WebinarOperations = () => {
               }
 
               const filteredRegistrations = selectedWebinarForRegistrants
-                ? allRegistrations.filter((r) => r.webinarId === selectedWebinarId)
-                : allRegistrations;
+                ? registrations.filter((r) => r.webinarId === selectedWebinarId)
+                : registrations;
 
               const selectedWebinarInfo = selectedWebinarForRegistrants
                 ? filteredWebinars.find((w) => w.id === selectedWebinarId && w.date === selectedWebinarDate)
