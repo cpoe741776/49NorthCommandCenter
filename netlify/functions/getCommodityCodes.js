@@ -12,9 +12,8 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
 
   try {
-    const creds = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
-      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    const { loadServiceAccount } = require('./_utils/google');
+    const creds = loadServiceAccount();
 
     const auth = new google.auth.GoogleAuth({
       credentials: creds,

@@ -24,10 +24,9 @@ exports.handler = async (event) => {
   }
 
   try {
-    // creds: base64 or raw json
-    const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
-      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    // Use shared credential loader
+    const { loadServiceAccount } = require('./_utils/google');
+    const credentials = loadServiceAccount();
 
     const auth = new google.auth.GoogleAuth({
       credentials,

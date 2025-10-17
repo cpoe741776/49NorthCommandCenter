@@ -90,17 +90,10 @@ exports.handler = async (event) => {
   }
 
   try {
-    // --- Credentials ---
-    const keyRaw = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-      : process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    const svc = JSON.parse(keyRaw);
-
-    const auth = new google.auth.JWT({
-      email: svc.client_email,
-      key: svc.private_key,
-      scopes: CFG.SCOPES,
-    });
+    // --- Use shared Google auth helper ---
+    const { getGoogleAuth } = require('./_utils/google');
+    const googleAuth = getGoogleAuth();
+    const auth = await googleAuth.getClient();
     const sheets = google.sheets({ version: 'v4', auth });
 
     // --- Sheet IDs ---

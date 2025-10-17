@@ -64,4 +64,5 @@ module.exports = {
   getGoogleAuth,
   sheetsClient,
   driveClient,
+  loadServiceAccount, // Export for functions that parse credentials inline
 };

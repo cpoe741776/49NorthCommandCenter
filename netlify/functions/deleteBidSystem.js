@@ -23,13 +23,8 @@ exports.handler = async (event) => {
       }
     }
 
-    let credentials;
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64) {
-      const decoded = Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8');
-      credentials = JSON.parse(decoded);
-    } else {
-      credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
-    }
+    const { loadServiceAccount } = require('./_utils/google');
+    const credentials = loadServiceAccount();
     const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
     const sheets = google.sheets({ version: 'v4', auth });
 

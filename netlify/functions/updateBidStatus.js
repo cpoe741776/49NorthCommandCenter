@@ -26,9 +26,8 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'bidId or bidIds and status are required' }) };
     }
 
-    const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
-      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    const { loadServiceAccount } = require('./_utils/google');
+    const credentials = loadServiceAccount();
 
     const auth = new google.auth.GoogleAuth({
       credentials,

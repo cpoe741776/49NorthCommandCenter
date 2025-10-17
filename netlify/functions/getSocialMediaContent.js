@@ -13,14 +13,9 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Credentials: support BASE64 or plain JSON
-    const credJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-      : process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-
-    if (!credJson) throw new Error('Missing Google service account credentials');
-
-    const credentials = JSON.parse(credJson);
+    // Use shared credential loader
+    const { loadServiceAccount } = require('./_utils/google');
+    const credentials = loadServiceAccount();
 
     const auth = new google.auth.GoogleAuth({
       credentials,

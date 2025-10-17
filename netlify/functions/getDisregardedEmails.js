@@ -18,11 +18,8 @@ exports.handler = async (event) => {
   try {
     if (!SHEET_ID) throw new Error('GOOGLE_SHEET_ID not configured');
 
-    const credJson = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8')
-      : process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-
-    const credentials = JSON.parse(credJson);
+    const { loadServiceAccount } = require('./_utils/google');
+    const credentials = loadServiceAccount();
 
     const auth = new google.auth.GoogleAuth({
       credentials,

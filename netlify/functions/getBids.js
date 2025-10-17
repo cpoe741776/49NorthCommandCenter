@@ -44,10 +44,9 @@ exports.handler = async (event) => {
       return { statusCode: 200, headers: { ...headers, ETag: cache.etag }, body: JSON.stringify(cache.payload) };
     }
 
-    // Service account (JSON or base64)
-    const creds = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64
-      ? JSON.parse(Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64, 'base64').toString('utf-8'))
-      : JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+    // Service account (use shared loader)
+    const { loadServiceAccount } = require('./_utils/google');
+    const creds = loadServiceAccount();
 
     const auth = new google.auth.GoogleAuth({
       credentials: creds,
