@@ -203,36 +203,40 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
 
 
 // Submitted row -> unified bid (A..U)
+// Submitted tab: A=Recommendation, B=Reasoning, C=Email Summary, D=Email Date Received, E=Email From,
+// F=Keywords Category, G=Keywords Found, H=Relevance, I=Email Subject, J=Email Body, K=URL,
+// L=Due Date, M=Significant Snippet, N=Email Domain, O=Bid System, P=Country, Q=Entity/Agency,
+// R=Status, S=Date Added, T=Source Email ID, U=Submission Date
 function toSubmittedBid(row, sheetRowNumber) {
   return {
     id: sheetRowNumber,
-    recommendation: vAt(row, 0),
-    reasoning: vAt(row, 1),         // B
-    emailSummary: vAt(row, 2),      // C
-    emailDateReceived: vAt(row, 3), // D
-    emailFrom: vAt(row, 4),         // E
-    keywordsCategory: vAt(row, 5),  // F
-    keywordsFound: vAt(row, 6),     // G
-    relevance: vAt(row, 7),         // H
-    emailSubject: vAt(row, 8),      // I
-    emailBody: vAt(row, 9),         // J
-    url: vAt(row, 10),              // K
-    dueDate: vAt(row, 11),          // L
-    significantSnippet: vAt(row, 12),// M
-    emailDomain: vAt(row, 13),      // N
-    bidSystem: vAt(row, 14),        // O
-    country: vAt(row, 15),          // P
-    entity: vAt(row, 16),           // Q
-    status: vAt(row, 17) || 'Submitted', // R
-    dateAdded: vAt(row, 18),        // S
-    sourceEmailId: vAt(row, 19),    // T
-    submissionDate: vAt(row, 20),   // U
+    recommendation: vAt(row, 0),        // A
+    reasoning: vAt(row, 1),             // B - Reasoning (non-AI)
+    emailSummary: vAt(row, 2),          // C - Email Summary (non-AI)
+    emailDateReceived: vAt(row, 3),     // D
+    emailFrom: vAt(row, 4),             // E
+    keywordsCategory: vAt(row, 5),      // F
+    keywordsFound: vAt(row, 6),         // G
+    relevance: vAt(row, 7),             // H
+    emailSubject: vAt(row, 8),          // I
+    emailBody: vAt(row, 9),             // J
+    url: vAt(row, 10),                  // K
+    dueDate: vAt(row, 11),              // L
+    significantSnippet: vAt(row, 12),   // M
+    emailDomain: vAt(row, 13),          // N
+    bidSystem: vAt(row, 14),            // O
+    country: vAt(row, 15),              // P
+    entity: vAt(row, 16),               // Q
+    status: vAt(row, 17) || 'Submitted',// R
+    dateAdded: vAt(row, 18),            // S
+    sourceEmailId: vAt(row, 19),        // T
+    submissionDate: vAt(row, 20),       // U
 
-    // Back-compat aliases so BidCard resolves gracefully
-    aiReasoning: vAt(row, 1),       // maps to reasoning
-    aiEmailSummary: vAt(row, 2),    // maps to emailSummary
-    aiSummary: vAt(row, 2),         // maps to emailSummary
-    subject: vAt(row, 8),
-    from: vAt(row, 4),
+    // Back-compat aliases so BidCard/Modal resolve gracefully
+    aiReasoning: vAt(row, 1),           // maps to reasoning
+    aiEmailSummary: vAt(row, 2),        // maps to emailSummary
+    aiSummary: vAt(row, 2),             // maps to emailSummary
+    subject: vAt(row, 8),               // maps to emailSubject
+    from: vAt(row, 4),                  // maps to emailFrom
   };
 }

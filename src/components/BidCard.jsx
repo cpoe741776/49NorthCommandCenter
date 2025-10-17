@@ -61,6 +61,7 @@ const BidCard = ({ bid, isSelected, onToggleSelect, onSystemClick, onCardClick }
   const keywordsFound = coalesce(bid.keywordsFound);
   const keywordsCategory = coalesce(bid.keywordsCategory);
   const sourceUrl = coalesce(bid.url);
+  const emailFrom = coalesce(bid.emailFrom, bid.from);
 
   const scoreClass = useMemo(() => scorePillClass(score), [score]);
   const recClass = useMemo(() => recPillClass(recommendation), [recommendation]);
@@ -140,7 +141,7 @@ const BidCard = ({ bid, isSelected, onToggleSelect, onSystemClick, onCardClick }
                   <ExternalLink size={12} /> View Source
                 </a>
               )}
-              {bid.emailFrom && <span className="text-gray-500 truncate">From: {bid.emailFrom}</span>}
+              {emailFrom && <span className="text-gray-500 truncate">From: {emailFrom}</span>}
             </div>
           </div>
         </div>
