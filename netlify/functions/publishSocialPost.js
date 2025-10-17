@@ -211,10 +211,21 @@ async function publishToWordPress(postData) {
   const url = WP_URL;
   if (!WP_USER || !WP_PASS) throw new Error('WordPress credentials not configured');
 
+  // Build post content with embedded image if provided
+  let content = postData.body || '';
+  
+  // If image URL provided, embed it at the top of the post
+  if (postData.imageUrl) {
+    content = `<img src="${postData.imageUrl}" alt="${postData.title || ''}" class="wp-image-featured" style="max-width: 100%; height: auto; margin-bottom: 20px;" />\n\n${content}`;
+  }
+
   const payload = {
     title: postData.title || '',
-    content: postData.body || '',
-    status: 'publish'
+    content: content,
+    status: 'publish',
+    // Add categories and tags if WordPress supports them
+    categories: [1], // Default "Uncategorized" - adjust as needed
+    excerpt: postData.body ? postData.body.substring(0, 150) + '...' : ''
   };
 
   const auth = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
