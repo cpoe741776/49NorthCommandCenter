@@ -199,7 +199,7 @@ async function publishToLinkedIn(postData) {
     headers: {
       Authorization: `Bearer ${LI_TOKEN}`,
       'Content-Type': 'application/json',
-      'LinkedIn-Version': '202310',
+      'LinkedIn-Version': '202405', // Use a more recent stable version
       'X-Restli-Protocol-Version': '2.0.0'
     },
     body: JSON.stringify(payload)
