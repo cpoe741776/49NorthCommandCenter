@@ -118,7 +118,7 @@ exports.handler = async (event) => {
     // U Submission Date
     const subResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Submitted!A2:V',
+      range: 'Submitted!A2:U',
     });
     const subRows = (subResp.data.values || []).filter(nonEmpty);
     const submittedBids = subRows.map((row, i) => toSubmittedBid(row, i + 2));
@@ -156,41 +156,48 @@ exports.handler = async (event) => {
 };
 
 // ----- helpers & mappers -----
+// ----- helpers & mappers -----
 function vAt(row, i) {
   return row && row[i] != null ? row[i] : '';
 }
 
 // Active/Disregarded row -> unified bid (A..U)
+// Active/Disregarded row -> unified bid (A..U)
 function toBid(row, sheetRowNumber, fallbackStatus) {
   return {
     id: sheetRowNumber,
-    recommendation: vAt(row, 0),
-    scoreDetails: vAt(row, 1),
-    aiReasoning: vAt(row, 2),
-    aiEmailSummary: vAt(row, 3),
-    emailDateReceived: vAt(row, 4),
-    emailFrom: vAt(row, 5),
-    keywordsCategory: vAt(row, 6),
-    keywordsFound: vAt(row, 7),
-    relevance: vAt(row, 8),
-    emailSubject: vAt(row, 9),
-    emailBody: vAt(row, 10),
-    url: vAt(row, 11),
-    dueDate: vAt(row, 12),
-    significantSnippet: vAt(row, 13),
-    emailDomain: vAt(row, 14),
-    bidSystem: vAt(row, 15),
-    country: vAt(row, 16),
-    entity: vAt(row, 17),
-    status: vAt(row, 18) || fallbackStatus,
-    dateAdded: vAt(row, 19),
-    sourceEmailId: vAt(row, 20),
+    recommendation: vAt(row, 0),      // A
+    scoreDetails: vAt(row, 1),        // B
+    
+    // FIX: Mapping follows A-U 0-20 strictly
+    aiReasoning: vAt(row, 2),         // C
+    aiEmailSummary: vAt(row, 3),      // D
 
-    // Back-compat aliases (so BidCard works uniformly)
-    aiSummary: vAt(row, 3),       // same as aiEmailSummary
-    emailSummary: vAt(row, 3),    // same as aiEmailSummary
-    subject: vAt(row, 9),
-    from: vAt(row, 5),
+    emailDateReceived: vAt(row, 4),   // E
+    emailFrom: vAt(row, 5),           // F
+    keywordsCategory: vAt(row, 6),    // G
+    keywordsFound: vAt(row, 7),       // H
+    relevance: vAt(row, 8),           // I
+
+    emailSubject: vAt(row, 9),        // J
+    emailBody: vAt(row, 10),          // K
+    url: vAt(row, 11),                // L
+    dueDate: vAt(row, 12),            // M
+
+    significantSnippet: vAt(row, 13), // N
+    emailDomain: vAt(row, 14),        // O
+    bidSystem: vAt(row, 15),          // P
+    country: vAt(row, 16),            // Q
+    entity: vAt(row, 17),             // R
+    status: vAt(row, 18) || fallbackStatus, // S
+    dateAdded: vAt(row, 19),          // T
+    sourceEmailId: vAt(row, 20),      // U
+
+    // Back-compat aliases (using corrected indices)
+    aiSummary: vAt(row, 3),       // D - same as aiEmailSummary
+    emailSummary: vAt(row, 3),    // D - same as aiEmailSummary
+    subject: vAt(row, 9),         // J
+    from: vAt(row, 5),            // F
   };
 }
 
