@@ -57,8 +57,8 @@ exports.handler = async (event) => {
 
     // Map webinars (A..L)
     // A id | B title | C date | D time | E platformLink | F registrationFormUrl
-    // G status | H capacity | I registrationCount | J attendanceCount | K surveyLink | L (optional/unused)
-    const webinars = webinarRows.map((row, index) => ({
+    // G status | H capacity | I registrationCount | J attendanceCount | K surveyLink | L createdDate
+    const webinarsRaw = webinarRows.map((row, index) => ({
       id: norm(row[0] || `webinar-${index}`),
       title: norm(row[1]),
       date: norm(row[2]),
@@ -70,8 +70,26 @@ exports.handler = async (event) => {
       registrationCount: asInt(row[8], 0),
       attendanceCount: asInt(row[9], 0),
       surveyLink: norm(row[10]),
-      extra: norm(row[11]) // keep L if present; harmless for UI
+      createdDate: norm(row[11]) // L = Created Date
     }));
+
+    // Deduplicate recurring series: keep latest entry for each id+date combination
+    const webinarMap = new Map();
+    for (const w of webinarsRaw) {
+      const key = `${w.id}|${w.date}`;
+      const existing = webinarMap.get(key);
+      if (!existing) {
+        webinarMap.set(key, w);
+      } else {
+        // Keep the one with the most recent createdDate (or highest registrationCount as tiebreaker)
+        const existingCreated = new Date(existing.createdDate || 0);
+        const currentCreated = new Date(w.createdDate || 0);
+        if (currentCreated > existingCreated || (currentCreated.getTime() === existingCreated.getTime() && w.registrationCount > existing.registrationCount)) {
+          webinarMap.set(key, w);
+        }
+      }
+    }
+    const webinars = Array.from(webinarMap.values());
 
     // Map surveys (A..L)
     const surveys = surveyRows.map((row) => ({
