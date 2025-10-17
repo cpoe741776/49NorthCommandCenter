@@ -1,6 +1,6 @@
 // SocialMediaOperations.jsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText } from 'lucide-react';
+import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText, Copy } from 'lucide-react';
 import { fetchSocialMediaContent } from '../services/socialMediaService';
 import PostComposerModal from './PostComposerModal';
 
@@ -18,6 +18,7 @@ const SocialMediaOperations = () => {
   const [posts, setPosts] = useState([]);
   const [summary, setSummary] = useState({ totalPosts: 0, published: 0, scheduled: 0, drafts: 0 });
   const [composerOpen, setComposerOpen] = useState(false);
+  const [postToEdit, setPostToEdit] = useState(null); // For reusing/editing posts
   const [successMessage, setSuccessMessage] = useState(null);
 
   // filters
@@ -193,6 +194,7 @@ const SocialMediaOperations = () => {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Platforms</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Dates</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Link</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -235,12 +237,25 @@ const SocialMediaOperations = () => {
                         </a>
                       ) : <span className="text-gray-400">—</span>}
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => {
+                          setPostToEdit(p);
+                          setComposerOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                        title="Reuse this post content"
+                      >
+                        <Copy size={14} />
+                        Reuse
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="px-4 py-10 text-center text-gray-500">
+                  <td colSpan="6" className="px-4 py-10 text-center text-gray-500">
                     No posts match your filters.
                   </td>
                 </tr>
@@ -266,9 +281,14 @@ const SocialMediaOperations = () => {
       {/* Post Composer Modal */}
       <PostComposerModal
         isOpen={composerOpen}
-        onClose={() => setComposerOpen(false)}
+        onClose={() => {
+          setComposerOpen(false);
+          setPostToEdit(null);
+        }}
+        initialPost={postToEdit}
         onSuccess={(message) => {
           setSuccessMessage(message);
+          setPostToEdit(null);
           load(); // Refresh posts list
           setTimeout(() => setSuccessMessage(null), 8000);
         }}

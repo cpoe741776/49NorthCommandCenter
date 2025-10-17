@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Send, Save, Eye, Image, Video, Calendar, Tag, AlertCircle } from 'lucide-react';
 import { createSocialPost, publishSocialPost } from '../services/socialMediaService';
 
-const PostComposerModal = ({ isOpen, onClose, onSuccess }) => {
+const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   const [formData, setFormData] = useState({
     title: '',
     body: '',
@@ -20,6 +20,36 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess }) => {
     tags: '',
     createdBy: 'user'
   });
+
+  // Load initial post data when provided (for reusing posts)
+  React.useEffect(() => {
+    if (initialPost && isOpen) {
+      const platformsFromPost = (initialPost.platforms || '')
+        .split(',')
+        .map(p => p.trim())
+        .filter(Boolean);
+      
+      setFormData({
+        title: initialPost.title || '',
+        body: initialPost.body || initialPost.text || '',
+        contentType: initialPost.contentType || 'announcement',
+        imageUrl: initialPost.imageUrl || '',
+        videoUrl: initialPost.videoUrl || '',
+        platforms: {
+          Facebook: platformsFromPost.includes('Facebook'),
+          LinkedIn: platformsFromPost.includes('LinkedIn'),
+          Website: platformsFromPost.includes('Website'),
+          Email: platformsFromPost.includes('Email')
+        },
+        scheduleDate: '', // Clear schedule date for reused posts
+        tags: initialPost.tags || '',
+        createdBy: 'user'
+      });
+    } else if (!isOpen) {
+      // Reset when modal closes
+      resetForm();
+    }
+  }, [initialPost, isOpen]);
 
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -176,7 +206,16 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess }) => {
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-900">Create Social Media Post</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              {initialPost ? 'Reuse Post' : 'Create Social Media Post'}
+            </h2>
+            {initialPost && (
+              <p className="text-sm text-blue-600 mt-1">
+                ✨ Content loaded from past post - customize and republish
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X size={24} />
           </button>
