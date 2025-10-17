@@ -3,6 +3,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Archive, RefreshCw } from 'lucide-react';
 import BidCard from './BidCard';
 import DisregardedArchiveModal from './DisregardedArchiveModal';
+import BidDetailModal from './BidDetailModal';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -34,6 +35,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const [showDisregardedModal, setShowDisregardedModal] = useState(false);
   const [disregardedEmails, setDisregardedEmails] = useState([]);
   const [loadingDisregarded, setLoadingDisregarded] = useState(false);
+
+  const [selectedBidForModal, setSelectedBidForModal] = useState(null);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -232,10 +235,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                   <BidCard
                     key={bid.id}
                     bid={bid}
-                    onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
                     onSystemClick={handleSystemClick}
+                    onCardClick={setSelectedBidForModal}
                   />
                 ))}
                 {hasMoreRespond && (
@@ -271,10 +274,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                   <BidCard
                     key={bid.id}
                     bid={bid}
-                    onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
                     onSystemClick={handleSystemClick}
+                    onCardClick={setSelectedBidForModal}
                   />
                 ))}
                 {hasMoreGatherInfo && (
@@ -305,10 +308,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                   <BidCard
                     key={bid.id}
                     bid={{ ...bid, recommendation: 'Submitted' }}
-                    onStatusChange={handleStatusChange}
                     isSelected={selectedBids.includes(bid.id)}
                     onToggleSelect={handleToggleSelect}
                     onSystemClick={handleSystemClick}
+                    onCardClick={setSelectedBidForModal}
                   />
                 ))}
                 {hasMoreSubmitted && (
@@ -336,6 +339,14 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
           onRefresh={loadDisregardedEmails}
         />
       )}
+
+      <BidDetailModal
+        bid={selectedBidForModal}
+        isOpen={!!selectedBidForModal}
+        onClose={() => setSelectedBidForModal(null)}
+        onStatusChange={handleStatusChange}
+        onSystemClick={handleSystemClick}
+      />
     </div>
   );
 };

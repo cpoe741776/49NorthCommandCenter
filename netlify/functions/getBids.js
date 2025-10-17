@@ -94,7 +94,7 @@ exports.handler = async (event) => {
     const disRows = (disResp.data.values || []).filter(nonEmpty);
     const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded'));
 
-    // ---------- Submitted (A..V; V = Submission Date) ----------
+    // ---------- Submitted (A..U; U = Submission Date) ----------
     // A Recommendation
     // B Reasoning (non-AI)
     // C Email Summary (non-AI)
