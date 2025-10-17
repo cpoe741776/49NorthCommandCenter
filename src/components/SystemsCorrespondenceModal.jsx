@@ -1,8 +1,8 @@
 // src/components/SystemsCorrespondenceModal.jsx
 import React, { useState } from 'react';
-import { X, Mail, Calendar, Building2, Eye, Trash2 } from 'lucide-react';
+import { X, Mail, Calendar, Building2, Eye, Trash2, Loader } from 'lucide-react';
 
-const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefresh }) => {
+const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefresh, loading = false }) => {
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
@@ -46,7 +46,12 @@ const SystemsCorrespondenceModal = ({ isOpen, onClose, emails, onArchive, onRefr
 
         <div className="flex-1 overflow-hidden flex">
           <div className="w-2/5 border-r border-gray-200 overflow-y-auto">
-            {emails.length === 0 ? (
+            {loading ? (
+              <div className="p-8 text-center text-gray-500">
+                <Loader size={48} className="mx-auto mb-4 text-blue-600 animate-spin" />
+                <p>Loading correspondence...</p>
+              </div>
+            ) : emails.length === 0 ? (
               <div className="p-8 text-center text-gray-500">
                 <Mail size={48} className="mx-auto mb-4 text-gray-300" />
                 <p>No system correspondence</p>

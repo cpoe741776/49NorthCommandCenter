@@ -643,6 +643,7 @@ const BidSystemsManager = ({ allBids = [] }) => {
           emails={adminEmails}
           onArchive={handleArchiveAdminEmail}
           onRefresh={loadAdminEmails}
+          loading={loadingAdmin}
         />
       )}
     </div>
