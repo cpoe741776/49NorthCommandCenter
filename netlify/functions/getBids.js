@@ -1,4 +1,10 @@
 // netlify/functions/getBids.js
+// Header alignment audit + tiny resilience tweaks
+// - Active_Bids: A..U (21 cols)
+// - Disregarded: A..U (21 cols)
+// - Submitted:   A..V (22 cols; V = Submission Date)
+// - Provides back-compat aliases so UI renders consistently across tabs
+
 const { google } = require('googleapis');
 const crypto = require('crypto');
 
@@ -51,7 +57,28 @@ exports.handler = async (event) => {
 
     const nonEmpty = (r) => r && r.length && r.some((c) => String(c || '').trim() !== '');
 
-    // ----- Active_Bids (A..U) -----
+    // ---------- Active_Bids (A..U) ----------
+    // A Recommendation
+    // B Score Details
+    // C AI Reasoning
+    // D AI Email Summary
+    // E Email Date Received
+    // F Email From
+    // G Keywords Category
+    // H Keywords Found
+    // I Relevance
+    // J Email Subject
+    // K Email Body
+    // L URL
+    // M Due Date
+    // N Significant Snippet
+    // O Email Domain
+    // P Bid System
+    // Q Country
+    // R Entity/Agency
+    // S Status
+    // T Date Added
+    // U Source Email ID
     const activeResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Active_Bids!A2:U',
@@ -59,7 +86,7 @@ exports.handler = async (event) => {
     const activeRows = (activeResp.data.values || []).filter(nonEmpty);
     const activeBids = activeRows.map((row, i) => toBid(row, i + 2, 'New'));
 
-    // ----- Disregarded (A..U) -----
+    // ---------- Disregarded (A..U) ----------
     const disResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Disregarded!A2:U',
@@ -67,7 +94,28 @@ exports.handler = async (event) => {
     const disRows = (disResp.data.values || []).filter(nonEmpty);
     const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded'));
 
-    // ----- Submitted (A..V, V = submissionDate) -----
+    // ---------- Submitted (A..V; V = Submission Date) ----------
+    // A Recommendation
+    // B Reasoning (non-AI)
+    // C Email Summary (non-AI)
+    // D Email Date Received
+    // E Email From
+    // F Keywords Category
+    // G Keywords Found
+    // H Relevance
+    // I Email Subject
+    // J Email Body
+    // K URL
+    // L Due Date
+    // M Significant Snippet
+    // N Email Domain
+    // O Bid System
+    // P Country
+    // Q Entity/Agency
+    // R Status
+    // S Date Added
+    // T Source Email ID
+    // U Submission Date
     const subResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Submitted!A2:V',
@@ -107,69 +155,76 @@ exports.handler = async (event) => {
   }
 };
 
-// Map a 21-column row (A..U) from Submitted tab to a unified bid object.
-function toSubmittedBid(row, sheetRowNumber) {
-  const v = (i) => (row && row[i] != null ? row[i] : '');
+// ----- helpers & mappers -----
+function vAt(row, i) {
+  return row && row[i] != null ? row[i] : '';
+}
+
+// Active/Disregarded row -> unified bid (A..U)
+function toBid(row, sheetRowNumber, fallbackStatus) {
   return {
     id: sheetRowNumber,
-    recommendation: v(0),
-    reasoning: v(1), // B = Reasoning (not AI Reasoning)
-    emailSummary: v(2), // C = Email Summary (not AI Email Summary)
-    emailDateReceived: v(3),
-    emailFrom: v(4),
-    keywordsCategory: v(5),
-    keywordsFound: v(6),
-    relevance: v(7),
-    emailSubject: v(8),
-    emailBody: v(9),
-    url: v(10),
-    dueDate: v(11),
-    significantSnippet: v(12),
-    emailDomain: v(13),
-    bidSystem: v(14),
-    country: v(15),
-    entity: v(16),
-    status: v(17) || 'Submitted',
-    dateAdded: v(18),
-    sourceEmailId: v(19),
-    submissionDate: v(20), // U = Submission Date
-    // Back-compat aliases for BidCard compatibility
-    aiReasoning: v(1),     // maps to reasoning
-    aiEmailSummary: v(2),  // maps to emailSummary
-    aiSummary: v(2),       // maps to emailSummary
+    recommendation: vAt(row, 0),
+    scoreDetails: vAt(row, 1),
+    aiReasoning: vAt(row, 2),
+    aiEmailSummary: vAt(row, 3),
+    emailDateReceived: vAt(row, 4),
+    emailFrom: vAt(row, 5),
+    keywordsCategory: vAt(row, 6),
+    keywordsFound: vAt(row, 7),
+    relevance: vAt(row, 8),
+    emailSubject: vAt(row, 9),
+    emailBody: vAt(row, 10),
+    url: vAt(row, 11),
+    dueDate: vAt(row, 12),
+    significantSnippet: vAt(row, 13),
+    emailDomain: vAt(row, 14),
+    bidSystem: vAt(row, 15),
+    country: vAt(row, 16),
+    entity: vAt(row, 17),
+    status: vAt(row, 18) || fallbackStatus,
+    dateAdded: vAt(row, 19),
+    sourceEmailId: vAt(row, 20),
+
+    // Back-compat aliases (so BidCard works uniformly)
+    aiSummary: vAt(row, 3),       // same as aiEmailSummary
+    emailSummary: vAt(row, 3),    // same as aiEmailSummary
+    subject: vAt(row, 9),
+    from: vAt(row, 5),
   };
 }
 
-// Map a 21-column row (A..U) to a unified bid object.
-// Default `fallbackStatus` is used when the sheet's Status col is empty.
-function toBid(row, sheetRowNumber, fallbackStatus) {
-  const v = (i) => (row && row[i] != null ? row[i] : '');
+// Submitted row -> unified bid (A..V)
+function toSubmittedBid(row, sheetRowNumber) {
   return {
     id: sheetRowNumber,
-    recommendation: v(0),
-    scoreDetails: v(1),
-    aiReasoning: v(2),
-    aiEmailSummary: v(3), // Column D = AI Email Summary
-    emailDateReceived: v(4),
-    emailFrom: v(5),
-    keywordsCategory: v(6),
-    keywordsFound: v(7),
-    relevance: v(8),
-    emailSubject: v(9),
-    emailBody: v(10),
-    url: v(11),
-    dueDate: v(12),
-    significantSnippet: v(13),
-    emailDomain: v(14),
-    bidSystem: v(15),
-    country: v(16),
-    entity: v(17),
-    status: v(18) || fallbackStatus,
-    dateAdded: v(19),
-    sourceEmailId: v(20),
-    // Back-compat aliases for different tab structures
-    aiSummary: v(3),     // maps to aiEmailSummary
-    emailSummary: v(3),  // maps to aiEmailSummary
-    reasoning: v(2),     // maps to aiReasoning
+    recommendation: vAt(row, 0),
+    reasoning: vAt(row, 1),         // B
+    emailSummary: vAt(row, 2),      // C
+    emailDateReceived: vAt(row, 3),
+    emailFrom: vAt(row, 4),
+    keywordsCategory: vAt(row, 5),
+    keywordsFound: vAt(row, 6),
+    relevance: vAt(row, 7),
+    emailSubject: vAt(row, 8),
+    emailBody: vAt(row, 9),
+    url: vAt(row, 10),
+    dueDate: vAt(row, 11),
+    significantSnippet: vAt(row, 12),
+    emailDomain: vAt(row, 13),
+    bidSystem: vAt(row, 14),
+    country: vAt(row, 15),
+    entity: vAt(row, 16),
+    status: vAt(row, 17) || 'Submitted',
+    dateAdded: vAt(row, 18),
+    sourceEmailId: vAt(row, 19),
+    submissionDate: vAt(row, 20),   // U
+
+    // Back-compat aliases so BidCard resolves gracefully
+    aiReasoning: vAt(row, 1),       // maps to reasoning
+    aiEmailSummary: vAt(row, 2),    // maps to emailSummary
+    aiSummary: vAt(row, 2),         // maps to emailSummary
+    subject: vAt(row, 8),
+    from: vAt(row, 4),
   };
 }
