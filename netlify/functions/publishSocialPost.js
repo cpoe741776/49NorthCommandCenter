@@ -23,7 +23,7 @@ exports.handler = async (event) => {
 
   try {
     const auth = getGoogleAuth();
-    await auth.authorize();
+    await auth.getClient(); // Use getClient() instead of deprecated authorize()
     const sheets = google.sheets({ version: 'v4', auth });
 
     // Load from sheet if postData not provided

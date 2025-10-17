@@ -84,10 +84,18 @@ exports.handler = async (event) => {
 
     const sliced = limit ? filtered.slice(0, limit) : filtered;
 
+    // Calculate summary stats
+    const summary = {
+      totalPosts: posts.length,
+      published: posts.filter(p => p.status.toLowerCase() === 'published').length,
+      scheduled: posts.filter(p => p.status.toLowerCase() === 'scheduled').length,
+      drafts: posts.filter(p => p.status.toLowerCase() === 'draft').length
+    };
+
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, count: sliced.length, posts: sliced }),
+      body: JSON.stringify({ success: true, count: sliced.length, posts: sliced, summary }),
     };
   } catch (error) {
     console.error('Error fetching social media content:', error);
