@@ -4,9 +4,9 @@
 
 const { corsHeaders } = require('./_utils/http');
 
-const CLIENT_ID = process.env.LINKEDIN_CLIENT_ID || '78on1lis2vgj2w';
+const CLIENT_ID = process.env.LINKEDIN_CLIENT_ID;
 const CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET;
-const REDIRECT_URI = 'https://script.google.com/macros/s/AKfycbzgBtY1bxhW6gNf2kEXJvPdyzQWNekwCOzWaaR19Squa7Aq6AysdvWNwCfus0PUW9l6/exec';
+const REDIRECT_URI = process.env.LINKEDIN_REDIRECT_URI || 'https://49northcommandcenter.netlify.app/.netlify/functions/linkedinOAuthHelper';
 
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin);
