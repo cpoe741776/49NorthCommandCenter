@@ -77,10 +77,11 @@ const WebinarOperations = () => {
     () => filteredWebinars.filter((w) => w.status === 'Completed').sort((a, b) => new Date(b.date) - new Date(a.date)),
     [filteredWebinars],
   );
-  const upcomingWebinars = useMemo(
-    () => filteredWebinars.filter((w) => w.status === 'Upcoming'),
-    [filteredWebinars],
-  );
+  const upcomingWebinars = useMemo(() => {
+    const upcoming = filteredWebinars.filter((w) => w.status === 'Upcoming');
+    console.log('[WebinarOps] Upcoming webinars:', upcoming.map(w => ({ id: w.id, title: w.title, date: w.date, status: w.status })));
+    return upcoming;
+  }, [filteredWebinars]);
 
   const summary = useMemo(() => {
     const completed = completedWebinars;

@@ -231,17 +231,55 @@ async function publishToWordPress(postData) {
 async function publishToBrevo(postData) {
   const BREVO_KEY = process.env.BREVO_API_KEY;
   const BREVO_URL = 'https://api.brevo.com/v3/emailCampaigns';
+  const BREVO_LIST_ID = process.env.BREVO_LIST_ID;
+  
   if (!BREVO_KEY) throw new Error('Brevo API key not configured');
+  if (!BREVO_LIST_ID) throw new Error('Brevo list ID not configured (BREVO_LIST_ID)');
+
+  // Build HTML with better formatting
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        h1 { color: #003049; margin-bottom: 20px; }
+        p { margin-bottom: 15px; }
+        img { max-width: 100%; height: auto; }
+        .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }
+      </style>
+    </head>
+    <body>
+      <h1>${postData.title || 'Update from 49 North'}</h1>
+      ${postData.imageUrl ? `<img src="${postData.imageUrl}" alt="${postData.title || ''}" style="margin-bottom: 20px;">` : ''}
+      <div>${(postData.body || '').replace(/\n/g, '<br>')}</div>
+      <div class="footer">
+        <p>49 North | Mental Armor Training</p>
+        <p><a href="https://mymentalarmor.com">Visit our website</a></p>
+      </div>
+    </body>
+    </html>
+  `.trim();
 
   const payload = {
-    name: `Campaign: ${postData.title || ''}`.trim(),
-    subject: postData.title || '',
+    name: `[DRAFT] ${postData.title || 'Email Campaign'}`,
+    subject: postData.title || 'Update from 49 North',
     sender: {
       name: process.env.BREVO_SENDER_NAME || '49 North',
       email: process.env.BREVO_SENDER_EMAIL
     },
-    htmlContent: `<h1>${postData.title || ''}</h1><p>${(postData.body || '').replace(/\n/g, '<br>')}</p>`,
-    status: 'draft'
+    htmlContent: htmlContent,
+    // IMPORTANT: Always create as draft for manual review before sending
+    // User has 28K contacts - no auto-sending!
+    recipients: {
+      listIds: [parseInt(BREVO_LIST_ID, 10)]
+    },
+    inlineImageActivation: true,
+    mirrorActive: true,
+    // Leave as draft - user will manually send from Brevo dashboard
+    // (No scheduledAt, no status: 'queued')
   };
 
   const res = await fetch(BREVO_URL, {
@@ -249,7 +287,19 @@ async function publishToBrevo(postData) {
     headers: { 'api-key': BREVO_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  if (!res.ok) throw new Error(`Brevo API error: ${await res.text()}`);
+  
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Brevo API error: ${errText}`);
+  }
+  
   const out = await res.json();
-  return { campaignId: out.id };
+  
+  // Return campaign ID and dashboard link for easy access
+  return { 
+    campaignId: out.id,
+    dashboardLink: `https://app.brevo.com/campaign/id/${out.id}`,
+    status: 'draft',
+    message: 'Email campaign created as DRAFT. Review and send manually from Brevo dashboard.'
+  };
 }

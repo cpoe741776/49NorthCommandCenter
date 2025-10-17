@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText } from 'lucide-react';
 import { fetchSocialMediaContent } from '../services/socialMediaService';
+import PostComposerModal from './PostComposerModal';
 
 const badgeForStatus = (s) => {
   const v = String(s || '').toLowerCase();
@@ -16,6 +17,8 @@ const SocialMediaOperations = () => {
   const [err, setErr] = useState(null);
   const [posts, setPosts] = useState([]);
   const [summary, setSummary] = useState({ totalPosts: 0, published: 0, scheduled: 0, drafts: 0 });
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
 
   // filters
   const [q, setQ] = useState('');
@@ -100,7 +103,7 @@ const SocialMediaOperations = () => {
             <RefreshCw size={18} /> Refresh
           </button>
           <button
-            onClick={() => alert('Composer coming soon — wired to post to your Google Sheet and queue to platforms.')}
+            onClick={() => setComposerOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
           >
             <Plus size={18} /> New Post
@@ -247,15 +250,29 @@ const SocialMediaOperations = () => {
         </div>
       )}
 
-      {/* Roadmap: Upload • Retrieve • Analyze */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Next Up</h2>
-        <ul className="list-disc pl-5 text-sm text-gray-700 space-y-1">
-          <li><span className="font-medium">Upload:</span> add a Netlify function <code>createSocialPost</code> to write rows to your Google Sheet; wire the “New Post” button to a modal that POSTs {`{title, body, platforms, scheduledDate}`}, then refresh.</li>
-          <li><span className="font-medium">Retrieve:</span> `fetchSocialMediaContent()` already normalizes data; extend it with filters <code>?status=Scheduled&platform=LinkedIn</code> and ETag for 304s.</li>
-          <li><span className="font-medium">Analyze:</span> nightly function computes per-platform cadence, best post time windows, and CTR if you add links; surface in KPI cards and a “Trends” sub-tab.</li>
-        </ul>
-      </div>
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="text-green-800 whitespace-pre-wrap">{successMessage}</div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="mt-2 text-green-600 hover:text-green-800 text-sm underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Post Composer Modal */}
+      <PostComposerModal
+        isOpen={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        onSuccess={(message) => {
+          setSuccessMessage(message);
+          load(); // Refresh posts list
+          setTimeout(() => setSuccessMessage(null), 8000);
+        }}
+      />
     </div>
   );
 };
