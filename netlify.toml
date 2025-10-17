@@ -2,7 +2,7 @@
   command = "npm run build"
   functions = "netlify/functions"
   publish = "build"
-  environment = { SECRETS_SCAN_OMIT_PATHS = "*.md,SOCIAL_MEDIA_*.md" }
+  environment = { SECRETS_SCAN_OMIT_PATHS = "*.md", SECRETS_SCAN_OMIT_KEYS = "LINKEDIN_ORG_URN" }
 
 [functions]
   node_bundler = "esbuild"
