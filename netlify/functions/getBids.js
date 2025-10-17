@@ -155,13 +155,13 @@ exports.handler = async (event) => {
   }
 };
 
-// ----- helpers & mappers -----
+
+
 // ----- helpers & mappers -----
 function vAt(row, i) {
   return row && row[i] != null ? row[i] : '';
 }
 
-// Active/Disregarded row -> unified bid (A..U)
 // Active/Disregarded row -> unified bid (A..U)
 function toBid(row, sheetRowNumber, fallbackStatus) {
   return {
@@ -169,7 +169,7 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     recommendation: vAt(row, 0),      // A
     scoreDetails: vAt(row, 1),        // B
     
-    // FIX: Mapping follows A-U 0-20 strictly
+    // Mapping is strictly alphabetical A=0, B=1, C=2, D=3, etc.
     aiReasoning: vAt(row, 2),         // C
     aiEmailSummary: vAt(row, 3),      // D
 
@@ -193,38 +193,39 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     dateAdded: vAt(row, 19),          // T
     sourceEmailId: vAt(row, 20),      // U
 
-    // Back-compat aliases (using corrected indices)
-    aiSummary: vAt(row, 3),       // D - same as aiEmailSummary
-    emailSummary: vAt(row, 3),    // D - same as aiEmailSummary
-    subject: vAt(row, 9),         // J
-    from: vAt(row, 5),            // F
+    // Back-compat aliases
+    aiSummary: vAt(row, 3),       
+    emailSummary: vAt(row, 3),    
+    subject: vAt(row, 9),         
+    from: vAt(row, 5),            
   };
 }
 
-// Submitted row -> unified bid (A..V)
+
+// Submitted row -> unified bid (A..U)
 function toSubmittedBid(row, sheetRowNumber) {
   return {
     id: sheetRowNumber,
     recommendation: vAt(row, 0),
     reasoning: vAt(row, 1),         // B
     emailSummary: vAt(row, 2),      // C
-    emailDateReceived: vAt(row, 3),
-    emailFrom: vAt(row, 4),
-    keywordsCategory: vAt(row, 5),
-    keywordsFound: vAt(row, 6),
-    relevance: vAt(row, 7),
-    emailSubject: vAt(row, 8),
-    emailBody: vAt(row, 9),
-    url: vAt(row, 10),
-    dueDate: vAt(row, 11),
-    significantSnippet: vAt(row, 12),
-    emailDomain: vAt(row, 13),
-    bidSystem: vAt(row, 14),
-    country: vAt(row, 15),
-    entity: vAt(row, 16),
-    status: vAt(row, 17) || 'Submitted',
-    dateAdded: vAt(row, 18),
-    sourceEmailId: vAt(row, 19),
+    emailDateReceived: vAt(row, 3), // D
+    emailFrom: vAt(row, 4),         // E
+    keywordsCategory: vAt(row, 5),  // F
+    keywordsFound: vAt(row, 6),     // G
+    relevance: vAt(row, 7),         // H
+    emailSubject: vAt(row, 8),      // I
+    emailBody: vAt(row, 9),         // J
+    url: vAt(row, 10),              // K
+    dueDate: vAt(row, 11),          // L
+    significantSnippet: vAt(row, 12),// M
+    emailDomain: vAt(row, 13),      // N
+    bidSystem: vAt(row, 14),        // O
+    country: vAt(row, 15),          // P
+    entity: vAt(row, 16),           // Q
+    status: vAt(row, 17) || 'Submitted', // R
+    dateAdded: vAt(row, 18),        // S
+    sourceEmailId: vAt(row, 19),    // T
     submissionDate: vAt(row, 20),   // U
 
     // Back-compat aliases so BidCard resolves gracefully

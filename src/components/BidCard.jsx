@@ -1,13 +1,24 @@
-// src/components/BidCard.jsx - REDESIGN
+// src/components/BidCard.jsx - FINAL CORRECTED REDESIGN
 import React, { useMemo, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { ChevronDown, ChevronRight, ExternalLink, Database, Clock, Zap, CheckCircle, HelpCircle } from 'lucide-react';
 
-// --- Utility Functions (Keep the existing ones) ---
+// --- Utility Functions (Kept same) ---
 
-const withHttp = (url) => { /* ... existing code ... */ };
+const withHttp = (url) => {
+  if (!url) return '';
+  const trimmed = String(url).trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+};
+
 const coalesce = (...vals) => vals.find((v) => v !== undefined && v !== null && String(v).trim() !== '') || '';
-const parseDate = (d) => { /* ... existing code ... */ };
+
+const parseDate = (d) => {
+  if (!d || String(d).toLowerCase() === 'not specified') return null;
+  const t = Date.parse(d);
+  return Number.isNaN(t) ? null : new Date(t);
+};
 
 const daysUntil = (dateStr) => {
   const d = parseDate(dateStr);
@@ -46,12 +57,21 @@ const relevanceClass = (rel) => {
   return 'bg-gray-100 text-gray-800 border-gray-300';
 };
 
+// Helper component for cleaner detail list
+const DetailItem = ({ label, value, colSpan = 1 }) => (
+  <div className={`col-span-${colSpan}`}>
+    <label className="text-xs font-semibold text-gray-600 block">{label}</label>
+    <p className="text-gray-800 mt-0.5 break-words">{value}</p>
+  </div>
+);
+
+
 const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClick }) => {
   const [expanded, setExpanded] = useState(false);
 
   // Consolidated Data Extraction
   const recommendation = coalesce(bid.recommendation);
-  const score = coalesce(bid.recommendationScoreDetails, bid.scoreDetails); // Use RecommendationScore if present
+  const score = coalesce(bid.recommendationScoreDetails, bid.scoreDetails);
   const emailSubject = coalesce(bid.emailSubject, bid.subject);
   const emailSummary = coalesce(bid.aiEmailSummary, bid.emailSummary, bid.aiSummary);
   const aiReasoning = coalesce(bid.aiReasoning, bid.reasoning);
@@ -70,12 +90,8 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
   const relClass = useMemo(() => relevanceClass(relevance), [relevance]);
   const dueInDays = useMemo(() => daysUntil(dueDate), [dueDate]);
 
-  // UI state for expansion
-  const toggleExpand = useCallback((e) => {
-      // Prevent toggling if the click was on the checkbox or an action button
-      if (e && (e.target.closest('button, a, input[type="checkbox"]'))) return;
-      setExpanded((v) => !v);
-  }, []);
+  // FIX: Simplified toggle function to fix the retraction bug
+  const toggleExpand = useCallback(() => setExpanded((v) => !v), []);
 
   // Card styling based on recommendation
   const cardBorderClass = useMemo(() => {
@@ -109,17 +125,17 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
       {/* Header (Always Visible) */}
       <div
         className="flex items-center justify-between cursor-pointer"
-        onClick={toggleExpand}
+        onClick={toggleExpand} // Clicking the header now reliably toggles the state
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(e); } }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(); } }}
         aria-expanded={expanded}
       >
         <div className="flex items-start gap-4 flex-1 min-w-0">
           <input
             type="checkbox"
             checked={!!isSelected}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()} // Stop propagation on checkbox
             onChange={(e) => { e.stopPropagation(); onToggleSelect?.(bid.id); }}
             className="mt-1 h-5 w-5 text-blue-600 rounded cursor-pointer"
           />
@@ -155,7 +171,7 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
               <DueDatePill days={dueInDays} />
               {bidSystem && bidSystem !== 'Unknown' && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onSystemClick?.(bidSystem); }}
+                  onClick={(e) => { e.stopPropagation(); onSystemClick?.(bidSystem); }} // Stop propagation on button
                   className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-full text-xs font-semibold hover:bg-indigo-100 transition-colors"
                   title="View this bid system"
                 >
@@ -166,10 +182,10 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
           </div>
         </div>
 
-        {/* Expand/Collapse Button */}
+        {/* Expand/Collapse Button (Explicit control) */}
         <button
           className="ml-4 p-2 text-gray-500 hover:text-gray-700 transition-colors rounded-full"
-          onClick={(e) => { e.stopPropagation(); toggleExpand(e); }}
+          onClick={(e) => { e.stopPropagation(); toggleExpand(); }} // Explicitly stop propagation and toggle
           aria-label={expanded ? 'Collapse details' : 'Expand details'}
         >
           {expanded ? <ChevronDown size={24} /> : <ChevronRight size={24} />}
@@ -188,10 +204,12 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-blue-700">Reasoning:</label>
+                {/* aiReasoning is now correctly mapped to Column C/B.I (Reasoning) */}
                 <p className="text-sm text-blue-900 mt-1 leading-relaxed">{aiReasoning || 'No reasoning available'}</p>
               </div>
               <div>
                 <label className="text-xs font-semibold text-blue-700">Summary:</label>
+                {/* emailSummary is now correctly mapped to Column D/B.I (Summary) */}
                 <p className="text-sm text-blue-900 mt-1 leading-relaxed">{emailSummary || 'No summary available'}</p>
               </div>
             </div>
@@ -204,6 +222,7 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
               <DetailItem label="Due Date" value={formatDate(dueDate) || 'N/A'} />
               <DetailItem label="Entity/Agency" value={agency || 'N/A'} />
               <DetailItem label="Country" value={bid.country || 'N/A'} />
+              {/* These fields will now populate correctly from columns G and H */}
               <DetailItem label="Keywords Category" value={keywordsCategory || 'None'} />
               <DetailItem label="Keywords Found" value={keywordsFound || 'None'} colSpan={2} />
               <DetailItem label="Status" value={bid.status || 'Unknown'} />
@@ -235,7 +254,13 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
           {!!sourceUrl && sourceUrl !== 'Not provided' && (
             <div>
               <label className="text-xs font-semibold text-gray-600">Original Source:</label>
-              <a href={withHttp(sourceUrl)} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-2 break-all mt-1 hover:underline font-medium">
+              <a 
+                href={withHttp(sourceUrl)} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-2 break-all mt-1 hover:underline font-medium"
+                onClick={(e) => e.stopPropagation()} // Stop propagation on link click
+              >
                 <ExternalLink size={14} className="flex-shrink-0" /> {sourceUrl}
               </a>
             </div>
@@ -263,23 +288,14 @@ const BidCard = ({ bid, onStatusChange, isSelected, onToggleSelect, onSystemClic
   );
 };
 
-// Helper component for cleaner detail list
-const DetailItem = ({ label, value, colSpan = 1 }) => (
-  <div className={`col-span-${colSpan}`}>
-    <label className="text-xs font-semibold text-gray-600 block">{label}</label>
-    <p className="text-gray-800 mt-0.5 break-words">{value}</p>
-  </div>
-);
-
-// --- PropTypes (Keep the existing ones, ensure RecommendationScoreDetails is included) ---
+// ... PropTypes and defaultProps (should remain the same) ...
 
 BidCard.propTypes = {
   bid: PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     recommendation: PropTypes.string,
-    recommendationScoreDetails: PropTypes.oneOfType([PropTypes.string, PropTypes.number]), // Added for Recommended bids
-    scoreDetails: PropTypes.oneOfType([PropTypes.string, PropTypes.number]), // Fallback
-    // ... all other existing props ...
+    recommendationScoreDetails: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    scoreDetails: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     bidSystem: PropTypes.string,
     emailDateReceived: PropTypes.string,
     emailSubject: PropTypes.string,
@@ -293,7 +309,7 @@ BidCard.propTypes = {
     dueDate: PropTypes.string,
     emailFrom: PropTypes.string,
     entity: PropTypes.string,
-    agency: PropTypes.string, // Fallback for entity
+    agency: PropTypes.string, 
     keywordsFound: PropTypes.string,
     keywordsCategory: PropTypes.string,
     significantSnippet: PropTypes.string,
@@ -304,7 +320,7 @@ BidCard.propTypes = {
     status: PropTypes.string,
     dateAdded: PropTypes.string,
     sourceEmailId: PropTypes.string,
-    submissionDate: PropTypes.string, // For Submitted bids
+    submissionDate: PropTypes.string, 
   }).isRequired,
   onStatusChange: PropTypes.func,
   isSelected: PropTypes.bool,
