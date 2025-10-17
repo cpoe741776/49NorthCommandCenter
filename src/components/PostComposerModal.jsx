@@ -20,6 +20,14 @@ const MENTAL_ARMOR_SKILLS = [
   'What\'s Most Important', 'Interpersonal Problem Solving', 'Celebrate Good News'
 ];
 
+// Platform-specific character limits
+const PLATFORM_LIMITS = {
+  Facebook: { title: 80, body: 63206 },
+  LinkedIn: { title: 150, body: 3000 },
+  Website: { title: 100, body: 'unlimited' },
+  Email: { title: 60, body: 'unlimited' }
+};
+
 const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -79,14 +87,6 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   const titleCount = formData.title.length;
   const bodyCount = formData.body.length;
 
-  // Platform-specific limits
-  const limits = {
-    Facebook: { title: 80, body: 63206 },
-    LinkedIn: { title: 150, body: 3000 },
-    Website: { title: 100, body: 'unlimited' },
-    Email: { title: 60, body: 'unlimited' }
-  };
-
   // Validation
   const selectedPlatforms = useMemo(() => 
     Object.entries(formData.platforms).filter(([_, v]) => v).map(([k]) => k),
@@ -101,11 +101,11 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
 
     // Platform-specific validation
     selectedPlatforms.forEach(platform => {
-      if (limits[platform].title !== 'unlimited' && titleCount > limits[platform].title) {
-        errors.push(`Title exceeds ${platform} limit (${limits[platform].title} chars)`);
+      if (PLATFORM_LIMITS[platform].title !== 'unlimited' && titleCount > PLATFORM_LIMITS[platform].title) {
+        errors.push(`Title exceeds ${platform} limit (${PLATFORM_LIMITS[platform].title} chars)`);
       }
-      if (limits[platform].body !== 'unlimited' && bodyCount > limits[platform].body) {
-        errors.push(`Body exceeds ${platform} limit (${limits[platform].body} chars)`);
+      if (PLATFORM_LIMITS[platform].body !== 'unlimited' && bodyCount > PLATFORM_LIMITS[platform].body) {
+        errors.push(`Body exceeds ${platform} limit (${PLATFORM_LIMITS[platform].body} chars)`);
       }
     });
 
