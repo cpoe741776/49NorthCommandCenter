@@ -1,7 +1,24 @@
 // src/components/PostComposerModal.jsx
 import React, { useState, useMemo } from 'react';
-import { X, Send, Save, Eye, Image, Video, Calendar, Tag, AlertCircle } from 'lucide-react';
+import { X, Send, Save, Eye, Image, Video, Calendar, Tag, AlertCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
 import { createSocialPost, publishSocialPost } from '../services/socialMediaService';
+
+// SEO Keywords for 49 North posts
+const SEO_KEYWORDS = [
+  'resilience training', 'mental strength training', 'psychological resilience', 'Mental Armor™',
+  'wellbeing', 'stress management', 'performance under pressure', 'first responder resilience',
+  'leadership development', 'burnout prevention', 'workplace wellbeing', 'mental fitness',
+  'ReFrame', 'Values Based Living', 'Mindfulness', 'Spiritual Resilience',
+  'emergency services wellbeing', 'law enforcement resilience', 'firefighter resilience',
+  'healthcare resilience', 'physician wellbeing', 'nurse wellbeing', 'educator resilience',
+  '49 North™', 'BG Rhonda Cornum', 'Dr. Jill Antonishak', 'Christopher Poe'
+];
+
+const MENTAL_ARMOR_SKILLS = [
+  'Foundations of Resilience', 'Values Based Living', 'Flex Your Strengths', 'Mindfulness',
+  'Spiritual Resilience', 'Cultivate Gratitude', 'ReFrame', 'Balance Your Thinking',
+  'What\'s Most Important', 'Interpersonal Problem Solving', 'Celebrate Good News'
+];
 
 const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   const [formData, setFormData] = useState({
@@ -55,6 +72,8 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(true);
+  const [showKeywords, setShowKeywords] = useState(false);
 
   // Character counts
   const titleCount = formData.title.length;
@@ -228,6 +247,115 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
               <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
               <div className="text-red-800 text-sm">{error}</div>
+            </div>
+          )}
+
+          {/* Publishing Instructions */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowInstructions(!showInstructions)}
+              className="w-full flex items-center justify-between p-4 hover:bg-blue-100 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Info size={20} className="text-blue-600" />
+                <span className="font-semibold text-blue-900">Publishing Guidelines & Best Practices</span>
+              </div>
+              {showInstructions ? <ChevronUp size={20} className="text-blue-600" /> : <ChevronDown size={20} className="text-blue-600" />}
+            </button>
+            {showInstructions && (
+              <div className="p-4 pt-0 text-sm text-blue-900 space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3">
+                  <strong className="text-yellow-900">⚠️ IMPORTANT:</strong>
+                  <p className="mt-1 text-yellow-800">Content published to platforms is distributed immediately. Ensure your post is fully written, approved, and free of errors before publishing.</p>
+                  <p className="mt-2 text-yellow-800"><strong>Brevo emails create DRAFTS</strong> for your review before sending to 28K+ contacts.</p>
+                </div>
+                
+                <div>
+                  <strong className="text-blue-800">✅ Example of a Strong Post:</strong>
+                  <ul className="list-disc list-inside mt-2 space-y-1 text-blue-700">
+                    <li><strong>Title:</strong> "ReFraming for Resilience: Mental Armor Skill That Lasts"</li>
+                    <li><strong>Body:</strong> Include key takeaway, why it matters, and field examples</li>
+                    <li><strong>Keywords:</strong> Sprinkle 2-3 SEO keywords naturally throughout</li>
+                    <li><strong>Tags:</strong> Use relevant Mental Armor skills (ReFrame, Mindfulness, etc.)</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <strong className="text-blue-800">🔍 SEO Best Practices:</strong>
+                  <ul className="list-disc list-inside mt-2 space-y-1 text-blue-700">
+                    <li>Include clear keywords in title and body (see keyword list below)</li>
+                    <li>Mention your main topic 2-3 times naturally</li>
+                    <li>Use short paragraphs and section headers</li>
+                    <li>Avoid passive voice and vague statements</li>
+                    <li>Add external links (research) and internal links (MyMentalArmor.com pages)</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <strong className="text-blue-800">📝 Content Structure:</strong>
+                  <ul className="list-disc list-inside mt-2 space-y-1 text-blue-700">
+                    <li><strong>Key Takeaway:</strong> What will readers learn?</li>
+                    <li><strong>Why It Matters:</strong> Why is this important? (General examples)</li>
+                    <li><strong>From the Field:</strong> Real-world examples, quotes, or statistics</li>
+                    <li><strong>Main Body:</strong> 3-5 paragraphs with actionable insights</li>
+                  </ul>
+                </div>
+
+                <button
+                  onClick={() => setShowKeywords(true)}
+                  className="mt-3 text-blue-600 hover:text-blue-800 underline text-sm font-medium"
+                >
+                  View SEO Keywords & Mental Armor Skills →
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* SEO Keywords Panel */}
+          {showKeywords && (
+            <div className="bg-purple-50 border border-purple-200 rounded-lg overflow-hidden">
+              <div className="flex items-center justify-between p-4 bg-purple-100">
+                <div className="flex items-center gap-2">
+                  <Tag size={20} className="text-purple-600" />
+                  <span className="font-semibold text-purple-900">SEO Keywords & Skills</span>
+                </div>
+                <button onClick={() => setShowKeywords(false)} className="text-purple-600 hover:text-purple-800">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-purple-900 mb-2">🎯 Recommended SEO Keywords:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {SEO_KEYWORDS.map((keyword, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          navigator.clipboard.writeText(keyword);
+                          alert(`Copied: ${keyword}`);
+                        }}
+                        className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs hover:bg-purple-200 transition-colors"
+                        title="Click to copy"
+                      >
+                        {keyword}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-purple-700 mt-2">Click any keyword to copy. Naturally include 2-3 in your post.</p>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold text-purple-900 mb-2">🛡️ Mental Armor Skills:</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {MENTAL_ARMOR_SKILLS.map((skill, i) => (
+                      <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-purple-700 mt-2">Use these in your tags field if relevant to your content.</p>
+                </div>
+              </div>
             </div>
           )}
 
