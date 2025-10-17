@@ -24,20 +24,47 @@ function safeNum(n, def = 0) {
 
 // ---- normalization (defensive) ----
 function normalizeBid(b = {}) {
+  // Pass through ALL fields from getBids.js without stripping
   return {
+    // Core fields
     id: String(b.id ?? b.rowId ?? ''),
-    subject: String(b.subject ?? b.title ?? 'Untitled'),
-    entity: String(b.entity ?? b.agency ?? b.client ?? ''),
-    bidSystem: String(b.bidSystem ?? b.platform ?? ''),
-    status: String(b.status ?? '').toLowerCase(), // e.g., 'active','submitted','disregarded'
-    recommendation: String(b.recommendation ?? '').toLowerCase(), // 'respond' | 'disregard' | ''
-    dueDate: b.dueDate ? String(b.dueDate) : '',
-    daysUntilDue: safeNum(b.daysUntilDue, null),
-    dateAdded: b.dateAdded ? String(b.dateAdded) : '',
+    recommendation: String(b.recommendation ?? ''),
+    
+    // Active_Bids fields (A-U)
+    scoreDetails: b.scoreDetails ?? '',
+    aiReasoning: String(b.aiReasoning ?? b.reasoning ?? ''),
+    aiEmailSummary: String(b.aiEmailSummary ?? b.emailSummary ?? b.aiSummary ?? ''),
     emailDateReceived: b.emailDateReceived ? String(b.emailDateReceived) : '',
+    emailFrom: String(b.emailFrom ?? ''),
+    keywordsCategory: String(b.keywordsCategory ?? ''),
+    keywordsFound: String(b.keywordsFound ?? ''),
+    relevance: String(b.relevance ?? ''),
+    emailSubject: String(b.emailSubject ?? b.subject ?? b.title ?? ''),
+    emailBody: String(b.emailBody ?? ''),
     url: String(b.url ?? ''),
-    aiReasoning: String(b.aiReasoning ?? ''),
-    // keep original for debugging
+    dueDate: b.dueDate ? String(b.dueDate) : '',
+    significantSnippet: String(b.significantSnippet ?? ''),
+    emailDomain: String(b.emailDomain ?? ''),
+    bidSystem: String(b.bidSystem ?? b.platform ?? ''),
+    country: String(b.country ?? ''),
+    entity: String(b.entity ?? b.agency ?? b.client ?? ''),
+    status: String(b.status ?? ''),
+    dateAdded: b.dateAdded ? String(b.dateAdded) : '',
+    sourceEmailId: String(b.sourceEmailId ?? ''),
+    
+    // Submitted-specific
+    submissionDate: b.submissionDate ?? '',
+    reasoning: String(b.reasoning ?? ''),
+    emailSummary: String(b.emailSummary ?? ''),
+    
+    // Back-compat
+    subject: String(b.emailSubject ?? b.subject ?? b.title ?? ''),
+    aiSummary: String(b.aiEmailSummary ?? b.emailSummary ?? b.aiSummary ?? ''),
+    
+    // Computed
+    daysUntilDue: safeNum(b.daysUntilDue, null),
+    
+    // Debug
     _raw: b,
   };
 }
