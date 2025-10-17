@@ -276,8 +276,8 @@ async function publishToBrevo(postData) {
     recipients: {
       listIds: [parseInt(BREVO_LIST_ID, 10)]
     },
-    inlineImageActivation: true,
-    mirrorActive: true,
+    inlineImageActivation: false, // Must be false for lists > 5000 contacts
+    mirrorActive: false, // Disable mirror to avoid image embedding issues
     // Leave as draft - user will manually send from Brevo dashboard
     // (No scheduledAt, no status: 'queued')
   };
