@@ -179,60 +179,37 @@ async function publishToLinkedIn(postData) {
   const ORG_URN = process.env.LINKEDIN_ORG_URN || LI_ORG_URN;
   if (!LI_TOKEN) throw new Error('LinkedIn token not configured');
 
-  // Try the newer REST API format (2023+)
+  // Use the stable v2 ugcPosts API
   const payload = {
     author: ORG_URN,
-    commentary: `${postData.title || ''}\n\n${postData.body || ''}`.trim(),
-    visibility: 'PUBLIC',
-    distribution: {
-      feedDistribution: 'MAIN_FEED',
-      targetEntities: [],
-      thirdPartyDistributionChannels: []
-    },
     lifecycleState: 'PUBLISHED',
-    isReshareDisabledByAuthor: false
+    specificContent: {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() },
+        shareMediaCategory: 'NONE'
+      }
+    },
+    visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
   };
 
-  // Try v2/posts endpoint first (newer API)
-  let res = await fetch('https://api.linkedin.com/rest/posts', {
+  const res = await fetch('https://api.linkedin.com/v2/ugcPosts', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${LI_TOKEN}`,
       'Content-Type': 'application/json',
-      'LinkedIn-Version': '202405', // Use a more recent stable version
       'X-Restli-Protocol-Version': '2.0.0'
     },
     body: JSON.stringify(payload)
   });
 
-  // If that fails, fall back to ugcPosts (older API)
-  if (!res.ok && res.status === 404) {
-    const ugcPayload = {
-      author: ORG_URN,
-      lifecycleState: 'PUBLISHED',
-      specificContent: {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() },
-          shareMediaCategory: 'NONE'
-        }
-      },
-      visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
-    };
-
-    res = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${LI_TOKEN}`,
-        'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0'
-      },
-      body: JSON.stringify(ugcPayload)
-    });
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('LinkedIn API full error:', errorText);
+    throw new Error(`LinkedIn API error: ${errorText}`);
   }
-
-  if (!res.ok) throw new Error(`LinkedIn API error: ${await res.text()}`);
+  
   const out = await res.json();
-  return { postId: out.id || out.value?.id };
+  return { postId: out.id };
 }
 
 async function publishToWordPress(postData) {
