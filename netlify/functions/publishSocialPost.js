@@ -238,35 +238,81 @@ async function publishToLinkedIn(postData) {
 async function publishToWordPress(postData) {
   const WP_USER = process.env.WP_USERNAME;
   const WP_PASS = process.env.WP_APPLICATION_PASSWORD;
-  const url = WP_URL;
+  const WP_BASE = WP_URL.replace('/wp-json/wp/v2/posts', '');
   if (!WP_USER || !WP_PASS) throw new Error('WordPress credentials not configured');
 
-  // Build post content with embedded image if provided
-  let content = postData.body || '';
-  
-  // If image URL provided, embed it at the top of the post
+  const auth = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
+  const authHeaders = { 
+    Authorization: `Basic ${auth}`, 
+    'Content-Type': 'application/json' 
+  };
+
+  let featuredMediaId = null;
+
+  // If image URL provided, upload to WordPress Media Library first
   if (postData.imageUrl) {
-    content = `<img src="${postData.imageUrl}" alt="${postData.title || ''}" class="wp-image-featured" style="max-width: 100%; height: auto; margin-bottom: 20px;" />\n\n${content}`;
+    try {
+      // Fetch the image from the URL
+      const imageRes = await fetch(postData.imageUrl);
+      if (imageRes.ok) {
+        const imageBuffer = await imageRes.arrayBuffer();
+        const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
+        
+        // Get filename from URL or use default
+        const urlPath = new URL(postData.imageUrl).pathname;
+        const filename = urlPath.split('/').pop() || 'featured-image.jpg';
+        
+        // Upload to WordPress Media Library
+        const mediaRes = await fetch(`${WP_BASE}/wp-json/wp/v2/media`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${auth}`,
+            'Content-Type': contentType,
+            'Content-Disposition': `attachment; filename="${filename}"`
+          },
+          body: Buffer.from(imageBuffer)
+        });
+
+        if (mediaRes.ok) {
+          const mediaData = await mediaRes.json();
+          featuredMediaId = mediaData.id;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to upload featured image:', err.message);
+      // Continue without featured image rather than failing the whole post
+    }
   }
 
+  // Create the post
   const payload = {
     title: postData.title || '',
-    content: content,
+    content: postData.body || '',
     status: 'publish',
-    // Add categories and tags if WordPress supports them
-    categories: [1], // Default "Uncategorized" - adjust as needed
+    categories: [1], // Default "Uncategorized"
     excerpt: postData.body ? postData.body.substring(0, 150) + '...' : ''
   };
 
-  const auth = Buffer.from(`${WP_USER}:${WP_PASS}`).toString('base64');
-  const res = await fetch(url, {
+  // Add featured image if we successfully uploaded it
+  if (featuredMediaId) {
+    payload.featured_media = featuredMediaId;
+  }
+
+  const res = await fetch(WP_URL, {
     method: 'POST',
-    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+    headers: authHeaders,
     body: JSON.stringify(payload)
   });
+  
   if (!res.ok) throw new Error(`WordPress API error: ${await res.text()}`);
   const out = await res.json();
-  return { postId: out.id, permalink: out.link };
+  
+  return { 
+    postId: out.id, 
+    permalink: out.link,
+    featuredImageId: featuredMediaId,
+    hasFeaturedImage: !!featuredMediaId
+  };
 }
 
 async function publishToBrevo(postData) {
