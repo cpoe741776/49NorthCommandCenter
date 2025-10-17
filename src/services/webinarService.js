@@ -49,6 +49,10 @@ function readCache() {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const { etag, ts, data } = JSON.parse(raw);
+    // Handle both old (array) and new (object with webinars/surveys/registrations) formats
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      return { etag, ts, data };
+    }
     return { etag, ts, data: validateArray(data) };
   } catch {
     return null;
@@ -106,13 +110,25 @@ export async function fetchWebinars(opts = {}) {
     resp = await fetch(url, { method: 'GET', headers, signal });
   } catch (err) {
     // Network error → fall back to cache if available
-    if (cache?.data?.length) return { success: true, fromCache: true, items: cache.data };
+    if (cache?.data) {
+      if (typeof cache.data === 'object' && cache.data.webinars) {
+        return { success: true, fromCache: true, ...cache.data };
+      }
+      if (Array.isArray(cache.data)) {
+        return { success: true, fromCache: true, items: cache.data };
+      }
+    }
     throw err;
   }
 
   // 304 Not Modified → use cache
-  if (resp.status === 304 && cache?.data?.length) {
-    return { success: true, fromCache: true, items: cache.data };
+  if (resp.status === 304 && cache?.data) {
+    if (typeof cache.data === 'object' && cache.data.webinars) {
+      return { success: true, fromCache: true, ...cache.data };
+    }
+    if (Array.isArray(cache.data)) {
+      return { success: true, fromCache: true, items: cache.data };
+    }
   }
 
   // Non-2xx with useful message
@@ -125,11 +141,17 @@ export async function fetchWebinars(opts = {}) {
   // Parse + validate
   const etag = resp.headers.get('ETag') || '';
   const json = await resp.json().catch(() => ({}));
+  
+  // getWebinars.js returns { success, webinars, surveys, registrations, summary }
+  if (json.success && json.webinars) {
+    // Write cache
+    if (useCache) writeCache(etag, json);
+    return { success: true, fromCache: false, ...json, etag };
+  }
+
+  // Fallback for legacy format
   const items = validateArray(json?.items || json?.webinars || json);
-
-  // Write cache
   if (useCache) writeCache(etag, items);
-
   return { success: true, fromCache: false, items, etag };
 }
 
