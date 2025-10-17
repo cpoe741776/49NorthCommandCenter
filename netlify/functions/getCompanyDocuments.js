@@ -2,7 +2,7 @@
 const { getGoogleAuth, sheetsClient } = require('./_utils/google');
 const { corsHeaders, methodGuard, ok, serverErr } = require('./_utils/http');
 
-const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID; // Sheet with "Uploads" tab (A:G)
+const SHEET_ID = process.env.COMPANY_DATA_SHEET_ID; // Sheet with "CompanyDocuments" tab (A:H)
 
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin);
@@ -21,54 +21,43 @@ exports.handler = async (event) => {
     }
 
     const auth = getGoogleAuth();
-    await auth.authorize();
+    await auth.getClient(); // Use getClient() instead of deprecated authorize()
     const sheets = sheetsClient(auth);
 
-    // Expecting Uploads!A:G matching uploadDocument.js appends:
-    // A uploadedAt | B driveFileId | C filename | D mimeType
-    // E webViewLink | F webContentLink | G meta JSON
+    // CompanyDocuments tab A:H (8 columns):
+    // A Document ID | B Category | C Document Name | D File Type | E Upload Date
+    // F Drive File ID | G File Size | H Notes
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'Uploads!A:G',
+      range: 'CompanyDocuments!A2:H', // Start at row 2 to skip header
     });
 
     const rows = res.data.values || [];
 
-    // Detect header row (look for "uploaded" in A1); if present, slice it off
-    const hasHeader = rows[0] && /uploaded/i.test(String(rows[0][0] || ''));
-    const dataRows = hasHeader ? rows.slice(1) : rows;
+    const documents = rows.map((r, i) => {
+      const rowNumber = i + 2; // Row 2 is first data row
 
-    const documents = dataRows.map((r, i) => {
-      // Compute 1-based sheet row number for deletion:
-      // if header exists, first data row is row 2; else row 1
-      const rowNumber = (hasHeader ? 2 : 1) + i;
-
-      const uploadedAt = r[0] || '';
-      const driveFileId = r[1] || '';
+      const documentId = r[0] || '';
+      const category = r[1] || 'Other';
       const documentName = r[2] || '';
-      const mimeType = r[3] || '';
-      const webViewLink = r[4] || '';
-      const webContentLink = r[5] || '';
-      let meta = {};
- try {
-   meta = JSON.parse(r[6] || '{}');
- } catch (e) {
-   console.warn('Bad meta JSON at row', rowNumber, r[6]);
-   meta = {};
- }
+      const fileType = r[3] || 'application/octet-stream';
+      const uploadDate = r[4] || '';
+      const driveFileId = r[5] || '';
+      const fileSize = r[6] || '';
+      const notes = r[7] || '';
 
       return {
-        id: rowNumber, // used by deleteDocument to delete the row
-        driveFileId,   // used by deleteDocument to delete the Drive file (optional)
-        documentName,
-        fileType: mimeType || 'application/octet-stream',
-        fileSize: meta.sizeReadable || '',
-        uploadDate: uploadedAt ? new Date(uploadedAt).toLocaleDateString() : '',
-        notes: meta.notes || '',
-        category: meta.category || 'Other',
-        driveLink: webViewLink || webContentLink || '',
-        // optional raw fields for debugging/auditing:
-        _uploadedAtRaw: uploadedAt || '',
+        id: rowNumber,       // used by deleteDocument to delete the row
+        documentId,          // Document ID from column A
+        driveFileId,         // Drive File ID from column F
+        documentName,        // Document Name from column C
+        fileType,            // File Type from column D
+        fileSize,            // File Size from column G
+        uploadDate,          // Upload Date from column E (as-is from sheet)
+        notes,               // Notes from column H
+        category,            // Category from column B
+        driveLink: driveFileId ? `https://drive.google.com/file/d/${driveFileId}/view` : '',
+        _raw: r              // Keep raw for debugging
       };
     });
 

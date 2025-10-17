@@ -71,7 +71,7 @@ exports.handler = async (event) => {
 
   try {
     const auth = getGoogleAuth();
-    await auth.authorize();
+    await auth.getClient(); // Use getClient() instead of deprecated authorize()
     const drive = driveClient(auth);
 
     // Upload to Drive
@@ -89,27 +89,37 @@ exports.handler = async (event) => {
     const uploadedAt = new Date().toISOString();
     const sizeReadable = prettySize(bytes.length);
 
-    // Optional: log to Sheets (Uploads!A:G)
+    // Log to Sheets (CompanyDocuments!A:H)
     if (SHEET_ID) {
       try {
         const sheets = sheetsClient(auth);
+        
+        // Generate Document ID: DOC### format
+        const existingIds = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: 'CompanyDocuments!A2:A',
+        });
+        const ids = (existingIds.data.values || [])
+          .map(r => (r[0] || '').match(/^DOC(\d+)$/))
+          .filter(Boolean)
+          .map(m => parseInt(m[1], 10));
+        const nextNum = ids.length ? Math.max(...ids) + 1 : 1;
+        const documentId = `DOC${String(nextNum).padStart(3, '0')}`;
+        
         const values = [[
-          uploadedAt,                     // A: timestamp
-          file.id,                        // B: driveFileId
-          file.name,                      // C: filename
-          file.mimeType || mimeType,      // D: mime
-          file.webViewLink || '',         // E: webViewLink
-          file.webContentLink || '',      // F: webContentLink
-          JSON.stringify({
-            ...sheetRowMeta,
-            size: bytes.length,
-            sizeReadable,
-          }),                             // G: meta JSON
+          documentId,                       // A: Document ID
+          sheetRowMeta.category || 'Other', // B: Category
+          file.name,                        // C: Document Name
+          file.mimeType || mimeType,        // D: File Type
+          new Date().toISOString().split('T')[0], // E: Upload Date (YYYY-MM-DD)
+          file.id,                          // F: Drive File ID
+          sizeReadable,                     // G: File Size
+          sheetRowMeta.notes || '',         // H: Notes
         ]];
 
         await sheets.spreadsheets.values.append({
           spreadsheetId: SHEET_ID,
-          range: 'Uploads!A:G',
+          range: 'CompanyDocuments!A:H',
           valueInputOption: 'USER_ENTERED',
           requestBody: { values },
         });

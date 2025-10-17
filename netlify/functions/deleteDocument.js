@@ -24,7 +24,7 @@ exports.handler = async (event) => {
 
   try {
     const auth = getGoogleAuth();
-    await auth.authorize();
+    await auth.getClient(); // Use getClient() instead of deprecated authorize()
 
     // 1) Try to delete the Drive file first (non-fatal if it fails)
     if (driveFileId) {
@@ -37,20 +37,20 @@ exports.handler = async (event) => {
       }
     }
 
-    // 2) Delete the sheet row from Uploads
+    // 2) Delete the sheet row from CompanyDocuments
     const sheets = sheetsClient(auth);
 
-    // We need the sheetId (gid) of "Uploads" tab to issue a batchUpdate deleteDimension
+    // We need the sheetId (gid) of "CompanyDocuments" tab to issue a batchUpdate deleteDimension
     const spreadsheet = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
       spreadsheetId: SHEET_ID,
     });
 
-    const uploadsSheet = (spreadsheet.data.sheets || []).find(
-      (s) => s.properties && s.properties.title === 'Uploads'
+    const companyDocsSheet = (spreadsheet.data.sheets || []).find(
+      (s) => s.properties && s.properties.title === 'CompanyDocuments'
     );
-    if (!uploadsSheet) return bad(headers, 'Uploads sheet not found');
+    if (!companyDocsSheet) return bad(headers, 'CompanyDocuments sheet not found');
 
-    const sheetId = uploadsSheet.properties.sheetId;
+    const sheetId = companyDocsSheet.properties.sheetId;
 
     // documentId is the row number (1-based). Delete exactly that row.
     // Sheets API deleteDimension uses 0-based, endIndex exclusive.
