@@ -285,6 +285,20 @@ export function generateTickerItems(data) {
     });
   }
 
+  // 16. OVERDUE WEBINAR SOCIAL POSTS
+  if (data.overdueWebinarSocialPosts > 0) {
+    items.push({
+      message: `🎥 ${data.overdueWebinarSocialPosts} Webinar Social Post${data.overdueWebinarSocialPosts > 1 ? 's' : ''} Overdue - Promote Your Webinars!`,
+      priority: 'high',
+      category: 'Reminders',
+      source: 'reminders-webinar-social',
+      target: 'social',
+      link: '',
+      createdAt: now,
+      status: 'active'
+    });
+  }
+
   // Sort by priority (high > medium > low), then by category
   const priorityOrder = { high: 3, medium: 2, low: 1 };
   const categoryOrder = { 'Reminders': 0, 'Bids': 1, 'Webinars': 2, 'Surveys': 3, 'Systems': 4, 'Social': 5, 'News': 6 };

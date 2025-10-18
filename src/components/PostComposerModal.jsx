@@ -311,6 +311,65 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
             )}
           </div>
 
+          {/* Webinar Post Helper */}
+          {(formData.contentType === 'webinar' || initialPost?.contentType?.includes('webinar')) && (
+            <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <Calendar size={24} className="text-purple-600 flex-shrink-0" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-purple-900 mb-2">
+                    🎥 Webinar Social Post Tips
+                    {initialPost?.webinarTitle && (
+                      <span className="block text-sm font-normal text-purple-700 mt-1">
+                        For: {initialPost.webinarTitle} ({initialPost.webinarDate} at {initialPost.webinarTime})
+                      </span>
+                    )}
+                  </h3>
+                  
+                  {initialPost?.contentType === 'webinar-1week' && (
+                    <div className="bg-white p-3 rounded border border-purple-200 mt-2">
+                      <div className="font-medium text-purple-900 mb-1">📅 1 Week Before - Promotional Post</div>
+                      <div className="text-sm text-purple-800 space-y-1">
+                        <p>• <strong>Goal:</strong> Build awareness and encourage early registration</p>
+                        <p>• <strong>Tone:</strong> Exciting and informative</p>
+                        <p>• <strong>Include:</strong> Webinar topic, date/time, key takeaways, registration link</p>
+                        <p>• <strong>Example:</strong> "Join us next week for our live webinar on [Topic]! Learn practical strategies for [key benefit]. Register now → [link]"</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {initialPost?.contentType === 'webinar-1day' && (
+                    <div className="bg-white p-3 rounded border border-purple-200 mt-2">
+                      <div className="font-medium text-purple-900 mb-1">⏰ 1 Day Before - Urgency Post</div>
+                      <div className="text-sm text-purple-800 space-y-1">
+                        <p>• <strong>Goal:</strong> Create urgency for last-minute registrations</p>
+                        <p>• <strong>Tone:</strong> Urgent but friendly</p>
+                        <p>• <strong>Include:</strong> "Tomorrow!" emphasis, time reminder, last chance to register</p>
+                        <p>• <strong>Example:</strong> "Tomorrow at 2 PM EST! Don't miss our webinar on [Topic]. Last chance to register → [link]"</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {initialPost?.contentType === 'webinar-1hour' && (
+                    <div className="bg-white p-3 rounded border border-purple-200 mt-2">
+                      <div className="font-medium text-purple-900 mb-1">🚀 1 Hour Before - "Starting Soon!"</div>
+                      <div className="text-sm text-purple-800 space-y-1">
+                        <p>• <strong>Goal:</strong> Remind registered participants and catch walk-ins</p>
+                        <p>• <strong>Tone:</strong> Exciting and immediate</p>
+                        <p>• <strong>Include:</strong> "Starting in 1 hour!", join link, what to expect</p>
+                        <p>• <strong>Example:</strong> "Starting in 1 hour! Join us live for [Topic]. Not registered yet? There's still time! → [link]"</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 text-xs text-purple-700 bg-purple-100 p-2 rounded">
+                    <strong>💡 Pro Tips:</strong> Include registration link, use eye-catching images, tag relevant Mental Armor skills, schedule posts for optimal engagement times
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* SEO Keywords Panel */}
           {showKeywords && (
             <div className="bg-purple-50 border border-purple-200 rounded-lg overflow-hidden">
