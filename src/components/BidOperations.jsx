@@ -231,18 +231,30 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
 
   const respondBids = useMemo(() => (
     bids
-      .filter((b) => normalizeRecommendation(b.recommendation) === 'respond')
+      .filter((b) => {
+        // Exclude if pending status change to something else
+        const pendingStatus = pendingStatusChanges.get(b.id);
+        if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'respond') {
+          return false;
+        }
+        return normalizeRecommendation(b.recommendation) === 'respond';
+      })
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
-  ), [bids]);
+  ), [bids, pendingStatusChanges]);
 
   const gatherInfoBids = useMemo(() => (
     bids
       .filter((b) => {
+        // Exclude if pending status change to something else
+        const pendingStatus = pendingStatusChanges.get(b.id);
+        if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'gather more information') {
+          return false;
+        }
         const s = normalizeRecommendation(b.recommendation);
         return s === 'gather more information' || s === 'gather info' || s === 'need info' || s === 'needs info' || s === 'research';
       })
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
-  ), [bids]);
+  ), [bids, pendingStatusChanges]);
 
   const paginatedRespondBids = respondBids.slice(0, respondPage * ITEMS_PER_PAGE);
   const paginatedGatherInfoBids = gatherInfoBids.slice(0, gatherInfoPage * ITEMS_PER_PAGE);
