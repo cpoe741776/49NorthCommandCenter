@@ -308,16 +308,21 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               <div>
                 <p className="text-sm text-gray-600">Pending Social Reminders</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {((reminderSummary.overdueWebinarEmails || 0) + (reminderSummary.missingSocialPosts || []).length)}
+                  {((reminderSummary.overdueWebinarEmails || 0) + (reminderSummary.overdueWebinarSocialPosts || 0) + (reminderSummary.missingSocialPosts || []).length)}
                 </p>
                 {(reminderSummary.overdueWebinarEmails || 0) > 0 && (
                   <p className="text-xs text-red-600 mt-1">
-                    {reminderSummary.overdueWebinarEmails} webinar emails overdue
+                    {reminderSummary.overdueWebinarEmails} webinar email{reminderSummary.overdueWebinarEmails > 1 ? 's' : ''} overdue
+                  </p>
+                )}
+                {(reminderSummary.overdueWebinarSocialPosts || 0) > 0 && (
+                  <p className="text-xs text-purple-600 mt-1">
+                    {reminderSummary.overdueWebinarSocialPosts} webinar social post{reminderSummary.overdueWebinarSocialPosts > 1 ? 's' : ''} overdue
                   </p>
                 )}
                 {(reminderSummary.missingSocialPosts || []).length > 0 && (
                   <p className="text-xs text-orange-600 mt-1">
-                    {(reminderSummary.missingSocialPosts || []).join(', ')} posts missing
+                    {(reminderSummary.missingSocialPosts || []).join(', ')} weekly posts missing
                   </p>
                 )}
               </div>

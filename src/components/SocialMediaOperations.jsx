@@ -22,6 +22,7 @@ const SocialMediaOperations = () => {
   const [postToEdit, setPostToEdit] = useState(null); // For reusing/editing posts
   const [successMessage, setSuccessMessage] = useState(null);
   const [weeklyReminders, setWeeklyReminders] = useState(null);
+  const [webinarReminders, setWebinarReminders] = useState(null);
 
   // filters
   const [q, setQ] = useState('');
@@ -48,9 +49,11 @@ const SocialMediaOperations = () => {
     try {
       const reminderData = await fetchReminders();
       setWeeklyReminders(reminderData.weeklyReminders);
+      setWebinarReminders(reminderData.webinarReminders || []);
     } catch (e) {
       console.warn('Failed to load weekly reminders:', e);
       setWeeklyReminders(null);
+      setWebinarReminders(null);
     }
   }, []);
 
@@ -243,6 +246,105 @@ const SocialMediaOperations = () => {
                 {weeklyReminders.friday.status === 'upcoming' && (
                   <div>• <strong>Friday</strong> - Due in {weeklyReminders.friday.daysUntil} days ({weeklyReminders.friday.date})</div>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Webinar Social Post Reminders */}
+      {webinarReminders && webinarReminders.some(w => 
+        w.socialReminders?.oneWeek?.status === 'overdue' || 
+        w.socialReminders?.oneDay?.status === 'overdue' || 
+        w.socialReminders?.oneHour?.status === 'overdue'
+      ) && (
+        <div className="bg-purple-50 border-l-4 border-purple-400 p-4 rounded-lg shadow">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-purple-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-purple-900">🎥 Webinar Social Post Reminders</h3>
+              <p className="text-sm text-purple-800 mt-1">
+                Create promotional social posts for upcoming webinars:
+              </p>
+              <div className="mt-2 space-y-2">
+                {webinarReminders.filter(w => 
+                  w.socialReminders?.oneWeek?.status === 'overdue' ||
+                  w.socialReminders?.oneDay?.status === 'overdue' ||
+                  w.socialReminders?.oneHour?.status === 'overdue'
+                ).map(webinar => (
+                  <div key={webinar.webinarId} className="bg-white p-3 rounded border border-purple-200">
+                    <div className="font-semibold text-purple-900 text-sm">{webinar.webinarTitle}</div>
+                    <div className="text-xs text-purple-700 mt-1">{webinar.webinarDate} at {webinar.webinarTime}</div>
+                    <div className="mt-2 space-y-1 text-xs">
+                      {webinar.socialReminders?.oneWeek?.status === 'overdue' && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-purple-800">
+                            • <strong>1 Week Before</strong> - Promotional post - <span className="text-red-600">Overdue</span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              setPostToEdit({ 
+                                contentType: 'webinar-1week', 
+                                webinarId: webinar.webinarId,
+                                webinarTitle: webinar.webinarTitle,
+                                webinarDate: webinar.webinarDate,
+                                webinarTime: webinar.webinarTime
+                              });
+                              setComposerOpen(true);
+                            }}
+                            className="text-purple-600 hover:underline font-medium ml-2"
+                          >
+                            Create Now →
+                          </button>
+                        </div>
+                      )}
+                      {webinar.socialReminders?.oneDay?.status === 'overdue' && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-purple-800">
+                            • <strong>1 Day Before</strong> - "Tomorrow!" post - <span className="text-red-600">Overdue</span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              setPostToEdit({ 
+                                contentType: 'webinar-1day', 
+                                webinarId: webinar.webinarId,
+                                webinarTitle: webinar.webinarTitle,
+                                webinarDate: webinar.webinarDate,
+                                webinarTime: webinar.webinarTime
+                              });
+                              setComposerOpen(true);
+                            }}
+                            className="text-purple-600 hover:underline font-medium ml-2"
+                          >
+                            Create Now →
+                          </button>
+                        </div>
+                      )}
+                      {webinar.socialReminders?.oneHour?.status === 'overdue' && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-purple-800">
+                            • <strong>1 Hour Before</strong> - "Starting soon!" post - <span className="text-red-600">Overdue</span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              setPostToEdit({ 
+                                contentType: 'webinar-1hour', 
+                                webinarId: webinar.webinarId,
+                                webinarTitle: webinar.webinarTitle,
+                                webinarDate: webinar.webinarDate,
+                                webinarTime: webinar.webinarTime
+                              });
+                              setComposerOpen(true);
+                            }}
+                            className="text-purple-600 hover:underline font-medium ml-2"
+                          >
+                            Create Now →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

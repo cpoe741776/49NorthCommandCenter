@@ -97,9 +97,17 @@ exports.handler = async (event) => {
         return reminderRows.find(r => r[2] === webinar.id && r[1] === `webinar-${type}`);
       };
 
+      const findSocialReminder = (type) => {
+        return reminderRows.find(r => r[2] === webinar.id && r[1] === `webinar-social-${type}`);
+      };
+
       const oneWeekReminder = findReminder('1week');
       const oneDayReminder = findReminder('1day');
       const oneHourReminder = findReminder('1hour');
+
+      const oneWeekSocialReminder = findSocialReminder('1week');
+      const oneDaySocialReminder = findSocialReminder('1day');
+      const oneHourSocialReminder = findSocialReminder('1hour');
 
       return {
         webinarId: webinar.id,
@@ -126,6 +134,26 @@ exports.handler = async (event) => {
             status: oneHourReminder ? oneHourReminder[4] : (now > timings.oneHour ? 'overdue' : 'pending'),
             campaignId: oneHourReminder ? oneHourReminder[6] : null,
             dashboardLink: oneHourReminder ? oneHourReminder[7] : null,
+            isPast: now > timings.oneHour
+          }
+        },
+        socialReminders: {
+          oneWeek: {
+            dueDate: timings.oneWeek.toISOString(),
+            status: oneWeekSocialReminder ? oneWeekSocialReminder[4] : (now > timings.oneWeek ? 'overdue' : 'pending'),
+            postId: oneWeekSocialReminder ? oneWeekSocialReminder[8] : null,
+            isPast: now > timings.oneWeek
+          },
+          oneDay: {
+            dueDate: timings.oneDay.toISOString(),
+            status: oneDaySocialReminder ? oneDaySocialReminder[4] : (now > timings.oneDay ? 'overdue' : 'pending'),
+            postId: oneDaySocialReminder ? oneDaySocialReminder[8] : null,
+            isPast: now > timings.oneDay
+          },
+          oneHour: {
+            dueDate: timings.oneHour.toISOString(),
+            status: oneHourSocialReminder ? oneHourSocialReminder[4] : (now > timings.oneHour ? 'overdue' : 'pending'),
+            postId: oneHourSocialReminder ? oneHourSocialReminder[8] : null,
             isPast: now > timings.oneHour
           }
         }
@@ -186,6 +214,12 @@ exports.handler = async (event) => {
           (w.reminders.oneDay.status === 'overdue' ? 1 : 0) +
           (w.reminders.oneHour.status === 'overdue' ? 1 : 0);
       }, 0),
+      overdueWebinarSocialPosts: webinarReminders.reduce((sum, w) => {
+        return sum +
+          (w.socialReminders.oneWeek.status === 'overdue' ? 1 : 0) +
+          (w.socialReminders.oneDay.status === 'overdue' ? 1 : 0) +
+          (w.socialReminders.oneHour.status === 'overdue' ? 1 : 0);
+      }, 0),
       missingSocialPosts: [
         weeklyReminders.monday.overdue ? 'Monday' : null,
         weeklyReminders.wednesday.overdue ? 'Wednesday' : null,
@@ -195,8 +229,12 @@ exports.handler = async (event) => {
         weeklyReminders.monday.status === 'upcoming' ? 'Monday' : null,
         weeklyReminders.wednesday.status === 'upcoming' ? 'Wednesday' : null,
         weeklyReminders.friday.status === 'upcoming' ? 'Friday' : null
-      ].filter(Boolean)
+      ].filter(Boolean),
+      totalPending: 0 // Will be calculated below
     };
+
+    // Calculate total pending (emails + weekly social + webinar social)
+    summary.totalPending = summary.overdueWebinarEmails + summary.missingSocialPosts.length + summary.overdueWebinarSocialPosts;
 
     return ok(headers, {
       success: true,
