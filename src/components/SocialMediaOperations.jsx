@@ -456,7 +456,19 @@ const SocialMediaOperations = () => {
                     <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => {
-                          setPostToEdit(p);
+                          // Normalize post data to ensure all fields are primitives
+                          const normalizedPost = {
+                            title: String(p.title || ''),
+                            body: String(p.body || p.text || ''),
+                            contentType: typeof p.contentType === 'string' ? p.contentType : 'announcement',
+                            imageUrl: String(p.imageUrl || ''),
+                            videoUrl: String(p.videoUrl || ''),
+                            platforms: String(p.platforms || ''),
+                            tags: String(p.tags || ''),
+                            link: String(p.link || p.url || ''),
+                            status: String(p.status || '')
+                          };
+                          setPostToEdit(normalizedPost);
                           setComposerOpen(true);
                         }}
                         className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
