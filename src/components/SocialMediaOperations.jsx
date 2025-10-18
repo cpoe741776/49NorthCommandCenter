@@ -202,20 +202,28 @@ const SocialMediaOperations = () => {
                 const statusBadge = badgeForStatus(p.status);
                 const scheduled = p.scheduledDate ? new Date(p.scheduledDate).toLocaleString() : '';
                 const published = p.publishedDate ? new Date(p.publishedDate).toLocaleString() : '';
-                const created = p.createdAt ? new Date(p.createdAt).toLocaleString() : '';
+                const created = p.timestamp || p.createdAt ? new Date(p.timestamp || p.createdAt).toLocaleString() : '';
+                
+                // Ensure all values are strings/primitives
+                const safeTitle = String(p.title || '(Untitled)');
+                const safeBody = String(p.body || '');
+                const safeStatus = String(p.status || '—');
+                const safePlatforms = String(p.platforms || '');
+                const safeLink = String(p.link || p.url || p.postPermalink || '');
+                
                 return (
                   <tr key={i} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm text-gray-900">
-                      <div className="font-semibold">{p.title || '(Untitled)'}</div>
-                      {p.body && <div className="text-xs text-gray-600 line-clamp-2 mt-0.5">{p.body}</div>}
+                      <div className="font-semibold">{safeTitle}</div>
+                      {safeBody && <div className="text-xs text-gray-600 line-clamp-2 mt-0.5">{safeBody}</div>}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded ${statusBadge.cls}`}>
-                        {statusBadge.icon}{p.status || '—'}
+                        {statusBadge.icon}{safeStatus}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
-                      {(p.platforms || '')
+                      {safePlatforms
                         .split(',')
                         .map(s => s.trim())
                         .filter(Boolean)
@@ -231,8 +239,8 @@ const SocialMediaOperations = () => {
                       {created && <div><span className="font-medium text-gray-700">Created:</span> {created}</div>}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {(p.link || p.url) ? (
-                        <a href={p.link || p.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                      {safeLink ? (
+                        <a href={safeLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                           View
                         </a>
                       ) : <span className="text-gray-400">—</span>}
