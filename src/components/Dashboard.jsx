@@ -390,12 +390,16 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 <div className="bg-white rounded-lg p-4 border border-blue-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Top Priorities</h3>
                   <div className="space-y-2">
-                    {aiInsights.bids.topPriorities.map((priority, idx) => (
-                      <div key={idx} className={`border rounded-lg p-3 ${getUrgencyColor(priority.urgency)}`}>
-                          <h4 className="font-semibold">{priority.title}</h4>
-                        {priority.action && <p className="text-sm mt-1">→ {priority.action}</p>}
-                    </div>
-                  ))}
+                    {aiInsights.bids.topPriorities.map((priority, idx) => {
+                      // Ensure priority is an object with proper fields
+                      if (!priority || typeof priority !== 'object') return null;
+                      return (
+                        <div key={idx} className={`border rounded-lg p-3 ${getUrgencyColor(priority.urgency)}`}>
+                          <h4 className="font-semibold">{String(priority.title || 'Priority Item')}</h4>
+                          {priority.action && <p className="text-sm mt-1">→ {String(priority.action)}</p>}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -588,17 +592,17 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 <p className="text-gray-700">{aiInsights.social.executiveSummary}</p>
               </div>
 
-              {aiInsights.social.contentInsights && (
+              {aiInsights.social.contentInsights && typeof aiInsights.social.contentInsights === 'object' && (
                 <div className="bg-white rounded-lg p-4 border border-purple-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Content Strategy</h3>
                   <div className="space-y-2">
-                    {aiInsights.social.contentInsights.topPerforming && (
+                    {aiInsights.social.contentInsights.topPerforming && typeof aiInsights.social.contentInsights.topPerforming === 'string' && (
                       <div>
                         <p className="text-xs text-gray-600 uppercase font-semibold">Top Performing</p>
                         <p className="text-sm text-gray-700 mt-1">{aiInsights.social.contentInsights.topPerforming}</p>
                       </div>
                     )}
-                    {aiInsights.social.contentInsights.suggestions && (
+                    {aiInsights.social.contentInsights.suggestions && typeof aiInsights.social.contentInsights.suggestions === 'string' && (
                       <div>
                         <p className="text-xs text-gray-600 uppercase font-semibold mt-3">Suggestions</p>
                         <p className="text-sm text-gray-700 mt-1">{aiInsights.social.contentInsights.suggestions}</p>
