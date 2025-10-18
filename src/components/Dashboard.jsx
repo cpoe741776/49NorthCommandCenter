@@ -306,9 +306,9 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Pending Reminders</p>
+                <p className="text-sm text-gray-600">Pending Social Reminders</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {reminderSummary.totalPending || 0}
+                  {((reminderSummary.overdueWebinarEmails || 0) + (reminderSummary.missingSocialPosts || []).length)}
                 </p>
                 {(reminderSummary.overdueWebinarEmails || 0) > 0 && (
                   <p className="text-xs text-red-600 mt-1">
