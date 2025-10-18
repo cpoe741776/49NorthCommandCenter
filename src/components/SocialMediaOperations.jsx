@@ -1,7 +1,8 @@
 // SocialMediaOperations.jsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText, Copy } from 'lucide-react';
+import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText, Copy, AlertCircle } from 'lucide-react';
 import { fetchSocialMediaContent } from '../services/socialMediaService';
+import { fetchReminders } from '../services/reminderService';
 import PostComposerModal from './PostComposerModal';
 
 const badgeForStatus = (s) => {
@@ -20,6 +21,7 @@ const SocialMediaOperations = () => {
   const [composerOpen, setComposerOpen] = useState(false);
   const [postToEdit, setPostToEdit] = useState(null); // For reusing/editing posts
   const [successMessage, setSuccessMessage] = useState(null);
+  const [weeklyReminders, setWeeklyReminders] = useState(null);
 
   // filters
   const [q, setQ] = useState('');
@@ -42,7 +44,20 @@ const SocialMediaOperations = () => {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  const loadWeeklyReminders = useCallback(async () => {
+    try {
+      const reminderData = await fetchReminders();
+      setWeeklyReminders(reminderData.weeklyReminders);
+    } catch (e) {
+      console.warn('Failed to load weekly reminders:', e);
+      setWeeklyReminders(null);
+    }
+  }, []);
+
+  useEffect(() => { 
+    load();
+    loadWeeklyReminders();
+  }, [load, loadWeeklyReminders]);
 
   const platforms = useMemo(() => {
     const set = new Set();
@@ -145,6 +160,94 @@ const SocialMediaOperations = () => {
           <p className="text-3xl font-bold text-gray-900 mt-1">{summary.drafts}</p>
         </div>
       </div>
+
+      {/* Weekly Post Reminders */}
+      {weeklyReminders && (weeklyReminders.monday.overdue || weeklyReminders.wednesday.overdue || weeklyReminders.friday.overdue) && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900">📅 Weekly Post Reminders</h3>
+              <p className="text-sm text-yellow-800 mt-1">
+                Missing posts for Week {weeklyReminders.currentWeek}:
+              </p>
+              <div className="mt-2 space-y-1 text-sm">
+                {weeklyReminders.monday.overdue && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-yellow-800">
+                      • <strong>Monday</strong> ({weeklyReminders.monday.date}) - "Resilience Skill of the Week" - <span className="text-red-600">Overdue</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setPostToEdit({ contentType: 'monday-weekly' });
+                        setComposerOpen(true);
+                      }}
+                      className="text-blue-600 hover:underline text-xs font-medium"
+                    >
+                      Create Now →
+                    </button>
+                  </div>
+                )}
+                {weeklyReminders.wednesday.overdue && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-yellow-800">
+                      • <strong>Wednesday</strong> ({weeklyReminders.wednesday.date}) - "Putting Skills Into Practice" - <span className="text-red-600">Overdue</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setPostToEdit({ contentType: 'wednesday-weekly' });
+                        setComposerOpen(true);
+                      }}
+                      className="text-blue-600 hover:underline text-xs font-medium"
+                    >
+                      Create Now →
+                    </button>
+                  </div>
+                )}
+                {weeklyReminders.friday.overdue && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-yellow-800">
+                      • <strong>Friday</strong> ({weeklyReminders.friday.date}) - "Learn More / CTA" - <span className="text-red-600">Overdue</span>
+                    </span>
+                    <button
+                      onClick={() => {
+                        setPostToEdit({ contentType: 'friday-weekly' });
+                        setComposerOpen(true);
+                      }}
+                      className="text-blue-600 hover:underline text-xs font-medium"
+                    >
+                      Create Now →
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming Posts Info */}
+      {weeklyReminders && (weeklyReminders.monday.status === 'upcoming' || weeklyReminders.wednesday.status === 'upcoming' || weeklyReminders.friday.status === 'upcoming') && (
+        <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg shadow">
+          <div className="flex items-start gap-3">
+            <Calendar className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-900">📅 Upcoming Weekly Posts</h3>
+              <div className="mt-2 space-y-1 text-sm text-blue-800">
+                {weeklyReminders.monday.status === 'upcoming' && (
+                  <div>• <strong>Monday</strong> - Due in {weeklyReminders.monday.daysUntil} days ({weeklyReminders.monday.date})</div>
+                )}
+                {weeklyReminders.wednesday.status === 'upcoming' && (
+                  <div>• <strong>Wednesday</strong> - Due in {weeklyReminders.wednesday.daysUntil} days ({weeklyReminders.wednesday.date})</div>
+                )}
+                {weeklyReminders.friday.status === 'upcoming' && (
+                  <div>• <strong>Friday</strong> - Due in {weeklyReminders.friday.daysUntil} days ({weeklyReminders.friday.date})</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow">

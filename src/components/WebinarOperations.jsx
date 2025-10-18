@@ -1,7 +1,8 @@
 // src/components/WebinarOperations.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Calendar, ChevronRight, MessageSquare, RefreshCw, TrendingUp, Users, X, Download, Mail, Filter } from 'lucide-react';
+import { Calendar, ChevronRight, MessageSquare, RefreshCw, TrendingUp, Users, X, Download, Mail, Filter, Bell, AlertCircle } from 'lucide-react';
 import { fetchWebinars } from '../services/webinarService';
+import { fetchReminders, createWebinarReminder } from '../services/reminderService';
 
 const DATA_QUALITY_CUTOFF = new Date('2025-10-01');
 
@@ -15,6 +16,8 @@ const WebinarOperations = () => {
   const [showLegacyData, setShowLegacyData] = useState(false);
   const [surveyFilterWebinar, setSurveyFilterWebinar] = useState(null);
   const [surveyFilterContactOnly, setSurveyFilterContactOnly] = useState(false);
+  const [reminders, setReminders] = useState(null);
+  const [creatingReminder, setCreatingReminder] = useState(null);
 
   const loadWebinarData = useCallback(async () => {
     try {
@@ -31,9 +34,33 @@ const WebinarOperations = () => {
     }
   }, []);
 
+  const loadReminders = useCallback(async () => {
+    try {
+      const reminderData = await fetchReminders();
+      setReminders(reminderData);
+    } catch (err) {
+      console.warn('Failed to load reminders:', err);
+      setReminders(null);
+    }
+  }, []);
+
   useEffect(() => {
     loadWebinarData();
-  }, [loadWebinarData]);
+    loadReminders();
+  }, [loadWebinarData, loadReminders]);
+
+  const handleCreateReminder = async (webinarId, timing) => {
+    setCreatingReminder(`${webinarId}-${timing}`);
+    try {
+      await createWebinarReminder(webinarId, timing);
+      alert(`✅ Email reminder created! Review the draft in Brevo.`);
+      await loadReminders();
+    } catch (err) {
+      alert(`❌ Failed to create reminder: ${err.message}`);
+    } finally {
+      setCreatingReminder(null);
+    }
+  };
 
   const webinars = useMemo(() => data?.webinars ?? [], [data]);
   const allSurveys = useMemo(() => data?.surveys ?? [], [data]);
@@ -399,7 +426,11 @@ const WebinarOperations = () => {
             <p className="text-gray-500">No upcoming webinars scheduled</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {upcomingWebinars.map((webinar) => (
+              {upcomingWebinars.map((webinar) => {
+                // Find reminder status for this webinar
+                const webinarReminder = reminders?.webinarReminders?.find(r => r.webinarId === webinar.id) || null;
+                
+                return (
                 <div key={`${webinar.id}-${webinar.date}`} className="border border-gray-200 rounded-lg p-6">
                   <h3 className="font-semibold text-gray-900 mb-3">{webinar.title}</h3>
                   <div className="space-y-2 text-sm text-gray-600">
@@ -425,8 +456,95 @@ const WebinarOperations = () => {
                       </span>
                     </div>
                   </div>
+                  
+                  {/* Email Reminder Status */}
+                  {webinarReminder && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Bell size={16} className="text-blue-600" />
+                        <h4 className="font-semibold text-sm text-gray-900">Email Reminders</h4>
+                      </div>
+                      <div className="space-y-1 text-xs">
+                        {/* 1 Week Reminder */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">1 Week Before:</span>
+                          {webinarReminder.reminders.oneWeek.status === 'draft-created' ? (
+                            <a 
+                              href={webinarReminder.reminders.oneWeek.dashboardLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:underline"
+                            >
+                              ✅ Draft created
+                            </a>
+                          ) : webinarReminder.reminders.oneWeek.status === 'overdue' ? (
+                            <button
+                              onClick={() => handleCreateReminder(webinar.id, '1week')}
+                              disabled={creatingReminder === `${webinar.id}-1week`}
+                              className="text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              {creatingReminder === `${webinar.id}-1week` ? 'Creating...' : '❌ Create Now'}
+                            </button>
+                          ) : (
+                            <span className="text-gray-500">⏰ Due {new Date(webinarReminder.reminders.oneWeek.dueDate).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                        
+                        {/* 1 Day Reminder */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">1 Day Before:</span>
+                          {webinarReminder.reminders.oneDay.status === 'draft-created' ? (
+                            <a 
+                              href={webinarReminder.reminders.oneDay.dashboardLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:underline"
+                            >
+                              ✅ Draft created
+                            </a>
+                          ) : webinarReminder.reminders.oneDay.status === 'overdue' ? (
+                            <button
+                              onClick={() => handleCreateReminder(webinar.id, '1day')}
+                              disabled={creatingReminder === `${webinar.id}-1day`}
+                              className="text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              {creatingReminder === `${webinar.id}-1day` ? 'Creating...' : '❌ Create Now'}
+                            </button>
+                          ) : (
+                            <span className="text-gray-500">⏰ Due {new Date(webinarReminder.reminders.oneDay.dueDate).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                        
+                        {/* 1 Hour Reminder */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">1 Hour Before:</span>
+                          {webinarReminder.reminders.oneHour.status === 'draft-created' ? (
+                            <a 
+                              href={webinarReminder.reminders.oneHour.dashboardLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600 hover:underline"
+                            >
+                              ✅ Draft created
+                            </a>
+                          ) : webinarReminder.reminders.oneHour.status === 'overdue' ? (
+                            <button
+                              onClick={() => handleCreateReminder(webinar.id, '1hour')}
+                              disabled={creatingReminder === `${webinar.id}-1hour`}
+                              className="text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              {creatingReminder === `${webinar.id}-1hour` ? 'Creating...' : '❌ Create Now'}
+                            </button>
+                          ) : (
+                            <span className="text-gray-500">⏰ Due {new Date(webinarReminder.reminders.oneHour.dueDate).toLocaleDateString()}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
