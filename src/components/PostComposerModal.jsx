@@ -312,16 +312,16 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
           </div>
 
           {/* Webinar Post Helper */}
-          {(formData.contentType === 'webinar' || initialPost?.contentType?.includes('webinar')) && (
+          {(formData.contentType === 'webinar' || (typeof initialPost?.contentType === 'string' && initialPost.contentType.includes('webinar'))) && (
             <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-300 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <Calendar size={24} className="text-purple-600 flex-shrink-0" />
                 <div className="flex-1">
                   <h3 className="font-semibold text-purple-900 mb-2">
                     🎥 Webinar Social Post Tips
-                    {initialPost?.webinarTitle && (
+                    {initialPost?.webinarTitle && typeof initialPost.webinarTitle === 'string' && (
                       <span className="block text-sm font-normal text-purple-700 mt-1">
-                        For: {initialPost.webinarTitle} ({initialPost.webinarDate} at {initialPost.webinarTime})
+                        For: {initialPost.webinarTitle} ({initialPost.webinarDate || 'TBA'} at {initialPost.webinarTime || 'TBA'})
                       </span>
                     )}
                   </h3>
