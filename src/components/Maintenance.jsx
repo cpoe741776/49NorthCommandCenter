@@ -380,29 +380,135 @@ const Maintenance = () => {
             </div>
 
             {/* Token Renewal Instructions */}
-            {status.tokenHealth && (!status.tokenHealth.linkedin?.valid || !status.tokenHealth.facebook?.valid) && (
-              <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded p-4">
-                <h4 className="font-semibold text-yellow-900 mb-2">🔧 Token Renewal Needed</h4>
-                <div className="text-sm text-yellow-800 space-y-1">
-                  {!status.tokenHealth.linkedin?.valid && (
-                    <div>
-                      • <strong>LinkedIn:</strong> Run{' '}
-                      <code className="bg-yellow-100 px-1 rounded">/.netlify/functions/linkedinOAuthHelper</code>{' '}
-                      to generate a new token
-                    </div>
-                  )}
-                  {!status.tokenHealth.facebook?.valid && (
-                    <div>
-                      • <strong>Facebook:</strong> Visit{' '}
-                      <a href="https://developers.facebook.com/tools/explorer" target="_blank" rel="noopener noreferrer" className="underline">
-                        Graph API Explorer
-                      </a>{' '}
-                      to generate a new token
-                    </div>
+            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-3">🔧 Token Renewal Instructions</h4>
+              
+              {/* LinkedIn */}
+              <div className="mb-4 pb-4 border-b border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-blue-900">LinkedIn Access Token</div>
+                  {status.tokenHealth?.linkedin?.valid ? (
+                    <span className="text-green-600 text-sm">✅ Valid</span>
+                  ) : (
+                    <span className="text-red-600 text-sm">❌ Expired</span>
                   )}
                 </div>
+                <div className="text-sm text-blue-800 space-y-2">
+                  <p><strong>1.</strong> Click button below to start OAuth flow</p>
+                  <p><strong>2.</strong> Authorize 49 North on LinkedIn</p>
+                  <p><strong>3.</strong> Copy the access token shown</p>
+                  <p><strong>4.</strong> Add to Netlify: <code className="bg-blue-100 px-1 rounded text-xs">LINKEDIN_ACCESS_TOKEN</code></p>
+                  <p><strong>5.</strong> Redeploy site</p>
+                  <a
+                    href="/.netlify/functions/linkedinOAuthHelper"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Renew LinkedIn Token →
+                  </a>
+                </div>
               </div>
-            )}
+
+              {/* Facebook */}
+              <div className="mb-4 pb-4 border-b border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-blue-900">Facebook Page Token</div>
+                  {status.tokenHealth?.facebook?.valid ? (
+                    <span className="text-green-600 text-sm">✅ Valid</span>
+                  ) : (
+                    <span className="text-red-600 text-sm">❌ Invalid</span>
+                  )}
+                </div>
+                <div className="text-sm text-blue-800 space-y-2">
+                  <p><strong>1.</strong> Visit Facebook Graph API Explorer</p>
+                  <p><strong>2.</strong> Select your Page from dropdown</p>
+                  <p><strong>3.</strong> Add permissions: <code className="bg-blue-100 px-1 rounded text-xs">pages_manage_posts, pages_read_engagement</code></p>
+                  <p><strong>4.</strong> Click "Generate Access Token"</p>
+                  <p><strong>5.</strong> Add to Netlify: <code className="bg-blue-100 px-1 rounded text-xs">FACEBOOK_PAGE_ACCESS_TOKEN</code></p>
+                  <a
+                    href="https://developers.facebook.com/tools/explorer"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Open Graph API Explorer →
+                  </a>
+                </div>
+              </div>
+
+              {/* Google */}
+              <div className="mb-4 pb-4 border-b border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-blue-900">Google Service Account</div>
+                  {status.tokenHealth?.google?.valid ? (
+                    <span className="text-green-600 text-sm">✅ Valid</span>
+                  ) : (
+                    <span className="text-red-600 text-sm">❌ Invalid</span>
+                  )}
+                </div>
+                <div className="text-sm text-blue-800">
+                  <p>Service Account credentials don't expire. If invalid, check:</p>
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>Netlify has <code className="bg-blue-100 px-1 rounded text-xs">GOOGLE_CLIENT_EMAIL</code></li>
+                    <li>Netlify has <code className="bg-blue-100 px-1 rounded text-xs">GOOGLE_PRIVATE_KEY</code></li>
+                    <li>Key is properly formatted (includes BEGIN/END markers)</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Brevo */}
+              <div className="mb-4 pb-4 border-b border-blue-200">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-blue-900">Brevo API Key</div>
+                  {status.tokenHealth?.brevo?.valid ? (
+                    <span className="text-green-600 text-sm">✅ Valid</span>
+                  ) : (
+                    <span className="text-red-600 text-sm">❌ Invalid</span>
+                  )}
+                </div>
+                <div className="text-sm text-blue-800 space-y-2">
+                  <p><strong>1.</strong> Log in to Brevo dashboard</p>
+                  <p><strong>2.</strong> Go to Settings → API Keys</p>
+                  <p><strong>3.</strong> Generate new API key</p>
+                  <p><strong>4.</strong> Add to Netlify: <code className="bg-blue-100 px-1 rounded text-xs">BREVO_API_KEY</code></p>
+                  <a
+                    href="https://app.brevo.com/settings/keys/api"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Open Brevo API Keys →
+                  </a>
+                </div>
+              </div>
+
+              {/* WordPress */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-blue-900">WordPress Application Password</div>
+                  {status.tokenHealth?.wordpress?.valid ? (
+                    <span className="text-green-600 text-sm">✅ Valid</span>
+                  ) : (
+                    <span className="text-red-600 text-sm">❌ Invalid</span>
+                  )}
+                </div>
+                <div className="text-sm text-blue-800 space-y-2">
+                  <p><strong>1.</strong> Log in to WordPress admin</p>
+                  <p><strong>2.</strong> Go to Users → Profile → Application Passwords</p>
+                  <p><strong>3.</strong> Create new application password</p>
+                  <p><strong>4.</strong> Add to Netlify: <code className="bg-blue-100 px-1 rounded text-xs">WP_APPLICATION_PASSWORD</code></p>
+                  <a
+                    href="https://mymentalarmor.com/wp-admin/profile.php"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Open WordPress Profile →
+                  </a>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
