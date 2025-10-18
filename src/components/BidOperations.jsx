@@ -37,6 +37,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const [loadingDisregarded, setLoadingDisregarded] = useState(false);
 
   const [selectedBidForModal, setSelectedBidForModal] = useState(null);
+  const [pendingStatusChanges, setPendingStatusChanges] = useState(new Map()); // bidId -> newStatus
+  const [updatingBids, setUpdatingBids] = useState(new Set()); // bidIds currently updating
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -58,17 +60,58 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
 
   const handleStatusChange = useCallback(async (bidId, status) => {
     try {
+      // Mark as updating
+      setUpdatingBids(prev => new Set(prev).add(bidId));
+      
+      // Optimistic update
+      setPendingStatusChanges(prev => new Map(prev).set(bidId, status));
+      
       const response = await fetch(
         '/.netlify/functions/updateBidStatus',
         withAuthHeaders({ method: 'POST' }, { bidId, status })
       );
+      
       if (!response.ok) throw new Error('Failed to update bid status');
       const result = await response.json();
-      alert(`Success! ${result.message}`);
-      await onRefresh?.();
+      
+      // Success - remove from pending and updating
+      setPendingStatusChanges(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(bidId);
+        return newMap;
+      });
+      setUpdatingBids(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bidId);
+        return newSet;
+      });
+      
+      // Show success message briefly
+      const successMsg = document.createElement('div');
+      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse';
+      successMsg.textContent = `✅ ${result.message || 'Status updated!'}`;
+      document.body.appendChild(successMsg);
+      setTimeout(() => successMsg.remove(), 3000);
+      
+      // Refresh after short delay to get fresh data
+      setTimeout(() => onRefresh?.(), 1000);
+      
     } catch (err) {
       console.error('Error updating bid status:', err);
-      alert('Error: Failed to update bid status');
+      
+      // Rollback optimistic update on error
+      setPendingStatusChanges(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(bidId);
+        return newMap;
+      });
+      setUpdatingBids(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(bidId);
+        return newSet;
+      });
+      
+      alert('❌ Error: Failed to update bid status');
     }
   }, [onRefresh]);
 
@@ -105,17 +148,67 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         }
       }
 
+      // Mark all as updating
+      setUpdatingBids(prev => {
+        const newSet = new Set(prev);
+        selectedBids.forEach(id => newSet.add(id));
+        return newSet;
+      });
+
+      // Optimistic updates
+      setPendingStatusChanges(prev => {
+        const newMap = new Map(prev);
+        selectedBids.forEach(id => newMap.set(id, status));
+        return newMap;
+      });
+
       const res = await fetch('/.netlify/functions/updateBidStatus', withAuthHeaders({ method: 'POST' }, { bidIds: selectedBids, status, ...(dueDate ? { dueDate } : {}) }));
       const data = await res.json();
+      
       if (!res.ok || data.success === false) {
         throw new Error(data.error || 'Bulk action failed');
       }
-      alert(`Bulk action complete! Updated ${data.ok || selectedBids.length}/${data.total || selectedBids.length}.`);
+
+      // Success - clear pending changes
+      setPendingStatusChanges(prev => {
+        const newMap = new Map(prev);
+        selectedBids.forEach(id => newMap.delete(id));
+        return newMap;
+      });
+      setUpdatingBids(prev => {
+        const newSet = new Set(prev);
+        selectedBids.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+
+      // Show success message
+      const successMsg = document.createElement('div');
+      successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse';
+      successMsg.textContent = `✅ Updated ${data.ok || selectedBids.length}/${data.total || selectedBids.length} bids`;
+      document.body.appendChild(successMsg);
+      setTimeout(() => successMsg.remove(), 3000);
+
       setSelectedBids([]);
-      await onRefresh?.();
+      
+      // Refresh after delay
+      setTimeout(() => onRefresh?.(), 1000);
+      
     } catch (e) {
       console.error('Bulk action error:', e);
-      alert('Error performing bulk action');
+      
+      // Rollback optimistic updates
+      setPendingStatusChanges(prev => {
+        const newMap = new Map(prev);
+        selectedBids.forEach(id => newMap.delete(id));
+        return newMap;
+      });
+      setUpdatingBids(prev => {
+        const newSet = new Set(prev);
+        selectedBids.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+      
+      alert('❌ Error performing bulk action');
     }
   }, [selectedBids, onRefresh, bids, submittedBids]);
 
@@ -239,6 +332,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                     onToggleSelect={handleToggleSelect}
                     onSystemClick={handleSystemClick}
                     onCardClick={setSelectedBidForModal}
+                    isUpdating={updatingBids.has(bid.id)}
+                    pendingStatus={pendingStatusChanges.get(bid.id)}
                   />
                 ))}
                 {hasMoreRespond && (
@@ -278,6 +373,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                     onToggleSelect={handleToggleSelect}
                     onSystemClick={handleSystemClick}
                     onCardClick={setSelectedBidForModal}
+                    isUpdating={updatingBids.has(bid.id)}
+                    pendingStatus={pendingStatusChanges.get(bid.id)}
                   />
                 ))}
                 {hasMoreGatherInfo && (
@@ -312,6 +409,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
                     onToggleSelect={handleToggleSelect}
                     onSystemClick={handleSystemClick}
                     onCardClick={setSelectedBidForModal}
+                    isUpdating={updatingBids.has(bid.id)}
+                    pendingStatus={pendingStatusChanges.get(bid.id)}
                   />
                 ))}
                 {hasMoreSubmitted && (
