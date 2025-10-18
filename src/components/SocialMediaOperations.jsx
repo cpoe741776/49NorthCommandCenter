@@ -162,7 +162,7 @@ const SocialMediaOperations = () => {
       </div>
 
       {/* Weekly Post Reminders */}
-      {weeklyReminders && (weeklyReminders.monday.overdue || weeklyReminders.wednesday.overdue || weeklyReminders.friday.overdue) && (
+      {weeklyReminders && weeklyReminders.monday && weeklyReminders.wednesday && weeklyReminders.friday && (weeklyReminders.monday.overdue || weeklyReminders.wednesday.overdue || weeklyReminders.friday.overdue) && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow">
           <div className="flex items-start gap-3">
             <AlertCircle className="text-yellow-600 flex-shrink-0 mt-0.5" size={20} />
@@ -227,7 +227,7 @@ const SocialMediaOperations = () => {
       )}
 
       {/* Upcoming Posts Info */}
-      {weeklyReminders && (weeklyReminders.monday.status === 'upcoming' || weeklyReminders.wednesday.status === 'upcoming' || weeklyReminders.friday.status === 'upcoming') && (
+      {weeklyReminders && weeklyReminders.monday && weeklyReminders.wednesday && weeklyReminders.friday && (weeklyReminders.monday.status === 'upcoming' || weeklyReminders.wednesday.status === 'upcoming' || weeklyReminders.friday.status === 'upcoming') && (
         <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg shadow">
           <div className="flex items-start gap-3">
             <Calendar className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
