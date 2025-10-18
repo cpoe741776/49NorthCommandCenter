@@ -1,6 +1,6 @@
 // src/components/WebinarOperations.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Calendar, ChevronRight, MessageSquare, RefreshCw, TrendingUp, Users, X, Download, Mail, Filter, Bell, AlertCircle } from 'lucide-react';
+import { Calendar, ChevronRight, MessageSquare, RefreshCw, TrendingUp, Users, X, Download, Mail, Filter, Bell } from 'lucide-react';
 import { fetchWebinars } from '../services/webinarService';
 import { fetchReminders, createWebinarReminder } from '../services/reminderService';
 
