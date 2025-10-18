@@ -179,21 +179,78 @@ async function publishToLinkedIn(postData) {
   const ORG_URN = process.env.LINKEDIN_ORG_URN || LI_ORG_URN;
   if (!LI_TOKEN) throw new Error('LinkedIn token not configured');
 
+  let assetUrn = null;
+
+  // If image URL provided, upload it as a native LinkedIn image
+  if (postData.imageUrl) {
+    try {
+      // Step 1: Register the upload
+      const registerRes = await fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${LI_TOKEN}`,
+          'Content-Type': 'application/json',
+          'X-Restli-Protocol-Version': '2.0.0'
+        },
+        body: JSON.stringify({
+          registerUploadRequest: {
+            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+            owner: ORG_URN,
+            serviceRelationships: [{
+              relationshipType: 'OWNER',
+              identifier: 'urn:li:userGeneratedContent'
+            }]
+          }
+        })
+      });
+
+      if (registerRes.ok) {
+        const registerData = await registerRes.json();
+        const uploadUrl = registerData.value?.uploadMechanism?.['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']?.uploadUrl;
+        assetUrn = registerData.value?.asset;
+
+        if (uploadUrl && assetUrn) {
+          // Step 2: Fetch and upload the image
+          const imageRes = await fetch(postData.imageUrl);
+          if (imageRes.ok) {
+            const imageBuffer = await imageRes.arrayBuffer();
+            
+            const uploadRes = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${LI_TOKEN}`,
+                'Content-Type': 'application/octet-stream'
+              },
+              body: Buffer.from(imageBuffer)
+            });
+
+            if (!uploadRes.ok) {
+              console.warn('LinkedIn image upload failed:', await uploadRes.text());
+              assetUrn = null; // Fall back to text-only post
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('LinkedIn image upload error:', err.message);
+      // Continue with text-only post
+    }
+  }
+
   // Build the share content
   const shareContent = {
-    shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() },
-    shareMediaCategory: 'NONE'
+    shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() }
   };
 
-  // If image URL provided, add it as an article with thumbnail
-  if (postData.imageUrl) {
-    shareContent.shareMediaCategory = 'ARTICLE';
+  // Add image if we successfully uploaded it
+  if (assetUrn) {
+    shareContent.shareMediaCategory = 'IMAGE';
     shareContent.media = [{
       status: 'READY',
-      description: { text: postData.body || '' },
-      originalUrl: postData.imageUrl,
-      title: { text: postData.title || '' }
+      media: assetUrn
     }];
+  } else {
+    shareContent.shareMediaCategory = 'NONE';
   }
 
   // Use the stable v2 ugcPosts API
@@ -223,7 +280,7 @@ async function publishToLinkedIn(postData) {
   }
   
   const out = await res.json();
-  return { postId: out.id };
+  return { postId: out.id, uploadedImage: !!assetUrn };
 }
 
 async function publishToWordPress(postData) {
