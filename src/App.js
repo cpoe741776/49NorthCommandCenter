@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense, lazy } from 'react';
-import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2, Activity } from 'lucide-react';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
@@ -14,6 +14,7 @@ const WebinarOperations = lazy(() => import('./components/WebinarOperations'));
 const SocialMediaOperations = lazy(() => import('./components/SocialMediaOperations'));
 const BidSystemsManager = lazy(() => import('./components/BidSystemsManager'));
 const CompanyDataVault = lazy(() => import('./components/CompanyDataVault'));
+const Maintenance = lazy(() => import('./components/Maintenance'));
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -22,6 +23,7 @@ const navItems = [
   { id: 'social', label: 'Social Media', icon: Share2 },
   { id: 'bid-systems', label: 'Bid Systems', icon: Database },
   { id: 'company-data', label: 'Company Data', icon: Building2 },
+  { id: 'maintenance', label: 'Maintenance', icon: Activity },
 ];
 
 const App = () => {
@@ -273,6 +275,8 @@ const App = () => {
         return <BidSystemsManager allBids={[...bids, ...submittedBids]} />;
       case 'company-data':
         return <CompanyDataVault />;
+      case 'maintenance':
+        return <Maintenance />;
       default:
         return (
           <Dashboard

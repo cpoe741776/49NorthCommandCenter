@@ -9,7 +9,8 @@ import {
   RefreshCw,
   Mail,
   Newspaper,
-  Bell
+  Bell,
+  AlertTriangle
 } from 'lucide-react';
 import { 
   fetchBidsAnalysis, 
@@ -46,6 +47,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   });
   const [showAllNews, setShowAllNews] = useState(false);
   const [reminderSummary, setReminderSummary] = useState(null);
+  const [maintenanceAlerts, setMaintenanceAlerts] = useState(null);
 
   // Load reminders
   const loadReminders = useCallback(async () => {
@@ -57,9 +59,27 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     }
   }, []);
 
+  const loadMaintenanceAlerts = useCallback(async () => {
+    try {
+      const res = await fetch('/.netlify/functions/getMaintenanceStatus');
+      const data = await res.json();
+      if (data.success) {
+        setMaintenanceAlerts({
+          hasIssues: data.disregardsToArchive > 0 || data.socialPostsToArchive > 0 || 
+                     data.oldDrafts > 0 || data.orphanedReminders > 0 ||
+                     !data.tokenHealth?.linkedin?.valid || !data.tokenHealth?.facebook?.valid,
+          total: data.disregardsToArchive + data.socialPostsToArchive + data.oldDrafts + data.orphanedReminders
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load maintenance alerts:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadReminders();
-  }, [loadReminders]);
+    loadMaintenanceAlerts();
+  }, [loadReminders, loadMaintenanceAlerts]);
 
   // Individual section loaders - only load cached data on mount, refresh on button click
   const loadBidsAnalysis = useCallback(async (bypassCache = false) => {
@@ -111,11 +131,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       const data = await fetchNewsAnalysis(bypassCache);
       setAiInsights(prev => ({ ...prev, news: data }));
       setLastRefresh(prev => ({ ...prev, news: new Date() }));
-    } catch (err) {
+      } catch (err) {
       setAiError(prev => ({ ...prev, news: err?.message || 'Failed to load news analysis' }));
-    } finally {
+      } finally {
       setAiLoading(prev => ({ ...prev, news: false }));
-    }
+      }
   }, []);
 
   // Initial load - only load cached data, no auto-refresh
@@ -180,6 +200,27 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         <h1 className="text-3xl font-bold text-gray-900">Command Center</h1>
         <p className="text-gray-600 mt-1">49 North Business Operations Dashboard</p>
       </div>
+
+      {/* Maintenance Alert Banner */}
+      {maintenanceAlerts?.hasIssues && (
+        <div 
+          onClick={() => onNavigate('maintenance')}
+          className="bg-gradient-to-r from-yellow-50 to-orange-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="text-yellow-600 flex-shrink-0 mt-0.5" size={24} />
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-900">⚠️ Maintenance Recommended</h3>
+              <p className="text-sm text-yellow-800 mt-1">
+                {maintenanceAlerts.total} items need attention (archival, cleanup, or token renewal)
+              </p>
+              <button className="text-yellow-700 hover:text-yellow-900 text-sm font-medium mt-2 underline">
+                Go to Maintenance →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -336,8 +377,8 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
       <div className="space-y-6">
         {/* Bids Analysis Section */}
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow-lg border border-blue-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
               <FileText className="text-blue-600" size={24} />
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Bids Analysis</h2>
@@ -347,20 +388,20 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                   </p>
                 )}
               </div>
-            </div>
-            <button
+          </div>
+          <button
               onClick={() => loadBidsAnalysis(true)}
               disabled={aiLoading.bids}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
-            >
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50 text-sm"
+          >
               <RefreshCw size={16} className={aiLoading.bids ? 'animate-spin' : ''} />
               {aiLoading.bids ? 'Analyzing...' : 'Refresh Analysis'}
-            </button>
-          </div>
+          </button>
+        </div>
 
           {aiLoading.bids && (
             <div className="flex items-center justify-center py-8">
-              <div className="text-center">
+            <div className="text-center">
                 <RefreshCw className="animate-spin text-blue-600 mx-auto mb-2" size={24} />
                 <p className="text-gray-600">Analyzing bids data...</p>
             </div>
@@ -405,9 +446,9 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             )}
 
               {Array.isArray(aiInsights.bids.priorityBids) && aiInsights.bids.priorityBids.length > 0 && (
-                <div className="bg-white rounded-lg p-4 border border-blue-200">
+              <div className="bg-white rounded-lg p-4 border border-blue-200">
                   <h3 className="font-semibold text-gray-900 mb-3">Top 5 Priority Bids</h3>
-                  <div className="space-y-2">
+                <div className="space-y-2">
                     {aiInsights.bids.priorityBids.slice(0, 5).map((bid, idx) => (
                       <div key={idx} className="border border-gray-200 rounded p-3 hover:border-blue-400 transition-colors cursor-pointer" onClick={() => onNavigate('bids')}>
                         <div className="flex items-start justify-between">
@@ -521,8 +562,8 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                                   {lead.factors.map((factor, factorIdx) => (
                                     <span key={factorIdx} className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs">
                                       {factor}
-                                    </span>
-                                  ))}
+                                  </span>
+                                ))}
                                 </div>
                               </div>
                             )}
@@ -533,9 +574,9 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                         </div>
                       </div>
                     ))}
-                  </div>
                 </div>
-              )}
+              </div>
+            )}
             </div>
           )}
         </div>
@@ -637,16 +678,16 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
               <RefreshCw size={16} className={aiLoading.news ? 'animate-spin' : ''} />
               {aiLoading.news ? 'Analyzing...' : 'Refresh Analysis'}
             </button>
-          </div>
+                      </div>
 
           {aiLoading.news && (
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <RefreshCw className="animate-spin text-orange-600 mx-auto mb-2" size={24} />
                 <p className="text-gray-600">Analyzing news data...</p>
-              </div>
-            </div>
-          )}
+                  </div>
+                </div>
+              )}
 
           {aiError.news && (
             <div className="bg-red-50 border border-red-200 rounded p-4">
@@ -670,8 +711,8 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                       <div key={idx} className="border border-gray-200 rounded p-3 hover:border-orange-400 transition-colors">
                         <a href={article.link} target="_blank" rel="noopener noreferrer" className="block">
                           <h4 className="font-semibold text-gray-900 hover:text-orange-600 transition-colors mb-2">
-                            {article.title}
-                          </h4>
+                          {article.title}
+                        </h4>
                           <div className="flex items-center gap-3 text-xs text-gray-500">
                             <span className="px-2 py-1 bg-orange-50 text-orange-700 rounded">
                               {article.source}
@@ -686,12 +727,12 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                               <span className="px-2 py-1 bg-red-50 text-red-700 rounded font-medium">
                                 Recent
                               </span>
-                            )}
-                          </div>
-                        </a>
-                      </div>
-                    ))}
-                  </div>
+                          )}
+                        </div>
+                      </a>
+                    </div>
+                  ))}
+                </div>
                   {aiInsights.news.articles.length > 5 && (
                     <div className="mt-4 text-center">
                       <button
@@ -702,10 +743,10 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                       </button>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
       </div>
 
