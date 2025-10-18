@@ -11,8 +11,8 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const CFG = {
   OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '3000', 10),
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '12000', 10),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '2000', 10),
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
 };
 
@@ -214,15 +214,29 @@ exports.handler = async (event, context) => {
     // AI analysis
     const aiInsights = await getSocialAIInsights(socialDataForAI);
 
+    // Fallback if AI times out or fails
+    const finalInsights = aiInsights || {
+      executiveSummary: 'AI analysis timed out. Basic metrics shown below.',
+      topPriorities: [
+        { title: 'Review recent post performance', action: 'Check platform distribution and engagement', urgency: 'medium' }
+      ],
+      contentInsights: {
+        topPerforming: 'Unable to analyze - AI timeout',
+        suggestions: 'Try refreshing analysis or check OpenAI API limits'
+      },
+      platformRecommendations: []
+    };
+
     return ok(headers, {
-      ...aiInsights,
+      ...finalInsights,
       timestamp: new Date().toISOString(),
       summary: socialDataForAI.summary,
       platformDistribution: socialDataForAI.platformDistribution,
       contentTypeDistribution: socialDataForAI.contentTypeDistribution,
       recentPosts: socialDataForAI.recentPosts,
       processingTime: `${Date.now() - started}ms`,
-      section: 'social'
+      section: 'social',
+      aiTimeout: !aiInsights
     });
 
   } catch (e) {
