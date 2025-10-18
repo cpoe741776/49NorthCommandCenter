@@ -179,15 +179,29 @@ async function publishToLinkedIn(postData) {
   const ORG_URN = process.env.LINKEDIN_ORG_URN || LI_ORG_URN;
   if (!LI_TOKEN) throw new Error('LinkedIn token not configured');
 
+  // Build the share content
+  const shareContent = {
+    shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() },
+    shareMediaCategory: 'NONE'
+  };
+
+  // If image URL provided, add it as an article with thumbnail
+  if (postData.imageUrl) {
+    shareContent.shareMediaCategory = 'ARTICLE';
+    shareContent.media = [{
+      status: 'READY',
+      description: { text: postData.body || '' },
+      originalUrl: postData.imageUrl,
+      title: { text: postData.title || '' }
+    }];
+  }
+
   // Use the stable v2 ugcPosts API
   const payload = {
     author: ORG_URN,
     lifecycleState: 'PUBLISHED',
     specificContent: {
-      'com.linkedin.ugc.ShareContent': {
-        shareCommentary: { text: `${postData.title || ''}\n\n${postData.body || ''}`.trim() },
-        shareMediaCategory: 'NONE'
-      }
+      'com.linkedin.ugc.ShareContent': shareContent
     },
     visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' }
   };
