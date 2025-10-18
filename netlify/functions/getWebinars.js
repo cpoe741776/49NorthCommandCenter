@@ -1,6 +1,11 @@
 // netlify/functions/getWebinars.js
 const { google } = require('googleapis');
 
+// In-memory cache (3 minute TTL)
+let cache = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -17,6 +22,14 @@ exports.handler = async (event) => {
   }
 
   try {
+    // Check cache first
+    const now = Date.now();
+    if (cache && (now - cacheTimestamp) < CACHE_TTL_MS) {
+      console.log('[Webinars] Returning cached data (age: ' + Math.round((now - cacheTimestamp) / 1000) + 's)');
+      return { statusCode: 200, headers, body: JSON.stringify({ ...cache, cached: true }) };
+    }
+
+    console.log('[Webinars] Cache miss or expired, fetching fresh data...');
     const spreadsheetId = process.env.WEBINAR_SHEET_ID;
     if (!spreadsheetId) {
       return { statusCode: 200, headers, body: JSON.stringify({ success: true, webinars: [], surveys: [], registrations: [], summary: { totalWebinars: 0, completedCount: 0, upcomingCount: 0, totalRegistrations: 0, totalAttendance: 0, avgAttendance: 0, totalSurveys: 0, surveyResponseRate: 0 } }) };
@@ -134,10 +147,17 @@ exports.handler = async (event) => {
       surveyResponseRate: totalAttendance > 0 ? Math.round((surveys.length / totalAttendance) * 100) : 0,
     };
 
+    const response = { success: true, webinars, surveys, registrations, summary };
+
+    // Cache the response
+    cache = response;
+    cacheTimestamp = Date.now();
+    console.log('[Webinars] Data cached for 3 minutes');
+
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, webinars, surveys, registrations, summary }),
+      body: JSON.stringify(response),
     };
   } catch (error) {
     console.error('getWebinars error:', error);

@@ -8,6 +8,11 @@ const { loadServiceAccount } = require('./_utils/google');
 const WEBINAR_SHEET_ID = process.env.WEBINAR_SHEET_ID;
 const SOCIAL_SHEET_ID = process.env.SOCIAL_MEDIA_SHEET_ID;
 
+// In-memory cache (5 minute TTL)
+let cache = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 // Get ISO week number
 function getWeekNumber(date) {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -40,6 +45,14 @@ exports.handler = async (event) => {
   if (guard) return guard;
 
   try {
+    // Check cache first
+    const now = Date.now();
+    if (cache && (now - cacheTimestamp) < CACHE_TTL_MS) {
+      console.log('[Reminders] Returning cached data (age: ' + Math.round((now - cacheTimestamp) / 1000) + 's)');
+      return ok(headers, { ...cache, cached: true });
+    }
+
+    console.log('[Reminders] Cache miss or expired, fetching fresh data...');
     const credentials = loadServiceAccount();
     const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
     const sheets = google.sheets({ version: 'v4', auth });
@@ -250,13 +263,20 @@ exports.handler = async (event) => {
     // Calculate total pending (emails + weekly social + webinar social)
     summary.totalPending = summary.overdueWebinarEmails + summary.missingSocialPosts.length + summary.overdueWebinarSocialPosts;
 
-    return ok(headers, {
+    const response = {
       success: true,
       webinarReminders,
       weeklyReminders,
       summary,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    // Cache the response
+    cache = response;
+    cacheTimestamp = Date.now();
+    console.log('[Reminders] Data cached for 5 minutes');
+
+    return ok(headers, response);
 
   } catch (e) {
     console.error('getReminders error:', e);

@@ -1,6 +1,11 @@
 // netlify/functions/getSocialPosts.js
 const { google } = require('googleapis');
 
+// In-memory cache (3 minute TTL)
+let cache = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -13,6 +18,21 @@ exports.handler = async (event) => {
   }
 
   try {
+    // Check cache first (ignore filters for simplicity - cache all posts)
+    const now = Date.now();
+    const url = new URL(event.rawUrl || `http://x${event.path}${event.rawQuery ? '?' + event.rawQuery : ''}`);
+    const statusFilter = (url.searchParams.get('status') || '').trim();
+    const limitParam = parseInt(url.searchParams.get('limit') || '0', 10);
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 0;
+    
+    // Use cache if no filters and fresh
+    if (!statusFilter && !limit && cache && (now - cacheTimestamp) < CACHE_TTL_MS) {
+      console.log('[SocialContent] Returning cached data (age: ' + Math.round((now - cacheTimestamp) / 1000) + 's)');
+      return { statusCode: 200, headers, body: JSON.stringify({ ...cache, cached: true }) };
+    }
+
+    console.log('[SocialContent] Cache miss or expired, fetching fresh data...');
+    
     // Use shared credential loader
     const { loadServiceAccount } = require('./_utils/google');
     const credentials = loadServiceAccount();
@@ -26,15 +46,9 @@ exports.handler = async (event) => {
     const spreadsheetId = process.env.SOCIAL_MEDIA_SHEET_ID;
     if (!spreadsheetId) throw new Error('SOCIAL_MEDIA_SHEET_ID not configured');
 
-    // Parse optional filters
-    const url = new URL(event.rawUrl || `http://x${event.path}${event.rawQuery ? '?' + event.rawQuery : ''}`);
-    const statusFilter = (url.searchParams.get('status') || '').trim(); // e.g. Draft, Scheduled, Published
-    const limitParam = parseInt(url.searchParams.get('limit') || '0', 10);
-    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 0;
-
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'MainPostData!A2:R',
+      range: 'MainPostData!A2:U',
     });
 
     const rows = response.data.values || [];
@@ -59,6 +73,9 @@ exports.handler = async (event) => {
         analytics: get(15),
         createdBy: get(16),
         tags: get(17),
+        purpose: get(18),
+        webinarId: get(19),
+        webinarTitle: get(20),
       };
     });
 
@@ -87,10 +104,19 @@ exports.handler = async (event) => {
       drafts: posts.filter(p => p.status.toLowerCase() === 'draft').length
     };
 
+    const result = { success: true, count: sliced.length, posts: sliced, summary };
+
+    // Cache if no filters
+    if (!statusFilter && !limit) {
+      cache = result;
+      cacheTimestamp = Date.now();
+      console.log('[SocialContent] Data cached for 3 minutes');
+    }
+
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ success: true, count: sliced.length, posts: sliced, summary }),
+      body: JSON.stringify(result),
     };
   } catch (error) {
     console.error('Error fetching social media content:', error);
