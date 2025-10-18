@@ -135,7 +135,7 @@ exports.handler = async (event) => {
       tokenHealth,
       performance,
       cacheStatus,
-      lastRun: status?.lastRun || null,
+      lastRun: null, // Would track this in a maintenance log tab
       nextRecommendedRun: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
       timestamp: new Date().toISOString()
     });
