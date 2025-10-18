@@ -54,16 +54,19 @@ const SocialMediaOperations = () => {
   }, [posts]);
 
   const filtered = useMemo(() => {
+    if (!Array.isArray(posts) || posts.length === 0) return [];
+    
     const ql = q.trim().toLowerCase();
     return posts.filter(p => {
+      if (!p || typeof p !== 'object') return false; // Skip invalid posts
       const matchQ = !ql || [p.title, p.body, p.text].some(v => String(v || '').toLowerCase().includes(ql));
       const matchStatus = status === 'all' || String(p.status || '').toLowerCase() === status.toLowerCase();
-      const plist = (p.platforms || '').split(',').map(s => s.trim());
+      const plist = String(p.platforms || '').split(',').map(s => s.trim());
       const matchPlatform = platform === 'all' || plist.includes(platform);
       return matchQ && matchStatus && matchPlatform;
     }).sort((a, b) => {
-      const ta = Date.parse(a.scheduledDate || a.publishedDate || a.createdAt || 0) || 0;
-      const tb = Date.parse(b.scheduledDate || b.publishedDate || b.createdAt || 0) || 0;
+      const ta = Date.parse(a.scheduledDate || a.publishedDate || a.timestamp || a.createdAt || 0) || 0;
+      const tb = Date.parse(b.scheduledDate || b.publishedDate || b.timestamp || b.createdAt || 0) || 0;
       return tb - ta;
     });
   }, [posts, q, status, platform]);
