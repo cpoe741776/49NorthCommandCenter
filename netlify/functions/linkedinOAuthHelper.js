@@ -22,7 +22,8 @@ exports.handler = async (event) => {
   try {
     // Step 1: Provide authorization URL
     if (step === '1') {
-      const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=w_organization_social`;
+      // Request organization scope explicitly
+      const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=r_organization_social,w_organization_social,rw_organization_admin&state=oauth_${Date.now()}`;
       
       return {
         statusCode: 200,
