@@ -39,6 +39,7 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const [selectedBidForModal, setSelectedBidForModal] = useState(null);
   const [pendingStatusChanges, setPendingStatusChanges] = useState(new Map()); // bidId -> newStatus
   const [updatingBids, setUpdatingBids] = useState(new Set()); // bidIds currently updating
+  const [bulkOperationInProgress, setBulkOperationInProgress] = useState(false);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -135,6 +136,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
     const confirmed = window.confirm(`Are you sure you want to mark ${selectedBids.length} bid(s) as ${status}?`);
     if (!confirmed) return;
 
+    setBulkOperationInProgress(true);
+
     try {
       let dueDate = undefined;
       if (status === 'submitted') {
@@ -209,6 +212,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
       });
       
       alert('❌ Error performing bulk action');
+    } finally {
+      setBulkOperationInProgress(false);
     }
   }, [selectedBids, onRefresh, bids, submittedBids]);
 
@@ -274,6 +279,20 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
 
   return (
     <div className="space-y-6">
+      {/* Bulk Operation Progress Banner */}
+      {bulkOperationInProgress && (
+        <div className="bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 animate-pulse">
+          <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <div>
+            <div className="font-semibold">Processing bulk action...</div>
+            <div className="text-sm text-blue-100">Updating {selectedBids.length} bid{selectedBids.length > 1 ? 's' : ''} - please wait</div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Bid Operations</h1>
