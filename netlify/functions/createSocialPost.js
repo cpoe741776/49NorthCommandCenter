@@ -70,12 +70,15 @@ exports.handler = async (event) => {
       '',                                 // O brevoEmailId
       '',                                 // P analytics
       formData.createdBy || 'system',     // Q createdBy
-      tags                                // R tags
+      tags,                               // R tags
+      formData.purpose || 'general',      // S purpose (reminder tracking)
+      formData.webinarId || '',           // T webinarId (for webinar posts)
+      formData.webinarTitle || ''         // U webinarTitle (for reference)
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: 'MainPostData!A:R',
+      range: 'MainPostData!A:U',
       valueInputOption: 'USER_ENTERED',
       resource: { values: [row] },
     });

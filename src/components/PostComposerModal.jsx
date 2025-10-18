@@ -33,6 +33,7 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
     title: '',
     body: '',
     contentType: 'announcement',
+    purpose: 'general',
     imageUrl: '',
     videoUrl: '',
     platforms: {
@@ -54,10 +55,20 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
         .map(p => p.trim())
         .filter(Boolean);
       
+      // Auto-set purpose based on contentType if provided
+      let autoPurpose = initialPost.purpose || 'general';
+      if (initialPost.contentType === 'monday-weekly') autoPurpose = 'weekly-monday';
+      if (initialPost.contentType === 'wednesday-weekly') autoPurpose = 'weekly-wednesday';
+      if (initialPost.contentType === 'friday-weekly') autoPurpose = 'weekly-friday';
+      if (initialPost.contentType === 'webinar-1week') autoPurpose = 'webinar-1week';
+      if (initialPost.contentType === 'webinar-1day') autoPurpose = 'webinar-1day';
+      if (initialPost.contentType === 'webinar-1hour') autoPurpose = 'webinar-1hour';
+      
       setFormData({
         title: initialPost.title || '',
         body: initialPost.body || initialPost.text || '',
         contentType: initialPost.contentType || 'announcement',
+        purpose: autoPurpose,
         imageUrl: initialPost.imageUrl || '',
         videoUrl: initialPost.videoUrl || '',
         platforms: {
@@ -68,7 +79,11 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
         },
         scheduleDate: '', // Clear schedule date for reused posts
         tags: initialPost.tags || '',
-        createdBy: 'user'
+        createdBy: 'user',
+        webinarId: initialPost.webinarId || '',
+        webinarTitle: initialPost.webinarTitle || '',
+        webinarDate: initialPost.webinarDate || '',
+        webinarTime: initialPost.webinarTime || ''
       });
     } else if (!isOpen) {
       // Reset when modal closes
@@ -207,6 +222,7 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
       title: '',
       body: '',
       contentType: 'announcement',
+      purpose: 'general',
       imageUrl: '',
       videoUrl: '',
       platforms: { Facebook: false, LinkedIn: false, Website: false, Email: false },
@@ -577,6 +593,34 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
                     <option value="custom">Custom</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Post Purpose */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <Tag size={16} className="inline mr-1" />
+                  Post Purpose (Reminder Tracking)
+                </label>
+                <select
+                  value={formData.purpose}
+                  onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="general">General Content (No requirement)</option>
+                  <optgroup label="Weekly Social Posts">
+                    <option value="weekly-monday">📅 Weekly - Monday (Resilience Content)</option>
+                    <option value="weekly-wednesday">📅 Weekly - Wednesday (Follow-up)</option>
+                    <option value="weekly-friday">📅 Weekly - Friday (CTA/Learn More)</option>
+                  </optgroup>
+                  <optgroup label="Webinar Social Posts">
+                    <option value="webinar-1week">🎥 Webinar - 1 Week Before</option>
+                    <option value="webinar-1day">🎥 Webinar - 1 Day Before</option>
+                    <option value="webinar-1hour">🎥 Webinar - 1 Hour Before</option>
+                  </optgroup>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select purpose to track this post against reminder requirements. "General Content" won't fulfill any reminders.
+                </p>
               </div>
 
               {/* Tags */}

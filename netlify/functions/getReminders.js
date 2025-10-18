@@ -69,17 +69,25 @@ exports.handler = async (event) => {
         platformLink: r[4]
       }));
 
-    // Fetch reminder tracking
+    // Fetch reminder tracking AND social posts (needed for purpose checking)
     let reminderRows = [];
+    let socialPosts = [];
     if (SOCIAL_SHEET_ID) {
       try {
-        const reminderRes = await sheets.spreadsheets.values.get({
-          spreadsheetId: SOCIAL_SHEET_ID,
-          range: 'ReminderTracking!A2:L'
-        });
+        const [reminderRes, socialRes] = await Promise.all([
+          sheets.spreadsheets.values.get({
+            spreadsheetId: SOCIAL_SHEET_ID,
+            range: 'ReminderTracking!A2:L'
+          }).catch(() => ({ data: { values: [] } })),
+          sheets.spreadsheets.values.get({
+            spreadsheetId: SOCIAL_SHEET_ID,
+            range: 'MainPostData!A2:U'
+          })
+        ]);
         reminderRows = reminderRes.data.values || [];
+        socialPosts = socialRes.data.values || [];
       } catch (err) {
-        console.warn('ReminderTracking tab not found, creating fresh reminders');
+        console.warn('Failed to fetch reminder/social data:', err.message);
       }
     }
 
@@ -99,6 +107,15 @@ exports.handler = async (event) => {
 
       const findSocialReminder = (type) => {
         return reminderRows.find(r => r[2] === webinar.id && r[1] === `webinar-social-${type}`);
+      };
+
+      // Check if webinar social post exists in MainPostData by purpose AND webinarId
+      const hasWebinarPost = (purpose) => {
+        return socialPosts.some(post => {
+          const postPurpose = post[18] || ''; // Column S
+          const postWebinarId = post[19] || ''; // Column T
+          return postPurpose === purpose && postWebinarId === webinar.id;
+        });
       };
 
       const oneWeekReminder = findReminder('1week');
@@ -140,19 +157,19 @@ exports.handler = async (event) => {
         socialReminders: {
           oneWeek: {
             dueDate: timings.oneWeek.toISOString(),
-            status: oneWeekSocialReminder ? oneWeekSocialReminder[4] : (now > timings.oneWeek ? 'overdue' : 'pending'),
+            status: hasWebinarPost('webinar-1week') ? 'posted' : (now > timings.oneWeek ? 'overdue' : 'pending'),
             postId: oneWeekSocialReminder ? oneWeekSocialReminder[8] : null,
             isPast: now > timings.oneWeek
           },
           oneDay: {
             dueDate: timings.oneDay.toISOString(),
-            status: oneDaySocialReminder ? oneDaySocialReminder[4] : (now > timings.oneDay ? 'overdue' : 'pending'),
+            status: hasWebinarPost('webinar-1day') ? 'posted' : (now > timings.oneDay ? 'overdue' : 'pending'),
             postId: oneDaySocialReminder ? oneDaySocialReminder[8] : null,
             isPast: now > timings.oneDay
           },
           oneHour: {
             dueDate: timings.oneHour.toISOString(),
-            status: oneHourSocialReminder ? oneHourSocialReminder[4] : (now > timings.oneHour ? 'overdue' : 'pending'),
+            status: hasWebinarPost('webinar-1hour') ? 'posted' : (now > timings.oneHour ? 'overdue' : 'pending'),
             postId: oneHourSocialReminder ? oneHourSocialReminder[8] : null,
             isPast: now > timings.oneHour
           }
@@ -160,22 +177,19 @@ exports.handler = async (event) => {
       };
     });
 
-    // Fetch social posts for this week
-    const socialRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SOCIAL_SHEET_ID,
-      range: 'MainPostData!A2:R'
-    });
-
-    const socialPosts = socialRes.data.values || [];
+    // Calculate week dates for weekly reminder checks
     const weekDates = getWeekDates(currentWeek, currentYear);
 
-    // Check if posts exist for Mon/Wed/Fri this week
-    const hasPost = (targetDate) => {
+    // Check if posts exist for Mon/Wed/Fri this week by PURPOSE
+    const hasPost = (targetDate, purpose) => {
       const dateStr = targetDate.toISOString().split('T')[0];
       return socialPosts.some(post => {
         const postDate = new Date(post[0] || post[9] || 0); // timestamp or publishedDate
         const postDateStr = postDate.toISOString().split('T')[0];
-        return postDateStr === dateStr;
+        const postPurpose = post[18] || ''; // Column S (index 18)
+        
+        // Match date AND purpose
+        return postDateStr === dateStr && postPurpose === purpose;
       });
     };
 
@@ -183,20 +197,20 @@ exports.handler = async (event) => {
       currentWeek: `${currentYear}-W${String(currentWeek).padStart(2, '0')}`,
       monday: {
         date: weekDates.monday.toISOString().split('T')[0],
-        status: hasPost(weekDates.monday) ? 'posted' : (now > weekDates.monday ? 'missing' : 'upcoming'),
-        overdue: now > weekDates.monday && !hasPost(weekDates.monday),
+        status: hasPost(weekDates.monday, 'weekly-monday') ? 'posted' : (now > weekDates.monday ? 'missing' : 'upcoming'),
+        overdue: now > weekDates.monday && !hasPost(weekDates.monday, 'weekly-monday'),
         daysUntil: Math.ceil((weekDates.monday - now) / (24 * 60 * 60 * 1000))
       },
       wednesday: {
         date: weekDates.wednesday.toISOString().split('T')[0],
-        status: hasPost(weekDates.wednesday) ? 'posted' : (now > weekDates.wednesday ? 'missing' : 'upcoming'),
-        overdue: now > weekDates.wednesday && !hasPost(weekDates.wednesday),
+        status: hasPost(weekDates.wednesday, 'weekly-wednesday') ? 'posted' : (now > weekDates.wednesday ? 'missing' : 'upcoming'),
+        overdue: now > weekDates.wednesday && !hasPost(weekDates.wednesday, 'weekly-wednesday'),
         daysUntil: Math.ceil((weekDates.wednesday - now) / (24 * 60 * 60 * 1000))
       },
       friday: {
         date: weekDates.friday.toISOString().split('T')[0],
-        status: hasPost(weekDates.friday) ? 'posted' : (now > weekDates.friday ? 'missing' : 'upcoming'),
-        overdue: now > weekDates.friday && !hasPost(weekDates.friday),
+        status: hasPost(weekDates.friday, 'weekly-friday') ? 'posted' : (now > weekDates.friday ? 'missing' : 'upcoming'),
+        overdue: now > weekDates.friday && !hasPost(weekDates.friday, 'weekly-friday'),
         daysUntil: Math.ceil((weekDates.friday - now) / (24 * 60 * 60 * 1000))
       }
     };
