@@ -11,8 +11,8 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const CFG = {
   OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '15000', 10),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '3000', 10),
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10),
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '8000', 10),
 };
 
@@ -327,8 +327,18 @@ exports.handler = async (event, context) => {
     // AI analysis
     const aiInsights = await getWebinarAIInsights(webinarDataForAI);
 
+    // Fallback if AI times out or fails
+    const finalInsights = aiInsights || {
+      executiveSummary: 'AI analysis timed out. Basic metrics shown below.',
+      topPriorities: [],
+      webinarRecommendations: [
+        { title: 'Review webinar metrics', action: 'Check registration and attendance rates', reasoning: 'AI analysis unavailable' }
+      ],
+      hotLeads: []
+    };
+
     return ok(headers, {
-      ...aiInsights,
+      ...finalInsights,
       timestamp: new Date().toISOString(),
       summary: webinarDataForAI.summary,
       webinarKPIs: webinarDataForAI.webinarKPIs,
