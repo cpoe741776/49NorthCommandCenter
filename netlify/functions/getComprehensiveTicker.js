@@ -543,6 +543,46 @@ async function fetchNewsData() {
   }
 }
 
+async function fetchReminderData(auth) {
+  try {
+    if (!CFG.SOCIAL_MEDIA_SHEET_ID) {
+      console.log('[Reminders] SOCIAL_MEDIA_SHEET_ID not set, skipping');
+      return { overdueWebinarEmails: 0, missingSocialPosts: [], pendingReminders: [] };
+    }
+
+    console.log('[Reminders] Fetching reminder data...');
+    const res = await fetch(`${process.env.URL || 'http://localhost:8888'}/.netlify/functions/getReminders`, {
+      headers: {
+        'X-App-Token': process.env.APP_TOKEN || 'dev-token'
+      }
+    });
+
+    if (!res.ok) {
+      console.warn('[Reminders] Failed to fetch:', res.status);
+      return { overdueWebinarEmails: 0, missingSocialPosts: [], pendingReminders: [] };
+    }
+
+    const data = await res.json();
+    console.log('[Reminders] Fetched:', data.summary);
+    
+    return {
+      overdueWebinarEmails: data.summary?.overdueWebinarEmails || 0,
+      missingSocialPosts: data.summary?.missingSocialPosts || [],
+      pendingReminders: [
+        ...(data.webinarReminders || []).flatMap(wr => 
+          Object.entries(wr.reminders).filter(([_, r]) => r.status === 'pending' || r.status === 'overdue')
+        ),
+        ...Object.entries(data.weeklyReminders || {})
+          .filter(([key, val]) => key !== 'currentWeek' && val.overdue)
+          .map(([day]) => ({ type: 'social', day }))
+      ]
+    };
+  } catch (err) {
+    console.error('[Reminders] Error:', err?.message);
+    return { overdueWebinarEmails: 0, missingSocialPosts: [], pendingReminders: [] };
+  }
+}
+
 exports.handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   console.log('[ComprehensiveTicker] Starting handler...');
@@ -578,14 +618,15 @@ exports.handler = async (event, context) => {
       return ok(headers, { success: true, items: [], note: 'Google authentication failed.' });
     }
 
-    // Fetch all data in parallel
+    // Fetch all data in parallel (including reminders)
     console.log('[ComprehensiveTicker] Fetching data from all sources...');
-    const [bidsData, webinarData, socialData, bidSystemsData, newsData] = await Promise.all([
+    const [bidsData, webinarData, socialData, bidSystemsData, newsData, reminderData] = await Promise.all([
       fetchBidsData(auth),
       fetchWebinarData(auth),
       fetchSocialMediaData(auth),
       fetchBidSystemsData(auth),
-      fetchNewsData()
+      fetchNewsData(),
+      fetchReminderData(auth)
     ]);
 
     console.log('[ComprehensiveTicker] Data fetched:', {
@@ -624,6 +665,7 @@ exports.handler = async (event, context) => {
       ...socialData,
       ...bidSystemsData,
       ...newsData,
+      ...reminderData,
       timestamp: new Date().toISOString()
     };
 

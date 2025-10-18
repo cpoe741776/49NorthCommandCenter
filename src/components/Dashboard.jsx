@@ -8,7 +8,8 @@ import {
   Share2,
   RefreshCw,
   Mail,
-  Newspaper
+  Newspaper,
+  Bell
 } from 'lucide-react';
 import { 
   fetchBidsAnalysis, 
@@ -16,6 +17,7 @@ import {
   fetchSocialAnalysis, 
   fetchNewsAnalysis 
 } from '../services/separateAnalysisService';
+import { fetchReminders } from '../services/reminderService';
 
 const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
   const [aiInsights, setAiInsights] = useState({
@@ -43,6 +45,21 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
     news: null
   });
   const [showAllNews, setShowAllNews] = useState(false);
+  const [reminderSummary, setReminderSummary] = useState(null);
+
+  // Load reminders
+  const loadReminders = useCallback(async () => {
+    try {
+      const data = await fetchReminders();
+      setReminderSummary(data.summary);
+    } catch (err) {
+      console.warn('Failed to load reminders:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReminders();
+  }, [loadReminders]);
 
   // Individual section loaders - only load cached data on mount, refresh on button click
   const loadBidsAnalysis = useCallback(async (bypassCache = false) => {
@@ -275,6 +292,39 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             </span>
           </div>
         </div>
+        
+        {/* Pending Reminders Card */}
+        {reminderSummary && (reminderSummary.totalPending > 0 || reminderSummary.overdueWebinarEmails > 0 || reminderSummary.missingSocialPosts.length > 0) && (
+          <div
+            onClick={() => onNavigate('social')}
+            className={`p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow ${
+              reminderSummary.overdueWebinarEmails > 0 || reminderSummary.missingSocialPosts.length > 0
+                ? 'bg-yellow-50 border-2 border-yellow-400'
+                : 'bg-white'
+            }`}
+            aria-label="View Reminders"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending Reminders</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  {reminderSummary.totalPending}
+                </p>
+                {reminderSummary.overdueWebinarEmails > 0 && (
+                  <p className="text-xs text-red-600 mt-1">
+                    {reminderSummary.overdueWebinarEmails} webinar emails overdue
+                  </p>
+                )}
+                {reminderSummary.missingSocialPosts.length > 0 && (
+                  <p className="text-xs text-orange-600 mt-1">
+                    {reminderSummary.missingSocialPosts.join(', ')} posts missing
+                  </p>
+                )}
+              </div>
+              <Bell className={reminderSummary.overdueWebinarEmails > 0 || reminderSummary.missingSocialPosts.length > 0 ? 'text-yellow-600' : 'text-blue-600'} size={40} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* AI Strategic Insights - Separate Sections */}

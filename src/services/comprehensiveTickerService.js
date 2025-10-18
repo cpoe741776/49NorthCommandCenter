@@ -257,9 +257,37 @@ export function generateTickerItems(data) {
     });
   }
 
+  // 14. OVERDUE WEBINAR EMAIL REMINDERS
+  if (data.overdueWebinarEmails > 0) {
+    items.push({
+      message: `⚠️ ${data.overdueWebinarEmails} Webinar Email Reminder${data.overdueWebinarEmails > 1 ? 's' : ''} Overdue - Review in Social Media`,
+      priority: 'high',
+      category: 'Reminders',
+      source: 'reminders-webinar',
+      target: 'webinars',
+      link: '',
+      createdAt: now,
+      status: 'active'
+    });
+  }
+
+  // 15. MISSING WEEKLY SOCIAL POSTS
+  if (data.missingSocialPosts && data.missingSocialPosts.length > 0) {
+    items.push({
+      message: `📅 Missing Weekly Posts: ${data.missingSocialPosts.join(', ')} - Create Now`,
+      priority: 'high',
+      category: 'Reminders',
+      source: 'reminders-social',
+      target: 'social',
+      link: '',
+      createdAt: now,
+      status: 'active'
+    });
+  }
+
   // Sort by priority (high > medium > low), then by category
   const priorityOrder = { high: 3, medium: 2, low: 1 };
-  const categoryOrder = { 'Bids': 1, 'Webinars': 2, 'Surveys': 3, 'Systems': 4, 'Social': 5, 'News': 6 };
+  const categoryOrder = { 'Reminders': 0, 'Bids': 1, 'Webinars': 2, 'Surveys': 3, 'Systems': 4, 'Social': 5, 'News': 6 };
   
   return items.sort((a, b) => {
     const priorityDiff = (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
