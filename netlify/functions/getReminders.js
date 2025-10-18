@@ -46,9 +46,9 @@ exports.handler = async (event) => {
 
   try {
     // Check cache first
-    const now = Date.now();
-    if (cache && (now - cacheTimestamp) < CACHE_TTL_MS) {
-      console.log('[Reminders] Returning cached data (age: ' + Math.round((now - cacheTimestamp) / 1000) + 's)');
+    const nowMs = Date.now();
+    if (cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
+      console.log('[Reminders] Returning cached data (age: ' + Math.round((nowMs - cacheTimestamp) / 1000) + 's)');
       return ok(headers, { ...cache, cached: true });
     }
 
