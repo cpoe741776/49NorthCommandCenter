@@ -7,7 +7,7 @@ const { corsHeaders, methodGuard, ok } = require('./_utils/http');
 const { loadServiceAccount } = require('./_utils/google');
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
-const BREVO_LIST_ID = process.env.BREVO_LIST_ID;
+const BREVO_LIST_ID = 108; // DATABASE MASTER list ID
 const WEBINAR_SHEET_ID = process.env.WEBINAR_SHEET_ID;
 
 exports.handler = async (event) => {
@@ -124,27 +124,44 @@ exports.handler = async (event) => {
         // Check if contact exists in Brevo
         const exists = await checkBrevoContactExists(email);
 
+        // Build attributes using your existing Brevo field structure
         const attributes = {
           FIRSTNAME: contact.firstName || '',
           LASTNAME: contact.lastName || '',
           ORGANIZATION_NAME: contact.organization || '',
           PHONE_MOBILE: contact.phone || '',
-          WEBINARS_ATTENDED_COUNT: contact.attendedWebinarIds.size,
+          WEBINARS_ATTENDED_COUNT: String(contact.attendedWebinarIds.size),
           ATTENDED_WEBINAR: contact.attendedWebinarIds.size > 0 ? 'Yes' : 'No',
           WEB_CONTACT_REQ: contact.surveys.some(s => s.contactMe === 'Yes') ? 'Yes' : 'No',
           SOURCED_FROM: 'Webinar',
           LAST_CHANGED: new Date().toISOString(),
-          INITIAL_CONTACT_TIME: contact.registrations[0]?.timestamp || new Date().toISOString()
+          INITIAL_CONTACT_TIME: contact.registrations[0]?.timestamp || new Date().toISOString(),
+          REGISTRATION_TIME: contact.registrations[0]?.timestamp || '',
+          WEBINAR_ID: contact.registrations[0]?.webinarId || '',
+          JOIN_TIME: contact.attendances[0]?.joinTime || '',
+          DURATION_MINUTES: contact.attendances[0]?.duration || ''
         };
 
-        if (!exists) {
-          // Create new contact
+        // Add survey fields if available
+        if (contact.surveys.length > 0) {
+          const latestSurvey = contact.surveys[0];
+          if (latestSurvey.relevance) attributes.RELEVANCE_RATING = latestSurvey.relevance;
+          attributes.SURVEY_SUBMITTED_TIME = latestSurvey.timestamp;
+        }
+
+        // Try PUT first (update), if 404 then POST (create)
+        // This matches your old MastertoBrevoSync.gs pattern
+        const updateResult = await updateBrevoContact(email, attributes);
+        
+        if (updateResult === 404) {
+          // Contact doesn't exist, create it
           await createBrevoContact(email, attributes);
           created++;
-        } else {
-          // Update existing contact
-          await updateBrevoContact(email, attributes);
+        } else if (updateResult === true) {
+          // Contact updated
           updated++;
+        } else {
+          errors++;
         }
 
         // Small delay to avoid rate limiting
@@ -207,13 +224,14 @@ async function createBrevoContact(email, attributes) {
     body: JSON.stringify({
       email,
       attributes,
-      listIds: BREVO_LIST_ID ? [parseInt(BREVO_LIST_ID, 10)] : [],
+      listIds: [BREVO_LIST_ID], // Add to DATABASE MASTER list
       updateEnabled: true
     })
   });
 
   if (!res.ok) {
     const error = await res.text();
+    console.error(`[WebinarSync] Create failed for ${email}:`, res.status, error);
     throw new Error(`Brevo create failed: ${error}`);
   }
 
@@ -231,13 +249,17 @@ async function updateBrevoContact(email, attributes) {
       'api-key': BREVO_API_KEY
     },
     body: JSON.stringify({
-      attributes
+      attributes,
+      updateEnabled: true
     })
   });
 
+  // Return status code (404 means contact doesn't exist)
+  if (res.status === 404) return 404;
+  
   if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Brevo update failed: ${error}`);
+    console.error(`[WebinarSync] Update failed for ${email}:`, res.status, await res.text());
+    return false;
   }
 
   return true;
