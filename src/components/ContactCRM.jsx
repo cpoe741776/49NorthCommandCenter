@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Users, RefreshCw, Search, Filter, Download,
-  TrendingUp, Star, Calendar, AlertCircle
+  TrendingUp, Star, Calendar, AlertCircle, UserPlus, X
 } from 'lucide-react';
 import ContactDetailModal from './ContactDetailModal';
 
@@ -16,6 +16,17 @@ const ContactCRM = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, hot-leads, webinar-attendees, cold-leads
   const [selectedContact, setSelectedContact] = useState(null);
+  const [page, setPage] = useState(0);
+  const [emailLookup, setEmailLookup] = useState('');
+  const [showNewContactModal, setShowNewContactModal] = useState(false);
+  const [newContact, setNewContact] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    organization: '',
+    phone: '',
+    jobTitle: ''
+  });
 
   const loadContacts = useCallback(async () => {
     try {
@@ -23,6 +34,8 @@ const ContactCRM = () => {
       setError(null);
       
       const params = new URLSearchParams();
+      params.append('limit', '1000');
+      params.append('offset', page * 1000);
       if (filterType !== 'all') params.append('filter', filterType);
       if (searchQuery) params.append('search', searchQuery);
       
@@ -40,7 +53,56 @@ const ContactCRM = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, searchQuery]);
+  }, [filterType, searchQuery, page]);
+
+  const handleEmailLookup = async () => {
+    if (!emailLookup.trim() || !emailLookup.includes('@')) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/.netlify/functions/getContactDetail?email=${encodeURIComponent(emailLookup.trim())}`);
+      const data = await res.json();
+      
+      if (data.success && data.contact?.exists) {
+        setSelectedContact(data.contact);
+        setEmailLookup('');
+      } else {
+        alert(`Contact not found: ${emailLookup}`);
+      }
+    } catch (err) {
+      alert(`Error looking up contact: ${err.message}`);
+    }
+  };
+
+  const handleCreateContact = async () => {
+    if (!newContact.email || !newContact.email.includes('@')) {
+      alert('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      const res = await fetch('/.netlify/functions/createContact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newContact)
+      });
+      
+      const data = await res.json();
+      
+      if (data.success) {
+        alert(`✅ Contact created: ${newContact.email}`);
+        setShowNewContactModal(false);
+        setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
+        loadContacts(); // Refresh list
+      } else {
+        alert(data.error || 'Failed to create contact');
+      }
+    } catch (err) {
+      alert(`Error creating contact: ${err.message}`);
+    }
+  };
 
   useEffect(() => {
     loadContacts();
@@ -138,6 +200,13 @@ const ContactCRM = () => {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={() => setShowNewContactModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+          >
+            <UserPlus size={18} />
+            New Contact
+          </button>
+          <button
             onClick={loadContacts}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
@@ -218,6 +287,33 @@ const ContactCRM = () => {
         </div>
       )}
 
+      {/* Direct Email Lookup */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg shadow border border-blue-200">
+        <div className="flex gap-2 items-center">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-blue-900 mb-1">
+              📧 Direct Contact Lookup (for contacts beyond first 1,000)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={emailLookup}
+                onChange={(e) => setEmailLookup(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleEmailLookup()}
+                placeholder="Enter email address to find any contact..."
+                className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button
+                onClick={handleEmailLookup}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+              >
+                Find Contact
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Search and Filters */}
       <div className="bg-white p-4 rounded-lg shadow">
         <div className="flex flex-wrap gap-3 items-center">
@@ -236,7 +332,7 @@ const ContactCRM = () => {
             <Filter size={18} className="text-gray-600" />
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              onChange={(e) => { setFilterType(e.target.value); setPage(0); }}
               className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Contacts</option>
@@ -247,9 +343,34 @@ const ContactCRM = () => {
           </div>
 
           <span className="text-sm text-gray-600">
-            {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
+            Showing {contacts.length} of {summary?.totalContacts || 0}
           </span>
         </div>
+
+        {/* Pagination */}
+        {summary && summary.totalContacts > 1000 && (
+          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Page {page + 1} of {Math.ceil(summary.totalContacts / 1000)}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                ← Previous
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={(page + 1) * 1000 >= summary.totalContacts}
+                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Contact List */}
@@ -382,6 +503,125 @@ const ContactCRM = () => {
           onClose={() => setSelectedContact(null)}
           onUpdate={loadContacts}
         />
+      )}
+
+      {/* New Contact Modal */}
+      {showNewContactModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <UserPlus className="text-purple-600" size={28} />
+                <h2 className="text-2xl font-bold text-gray-900">Create New Contact</h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowNewContactModal(false);
+                  setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Email <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={newContact.email}
+                    onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                    placeholder="email@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Job Title</label>
+                  <input
+                    type="text"
+                    value={newContact.jobTitle}
+                    onChange={(e) => setNewContact({ ...newContact, jobTitle: e.target.value })}
+                    placeholder="e.g., HR Director"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">First Name</label>
+                  <input
+                    type="text"
+                    value={newContact.firstName}
+                    onChange={(e) => setNewContact({ ...newContact, firstName: e.target.value })}
+                    placeholder="First name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Last Name</label>
+                  <input
+                    type="text"
+                    value={newContact.lastName}
+                    onChange={(e) => setNewContact({ ...newContact, lastName: e.target.value })}
+                    placeholder="Last name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Organization</label>
+                  <input
+                    type="text"
+                    value={newContact.organization}
+                    onChange={(e) => setNewContact({ ...newContact, organization: e.target.value })}
+                    placeholder="Organization name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    value={newContact.phone}
+                    onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                    placeholder="Phone number"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-900">
+                  <strong>Note:</strong> Contact will be added to Brevo's DATABASE MASTER list (ID 108)
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowNewContactModal(false);
+                  setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
+                }}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateContact}
+                className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
+              >
+                Create Contact
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
