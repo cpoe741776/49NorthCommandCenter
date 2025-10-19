@@ -45,23 +45,38 @@ exports.handler = async (event) => {
     const notes = await fetchContactNotes();
     const followUps = await fetchFollowUpTasks();
 
-    // Enrich Brevo contacts with metadata
+    // Enrich Brevo contacts with CRM sheet data (notes, tasks, lead scoring)
     const enrichedContacts = brevoContacts.map(contact => {
       const meta = metadata.find(m => m.email.toLowerCase() === contact.email.toLowerCase());
       const contactNotes = notes.filter(n => n.email.toLowerCase() === contact.email.toLowerCase());
       const contactTasks = followUps.filter(t => t.email.toLowerCase() === contact.email.toLowerCase() && t.status === 'Open');
 
+      // Calculate lead status based on Brevo data
+      let leadStatus = 'Cold';
+      const webinarCount = contact.webinarsAttendedCount || 0;
+      const isSurveyContact = contact.surveyContact === 'Yes';
+      
+      if (isSurveyContact || webinarCount >= 2) {
+        leadStatus = 'Hot Lead';
+      } else if (webinarCount >= 1 || contact.attendedWebinar === 'Yes') {
+        leadStatus = 'Warm';
+      }
+
+      // Calculate lead score (0-100)
+      let leadScore = 0;
+      leadScore += webinarCount * 15; // 15 points per webinar
+      leadScore += isSurveyContact ? 30 : 0; // 30 points for survey contact
+      leadScore += contact.attendedWebinar === 'Yes' ? 20 : 0; // 20 points for attendance
+      leadScore += contactNotes.length * 5; // 5 points per note
+      leadScore = Math.min(100, leadScore); // Cap at 100
+
       return {
         ...contact,
-        leadScore: meta?.leadScore || 0,
-        leadStatus: meta?.leadStatus || 'Cold',
-        firstTouchDate: meta?.firstTouchDate || contact.createdAt,
-        lastActivityDate: meta?.lastActivityDate || contact.modifiedAt,
-        webinarCount: meta?.webinarCount || 0,
-        attendedCount: meta?.attendedCount || 0,
-        surveyContact: meta?.surveyContact === 'Yes',
+        leadScore: meta?.leadScore || leadScore,
+        leadStatus: meta?.leadStatus || leadStatus,
         notesCount: contactNotes.length,
-        pendingTasks: contactTasks.length
+        pendingTasks: contactTasks.length,
+        hasOpenTasks: contactTasks.length > 0
       };
     });
 
@@ -142,20 +157,36 @@ async function fetchBrevoContacts(limit, offset) {
 
     const data = await res.json();
     
-    // Map Brevo contacts to our format
+    // Map Brevo contacts to our format (using existing Brevo fields)
     return (data.contacts || []).map(c => ({
       email: c.email,
       name: `${c.attributes?.FIRSTNAME || ''} ${c.attributes?.LASTNAME || ''}`.trim() || c.email,
       firstName: c.attributes?.FIRSTNAME || '',
       lastName: c.attributes?.LASTNAME || '',
-      organization: c.attributes?.ORGANIZATION || c.attributes?.COMPANY || '',
-      phone: c.attributes?.PHONE || c.attributes?.SMS || '',
+      organization: c.attributes?.ORGANIZATION_NAME || '',
+      jobTitle: c.attributes?.JOB_TITLE || '',
+      phone: c.attributes?.PHONE_MOBILE || c.attributes?.PHONE_OFFICE || c.attributes?.SMS || '',
+      phoneOffice: c.attributes?.PHONE_OFFICE || '',
+      phoneMobile: c.attributes?.PHONE_MOBILE || '',
+      city: c.attributes?.CITY || '',
+      state: c.attributes?.STATE_PROVINCE || '',
+      country: c.attributes?.COUNTRY_REGION || '',
+      organizationType: c.attributes?.ORGANIZATION_TYPE || '',
+      webinarId: c.attributes?.WEBINAR_ID || '',
+      webinarTopic: c.attributes?.WEBINAR_TOPIC || '',
+      webinarsAttendedCount: parseInt(c.attributes?.WEBINARS_ATTENDED_COUNT || '0', 10),
+      attendedWebinar: c.attributes?.ATTENDED_WEBINAR || 'No',
+      surveyContact: c.attributes?.WEB_CONTACT_REQ || 'No',
+      sourcedFrom: c.attributes?.SOURCED_FROM || '',
+      customTag: c.attributes?.CUSTOM_TAG || '',
+      linkedin: c.attributes?.LINKEDIN || '',
       tags: c.attributes?.TAGS || [],
       lists: c.listIds || [],
       emailBlacklisted: c.emailBlacklisted || false,
       smsBlacklisted: c.smsBlacklisted || false,
       createdAt: c.createdAt,
       modifiedAt: c.modifiedAt,
+      lastChanged: c.attributes?.LAST_CHANGED || c.modifiedAt,
       attributes: c.attributes || {}
     }));
   } catch (err) {
