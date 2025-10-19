@@ -22,7 +22,7 @@ exports.handler = async (event) => {
   try {
     // Parse query params
     const url = new URL(event.rawUrl || `http://x${event.path}${event.rawQuery ? '?' + event.rawQuery : ''}`);
-    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const limit = parseInt(url.searchParams.get('limit') || '1000', 10); // Default 1000 instead of 100
     const offset = parseInt(url.searchParams.get('offset') || '0', 10);
     const filter = url.searchParams.get('filter') || ''; // 'hot-leads', 'webinar-attendees', etc.
     const search = url.searchParams.get('search') || '';
@@ -37,7 +37,9 @@ exports.handler = async (event) => {
     console.log('[Contacts] Fetching fresh data...');
 
     // Fetch contacts from Brevo
-    const brevoContacts = await fetchBrevoContacts(limit, offset);
+    const brevoData = await fetchBrevoContacts(limit, offset);
+    const brevoContacts = brevoData.contacts;
+    const brevoTotal = brevoData.count; // Total count from Brevo API
 
     // Fetch metadata from Google Sheets
     const metadata = await fetchContactMetadata();
@@ -99,13 +101,14 @@ exports.handler = async (event) => {
       );
     }
 
-    // Calculate summary
+    // Calculate summary (use Brevo total count, not just fetched slice)
     const summary = {
-      totalContacts: enrichedContacts.length,
-      hotLeads: enrichedContacts.filter(c => c.leadStatus === 'Hot Lead' || c.surveyContact).length,
-      webinarAttendees: enrichedContacts.filter(c => c.webinarCount > 0).length,
+      totalContacts: brevoTotal, // Actual total from Brevo
+      hotLeads: enrichedContacts.filter(c => c.leadStatus === 'Hot Lead').length,
+      webinarAttendees: enrichedContacts.filter(c => (c.webinarsAttendedCount || 0) > 0).length,
       pendingFollowUps: followUps.filter(t => t.status === 'Open').length,
-      coldContacts: enrichedContacts.filter(c => c.leadStatus === 'Cold').length
+      coldContacts: enrichedContacts.filter(c => c.leadStatus === 'Cold').length,
+      showing: filtered.slice(0, limit).length // How many we're displaying
     };
 
     const response = {
@@ -138,7 +141,7 @@ exports.handler = async (event) => {
 async function fetchBrevoContacts(limit, offset) {
   if (!BREVO_API_KEY) {
     console.warn('[Contacts] BREVO_API_KEY not set');
-    return [];
+    return { contacts: [], count: 0 };
   }
 
   try {
@@ -151,13 +154,15 @@ async function fetchBrevoContacts(limit, offset) {
 
     if (!res.ok) {
       console.error('[Contacts] Brevo API error:', res.status);
-      return [];
+      return { contacts: [], count: 0 };
     }
 
     const data = await res.json();
     
+    console.log('[Contacts] Brevo returned:', data.contacts?.length || 0, 'contacts. Total in Brevo:', data.count || 0);
+    
     // Map Brevo contacts to our format (using existing Brevo fields)
-    return (data.contacts || []).map(c => ({
+    const contacts = (data.contacts || []).map(c => ({
       email: c.email,
       name: `${c.attributes?.FIRSTNAME || ''} ${c.attributes?.LASTNAME || ''}`.trim() || c.email,
       firstName: c.attributes?.FIRSTNAME || '',
@@ -188,9 +193,14 @@ async function fetchBrevoContacts(limit, offset) {
       lastChanged: c.attributes?.LAST_CHANGED || c.modifiedAt,
       attributes: c.attributes || {}
     }));
+    
+    return {
+      contacts,
+      count: data.count || 0 // Total count in Brevo
+    };
   } catch (err) {
     console.error('[Contacts] Brevo fetch failed:', err.message);
-    return [];
+    return { contacts: [], count: 0 };
   }
 }
 
