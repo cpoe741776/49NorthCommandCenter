@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback, Suspense, lazy } from 'react';
-import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2, Activity } from 'lucide-react';
+import { LayoutDashboard, FileText, Video, Share2, Menu, X, LogOut, Database, Building2, Activity, Users } from 'lucide-react';
 import { useAuth } from './components/Auth';
 import LoginPage from './components/LoginPage';
 
@@ -15,12 +15,14 @@ const SocialMediaOperations = lazy(() => import('./components/SocialMediaOperati
 const BidSystemsManager = lazy(() => import('./components/BidSystemsManager'));
 const CompanyDataVault = lazy(() => import('./components/CompanyDataVault'));
 const Maintenance = lazy(() => import('./components/Maintenance'));
+const ContactCRM = lazy(() => import('./components/ContactCRM'));
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'bids', label: 'Bid Operations', icon: FileText },
   { id: 'webinars', label: 'Webinar Operations', icon: Video },
   { id: 'social', label: 'Social Media', icon: Share2 },
+  { id: 'contacts', label: 'Contact CRM', icon: Users },
   { id: 'bid-systems', label: 'Bid Systems', icon: Database },
   { id: 'company-data', label: 'Company Data', icon: Building2 },
   { id: 'maintenance', label: 'Maintenance', icon: Activity },
@@ -275,6 +277,8 @@ const App = () => {
         return <BidSystemsManager allBids={[...bids, ...submittedBids]} />;
       case 'company-data':
         return <CompanyDataVault />;
+      case 'contacts':
+        return <ContactCRM />;
       case 'maintenance':
         return <Maintenance />;
       default:

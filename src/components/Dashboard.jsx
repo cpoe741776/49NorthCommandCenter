@@ -333,6 +333,30 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
             </span>
           </div>
         </div>
+
+        {/* Hot Leads / CRM Card */}
+        <div
+          onClick={() => onNavigate('contacts')}
+          className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border-2 border-red-200"
+          aria-label="Open CRM"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-red-700 font-semibold">Hot Leads</p>
+              <p className="text-3xl font-bold text-red-900 mt-1">
+                {summary?.hotLeadsCount || 0}
+              </p>
+            </div>
+            <Users className="text-red-600" size={40} />
+          </div>
+          <div className="mt-4 text-sm">
+            <span className="text-red-700 font-semibold">
+              Survey contacts + 2+ webinars
+            </span>
+            <span className="text-gray-400 mx-2">•</span>
+            <span className="text-gray-600">Click to view CRM</span>
+          </div>
+        </div>
         
         {/* Pending Reminders Card */}
         {reminderSummary && ((reminderSummary.totalPending || 0) > 0 || (reminderSummary.overdueWebinarEmails || 0) > 0 || (reminderSummary.missingSocialPosts || []).length > 0) && (
