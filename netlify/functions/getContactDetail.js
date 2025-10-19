@@ -85,6 +85,15 @@ async function fetchBrevoContactDetail(email) {
 
     const data = await res.json();
     
+    console.log('[ContactDetail] Brevo raw data for', email, ':', {
+      email: data.email,
+      attributeKeys: Object.keys(data.attributes || {}),
+      FIRSTNAME: data.attributes?.FIRSTNAME,
+      LASTNAME: data.attributes?.LASTNAME,
+      ORGANIZATION_NAME: data.attributes?.ORGANIZATION_NAME,
+      JOB_TITLE: data.attributes?.JOB_TITLE
+    });
+    
     return {
       email: data.email,
       name: `${data.attributes?.FIRSTNAME || ''} ${data.attributes?.LASTNAME || ''}`.trim() || data.email,
@@ -117,7 +126,7 @@ async function fetchBrevoContactDetail(email) {
       sourcedFrom: data.attributes?.SOURCED_FROM || '',
       customTag: data.attributes?.CUSTOM_TAG || '',
       areasOfInterest: data.attributes?.AREAS_OF_INTEREST || '',
-      tags: c.attributes?.TAGS || [],
+      tags: data.attributes?.TAGS || [],
       lists: data.listIds || [],
       emailBlacklisted: data.emailBlacklisted || false,
       smsBlacklisted: data.smsBlacklisted || false,
