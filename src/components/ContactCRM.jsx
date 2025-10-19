@@ -1,8 +1,8 @@
 // src/components/ContactCRM.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Users, RefreshCw, Search, Filter, Download, UserPlus,
-  TrendingUp, Star, Calendar, AlertCircle, CheckCircle2
+  Users, RefreshCw, Search, Filter, Download,
+  TrendingUp, Star, Calendar, AlertCircle
 } from 'lucide-react';
 import ContactDetailModal from './ContactDetailModal';
 

@@ -1,10 +1,8 @@
 // src/components/ContactDetailModal.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  X, Mail, Phone, Building, MapPin, Calendar, 
-  FileText, CheckCircle2, Edit, Save, Plus,
-  ExternalLink, Video, MessageSquare, Clock,
-  Users, RefreshCw
+  X, Mail, Phone, FileText, Edit, Save, Plus,
+  Video, MessageSquare, Clock, Users, RefreshCw
 } from 'lucide-react';
 
 const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
