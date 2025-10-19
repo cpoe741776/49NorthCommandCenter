@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   X, Mail, Phone, Building, MapPin, Calendar, 
   FileText, CheckCircle2, Edit, Save, Plus,
-  ExternalLink, Video, MessageSquare, Clock
+  ExternalLink, Video, MessageSquare, Clock,
+  Users, RefreshCw
 } from 'lucide-react';
 
 const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {

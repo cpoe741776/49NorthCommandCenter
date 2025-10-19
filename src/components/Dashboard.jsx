@@ -10,7 +10,8 @@ import {
   Mail,
   Newspaper,
   Bell,
-  AlertTriangle
+  AlertTriangle,
+  Users
 } from 'lucide-react';
 import { 
   fetchBidsAnalysis, 
