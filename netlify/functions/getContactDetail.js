@@ -1,7 +1,6 @@
 // netlify/functions/getContactDetail.js
 // Fetches detailed contact information including full activity history
 
-const fetch = require('node-fetch');
 const { google } = require('googleapis');
 const { corsHeaders, methodGuard, ok } = require('./_utils/http');
 const { loadServiceAccount } = require('./_utils/google');

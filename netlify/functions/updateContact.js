@@ -1,7 +1,6 @@
 // netlify/functions/updateContact.js
 // Updates contact information in Brevo
 
-const fetch = require('node-fetch');
 const { corsHeaders, methodGuard, ok } = require('./_utils/http');
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;

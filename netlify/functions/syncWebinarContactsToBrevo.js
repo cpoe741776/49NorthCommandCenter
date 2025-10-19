@@ -1,7 +1,6 @@
 // netlify/functions/syncWebinarContactsToBrevo.js
 // Syncs webinar registrants and attendees to Brevo, updating counts and attributes
 
-const fetch = require('node-fetch');
 const { google } = require('googleapis');
 const { corsHeaders, methodGuard, ok } = require('./_utils/http');
 const { loadServiceAccount } = require('./_utils/google');

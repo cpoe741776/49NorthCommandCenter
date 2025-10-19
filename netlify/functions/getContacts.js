@@ -1,7 +1,6 @@
 // netlify/functions/getContacts.js
 // Fetches unified contact list from Brevo + enriches with Google Sheets data
 
-const fetch = require('node-fetch');
 const { google } = require('googleapis');
 const { corsHeaders, methodGuard, ok } = require('./_utils/http');
 const { loadServiceAccount } = require('./_utils/google');
