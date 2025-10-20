@@ -28,14 +28,26 @@ const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
         setEditForm({
           firstName: data.contact?.firstName || '',
           lastName: data.contact?.lastName || '',
-          organization: data.contact?.organization || '',
+          email: data.contact?.email || '',
           jobTitle: data.contact?.jobTitle || '',
-          phoneMobile: data.contact?.phoneMobile || '',
-          phoneOffice: data.contact?.phoneOffice || '',
+          credentials: data.contact?.attributes?.CREDENTIALS || '',
+          organization: data.contact?.organization || '',
+          organizationType: data.contact?.organizationType || '',
+          organizationSize: data.contact?.attributes?.ORGANIZATION_SIZE || '',
+          organizationAddress: data.contact?.organizationAddress || '',
           city: data.contact?.city || '',
           state: data.contact?.state || '',
+          county: data.contact?.county || '',
+          zipCode: data.contact?.zipCode || '',
           country: data.contact?.country || '',
-          linkedin: data.contact?.linkedin || ''
+          phoneOffice: data.contact?.phoneOffice || '',
+          phoneMobile: data.contact?.phoneMobile || '',
+          phoneExtension: data.contact?.phoneExtension || '',
+          whatsapp: data.contact?.whatsapp || '',
+          linkedin: data.contact?.linkedin || '',
+          areasOfInterest: data.contact?.areasOfInterest || '',
+          customTag: data.contact?.customTag || '',
+          sourcedFrom: data.contact?.sourcedFrom || ''
         });
       }
     } catch (err) {
@@ -197,88 +209,247 @@ const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
               </div>
 
               {editing ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2">
+                  {/* Basic Contact Info */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">First Name</label>
-                    <input
-                      type="text"
-                      value={editForm.firstName}
-                      onChange={(e) => setEditForm({...editForm, firstName: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
+                    <h4 className="font-semibold text-gray-700 mb-3 text-sm">Basic Information</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">First Name</label>
+                        <input
+                          type="text"
+                          value={editForm.firstName}
+                          onChange={(e) => setEditForm({...editForm, firstName: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Last Name</label>
+                        <input
+                          type="text"
+                          value={editForm.lastName}
+                          onChange={(e) => setEditForm({...editForm, lastName: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Email (Read-Only)</label>
+                        <input
+                          type="email"
+                          value={editForm.email}
+                          disabled
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-gray-100 cursor-not-allowed"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Job Title</label>
+                        <input
+                          type="text"
+                          value={editForm.jobTitle}
+                          onChange={(e) => setEditForm({...editForm, jobTitle: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Credentials</label>
+                        <input
+                          type="text"
+                          value={editForm.credentials}
+                          onChange={(e) => setEditForm({...editForm, credentials: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., PhD, MBA, etc."
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Last Name</label>
-                    <input
-                      type="text"
-                      value={editForm.lastName}
-                      onChange={(e) => setEditForm({...editForm, lastName: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
+
+                  {/* Organization Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3 text-sm">Organization</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Organization Name</label>
+                        <input
+                          type="text"
+                          value={editForm.organization}
+                          onChange={(e) => setEditForm({...editForm, organization: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Organization Type</label>
+                        <input
+                          type="text"
+                          value={editForm.organizationType}
+                          onChange={(e) => setEditForm({...editForm, organizationType: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., Agency, Non-Profit, etc."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Organization Size</label>
+                        <input
+                          type="text"
+                          value={editForm.organizationSize}
+                          onChange={(e) => setEditForm({...editForm, organizationSize: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., 50-200, 1000+, etc."
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Organization Address</label>
+                        <input
+                          type="text"
+                          value={editForm.organizationAddress}
+                          onChange={(e) => setEditForm({...editForm, organizationAddress: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Organization</label>
-                    <input
-                      type="text"
-                      value={editForm.organization}
-                      onChange={(e) => setEditForm({...editForm, organization: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
+
+                  {/* Location Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3 text-sm">Location</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">City</label>
+                        <input
+                          type="text"
+                          value={editForm.city}
+                          onChange={(e) => setEditForm({...editForm, city: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">State/Province</label>
+                        <input
+                          type="text"
+                          value={editForm.state}
+                          onChange={(e) => setEditForm({...editForm, state: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">County</label>
+                        <input
+                          type="text"
+                          value={editForm.county}
+                          onChange={(e) => setEditForm({...editForm, county: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Zip/Postal Code</label>
+                        <input
+                          type="text"
+                          value={editForm.zipCode}
+                          onChange={(e) => setEditForm({...editForm, zipCode: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Country/Region</label>
+                        <input
+                          type="text"
+                          value={editForm.country}
+                          onChange={(e) => setEditForm({...editForm, country: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Job Title</label>
-                    <input
-                      type="text"
-                      value={editForm.jobTitle}
-                      onChange={(e) => setEditForm({...editForm, jobTitle: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
+
+                  {/* Contact Methods */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3 text-sm">Contact Methods</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Office Phone</label>
+                        <input
+                          type="tel"
+                          value={editForm.phoneOffice}
+                          onChange={(e) => setEditForm({...editForm, phoneOffice: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Mobile Phone</label>
+                        <input
+                          type="tel"
+                          value={editForm.phoneMobile}
+                          onChange={(e) => setEditForm({...editForm, phoneMobile: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Phone Extension</label>
+                        <input
+                          type="text"
+                          value={editForm.phoneExtension}
+                          onChange={(e) => setEditForm({...editForm, phoneExtension: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">WhatsApp</label>
+                        <input
+                          type="tel"
+                          value={editForm.whatsapp}
+                          onChange={(e) => setEditForm({...editForm, whatsapp: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">LinkedIn Profile</label>
+                        <input
+                          type="url"
+                          value={editForm.linkedin}
+                          onChange={(e) => setEditForm({...editForm, linkedin: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="https://linkedin.com/in/..."
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Mobile Phone</label>
-                    <input
-                      type="text"
-                      value={editForm.phoneMobile}
-                      onChange={(e) => setEditForm({...editForm, phoneMobile: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
+
+                  {/* Additional Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3 text-sm">Additional Information</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Areas of Interest</label>
+                        <textarea
+                          value={editForm.areasOfInterest}
+                          onChange={(e) => setEditForm({...editForm, areasOfInterest: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          rows="2"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Sourced From</label>
+                        <input
+                          type="text"
+                          value={editForm.sourcedFrom}
+                          onChange={(e) => setEditForm({...editForm, sourcedFrom: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="e.g., Webinar, Website, Referral"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">Custom Tag</label>
+                        <input
+                          type="text"
+                          value={editForm.customTag}
+                          onChange={(e) => setEditForm({...editForm, customTag: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">Office Phone</label>
-                    <input
-                      type="text"
-                      value={editForm.phoneOffice}
-                      onChange={(e) => setEditForm({...editForm, phoneOffice: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">City</label>
-                    <input
-                      type="text"
-                      value={editForm.city}
-                      onChange={(e) => setEditForm({...editForm, city: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">State</label>
-                    <input
-                      type="text"
-                      value={editForm.state}
-                      onChange={(e) => setEditForm({...editForm, state: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-semibold text-gray-600 mb-1">LinkedIn URL</label>
-                    <input
-                      type="text"
-                      value={editForm.linkedin}
-                      onChange={(e) => setEditForm({...editForm, linkedin: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
-                      placeholder="https://linkedin.com/in/..."
-                    />
+
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-xs text-yellow-800">
+                    <strong>Note:</strong> Webinar data, ratings, survey responses, and timestamps are read-only and managed automatically.
                   </div>
                 </div>
               ) : (

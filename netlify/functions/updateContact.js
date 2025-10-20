@@ -23,22 +23,37 @@ exports.handler = async (event) => {
 
     // Map to Brevo attribute names
     const attributes = {};
-    if (updates.firstName) attributes.FIRSTNAME = updates.firstName;
-    if (updates.lastName) attributes.LASTNAME = updates.lastName;
-    if (updates.organization) attributes.ORGANIZATION_NAME = updates.organization;
-    if (updates.jobTitle) attributes.JOB_TITLE = updates.jobTitle;
-    if (updates.phoneMobile) attributes.PHONE_MOBILE = updates.phoneMobile;
-    if (updates.phoneOffice) attributes.PHONE_OFFICE = updates.phoneOffice;
-    if (updates.phoneExtension) attributes.PHONE_EXTENSION = updates.phoneExtension;
-    if (updates.linkedin) attributes.LINKEDIN = updates.linkedin;
-    if (updates.city) attributes.CITY = updates.city;
-    if (updates.state) attributes.STATE_PROVINCE = updates.state;
-    if (updates.country) attributes.COUNTRY_REGION = updates.country;
-    if (updates.zipCode) attributes.ZIP_OR_POSTAL_CODE = updates.zipCode;
-    if (updates.organizationType) attributes.ORGANIZATION_TYPE = updates.organizationType;
-    if (updates.organizationSize) attributes.ORGANIZATION_SIZE = updates.organizationSize;
-    if (updates.areasOfInterest) attributes.AREAS_OF_INTEREST = updates.areasOfInterest;
-    if (updates.customTag) attributes.CUSTOM_TAG = updates.customTag;
+    
+    // Basic Info
+    if (updates.firstName !== undefined) attributes.FIRSTNAME = updates.firstName;
+    if (updates.lastName !== undefined) attributes.LASTNAME = updates.lastName;
+    if (updates.jobTitle !== undefined) attributes.JOB_TITLE = updates.jobTitle;
+    if (updates.credentials !== undefined) attributes.CREDENTIALS = updates.credentials;
+    
+    // Organization
+    if (updates.organization !== undefined) attributes.ORGANIZATION_NAME = updates.organization;
+    if (updates.organizationType !== undefined) attributes.ORGANIZATION_TYPE = updates.organizationType;
+    if (updates.organizationSize !== undefined) attributes.ORGANIZATION_SIZE = updates.organizationSize;
+    if (updates.organizationAddress !== undefined) attributes.ORGANIZATION_STREET_ADDRESS = updates.organizationAddress;
+    
+    // Location
+    if (updates.city !== undefined) attributes.CITY = updates.city;
+    if (updates.state !== undefined) attributes.STATE_PROVINCE = updates.state;
+    if (updates.county !== undefined) attributes.COUNTY = updates.county;
+    if (updates.zipCode !== undefined) attributes.ZIP_OR_POSTAL_CODE = updates.zipCode;
+    if (updates.country !== undefined) attributes.COUNTRY_REGION = updates.country;
+    
+    // Contact Methods
+    if (updates.phoneOffice !== undefined) attributes.PHONE_OFFICE = updates.phoneOffice;
+    if (updates.phoneMobile !== undefined) attributes.PHONE_MOBILE = updates.phoneMobile;
+    if (updates.phoneExtension !== undefined) attributes.PHONE_EXTENSION = updates.phoneExtension;
+    if (updates.whatsapp !== undefined) attributes.WHATSAPP = updates.whatsapp;
+    if (updates.linkedin !== undefined) attributes.LINKEDIN = updates.linkedin;
+    
+    // Additional Info
+    if (updates.areasOfInterest !== undefined) attributes.AREAS_OF_INTEREST = updates.areasOfInterest;
+    if (updates.customTag !== undefined) attributes.CUSTOM_TAG = updates.customTag;
+    if (updates.sourcedFrom !== undefined) attributes.SOURCED_FROM = updates.sourcedFrom;
     
     // Always update last changed
     attributes.LAST_CHANGED = new Date().toISOString();
