@@ -1,8 +1,9 @@
 // src/components/ContactCRM.jsx
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   Users, RefreshCw, Search, Filter, Download,
-  TrendingUp, Star, Calendar, AlertCircle, UserPlus, X, ChevronUp
+  TrendingUp, Star, Calendar, AlertCircle, UserPlus, X, ChevronUp,
+  ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import ContactDetailModal from './ContactDetailModal';
 
@@ -28,6 +29,8 @@ const ContactCRM = () => {
     jobTitle: ''
   });
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [sortField, setSortField] = useState('name'); // name, email, organization, leadScore, lastChanged
+  const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
   const topRef = useRef(null);
 
   const loadContacts = useCallback(async () => {
@@ -131,6 +134,67 @@ const ContactCRM = () => {
       topRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // Toggle direction if clicking the same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Default to ascending for new field
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort contacts based on current sort field and direction
+  const sortedContacts = useMemo(() => {
+    if (!contacts || contacts.length === 0) return [];
+
+    const sorted = [...contacts].sort((a, b) => {
+      let aVal, bVal;
+
+      switch (sortField) {
+        case 'name':
+          aVal = (a.name || a.email || '').toLowerCase();
+          bVal = (b.name || b.email || '').toLowerCase();
+          break;
+        case 'email':
+          aVal = (a.email || '').toLowerCase();
+          bVal = (b.email || '').toLowerCase();
+          break;
+        case 'organization':
+          aVal = (a.organization || '').toLowerCase();
+          bVal = (b.organization || '').toLowerCase();
+          break;
+        case 'leadScore':
+          aVal = a.leadScore || 0;
+          bVal = b.leadScore || 0;
+          break;
+        case 'leadStatus':
+          // Sort order: Hot Lead, Warm, Cold
+          const statusOrder = { 'Hot Lead': 3, 'Warm': 2, 'Cold': 1 };
+          aVal = statusOrder[a.leadStatus] || 0;
+          bVal = statusOrder[b.leadStatus] || 0;
+          break;
+        case 'lastChanged':
+          aVal = new Date(a.lastChanged || 0);
+          bVal = new Date(b.lastChanged || 0);
+          break;
+        case 'webinarsAttended':
+          aVal = a.webinarsAttendedCount || 0;
+          bVal = b.webinarsAttendedCount || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [contacts, sortField, sortDirection]);
 
   const handleSync = async () => {
     if (!window.confirm('Sync all webinar registrants and attendees to Brevo? This may take a few minutes.')) {
@@ -402,6 +466,15 @@ const ContactCRM = () => {
           <span className="text-sm text-gray-600">
             Showing {contacts.length} of {summary?.totalContacts || 0}
           </span>
+
+          {/* Sort Indicator */}
+          <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 px-3 py-1 rounded">
+            <ArrowUpDown size={16} className="text-blue-600" />
+            <span>
+              Sorted by: <strong className="text-blue-800">{sortField.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</strong>
+              {sortDirection === 'asc' ? ' ↑' : ' ↓'}
+            </span>
+          </div>
         </div>
 
         {/* Pagination */}
@@ -509,23 +582,71 @@ const ContactCRM = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Contact</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Organization</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <button
+                      onClick={() => handleSort('name')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                    >
+                      Contact
+                      {sortField === 'name' ? (
+                        sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                      ) : (
+                        <ArrowUpDown size={14} className="opacity-40" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <button
+                      onClick={() => handleSort('organization')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                    >
+                      Organization
+                      {sortField === 'organization' ? (
+                        sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                      ) : (
+                        <ArrowUpDown size={14} className="opacity-40" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Location</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Lead Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Activity</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <button
+                      onClick={() => handleSort('leadStatus')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                    >
+                      Lead Status
+                      {sortField === 'leadStatus' ? (
+                        sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                      ) : (
+                        <ArrowUpDown size={14} className="opacity-40" />
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                    <button
+                      onClick={() => handleSort('webinarsAttended')}
+                      className="flex items-center gap-1 hover:text-blue-600 transition-colors"
+                    >
+                      Activity
+                      {sortField === 'webinarsAttended' ? (
+                        sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />
+                      ) : (
+                        <ArrowUpDown size={14} className="opacity-40" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Contact Info</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {contacts.length === 0 ? (
+                {sortedContacts.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                       No contacts found
                     </td>
                   </tr>
                 ) : (
-                  contacts.map((contact) => (
+                  sortedContacts.map((contact) => (
                     <tr
                       key={contact.email}
                       onClick={() => setSelectedContact(contact)}
