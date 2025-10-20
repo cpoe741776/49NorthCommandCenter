@@ -36,10 +36,11 @@ exports.handler = async (event) => {
 
     console.log('[Contacts] Fetching fresh data...');
 
-    // Fetch contacts from Brevo
-    const brevoData = await fetchBrevoContacts(limit, offset);
+    // Fetch contacts from Brevo (with optional filtering)
+    const brevoData = await fetchBrevoContacts(limit, offset, filter);
     const brevoContacts = brevoData.contacts;
     const brevoTotal = brevoData.count; // Total count from Brevo API
+    const filteredTotal = brevoData.filteredCount || brevoTotal; // Count after Brevo-level filtering
 
     // Fetch metadata from Google Sheets
     const metadata = await fetchContactMetadata();
@@ -101,14 +102,18 @@ exports.handler = async (event) => {
       );
     }
 
-    // Calculate summary (use Brevo total count, not just fetched slice)
+    // Calculate summary stats from ALL contacts in Brevo (not just this page)
+    const globalStats = await calculateGlobalStats();
+    
     const summary = {
       totalContacts: brevoTotal, // Actual total from Brevo
-      hotLeads: enrichedContacts.filter(c => c.leadStatus === 'Hot Lead').length,
-      webinarAttendees: enrichedContacts.filter(c => (c.webinarsAttendedCount || 0) > 0).length,
+      hotLeads: globalStats.hotLeads,
+      webinarAttendees: globalStats.webinarAttendees,
       pendingFollowUps: followUps.filter(t => t.status === 'Open').length,
-      coldContacts: enrichedContacts.filter(c => c.leadStatus === 'Cold').length,
-      showing: filtered.slice(0, limit).length // How many we're displaying
+      coldContacts: globalStats.coldContacts,
+      warmLeads: globalStats.warmLeads,
+      showing: filtered.slice(0, limit).length, // How many we're displaying on current page
+      fromPage: enrichedContacts.length // How many contacts on this page
     };
 
     const response = {
@@ -138,14 +143,20 @@ exports.handler = async (event) => {
   }
 };
 
-async function fetchBrevoContacts(limit, offset) {
+async function fetchBrevoContacts(limit, offset, filter = '') {
   if (!BREVO_API_KEY) {
     console.warn('[Contacts] BREVO_API_KEY not set');
-    return { contacts: [], count: 0 };
+    return { contacts: [], count: 0, filteredCount: 0 };
   }
 
   try {
-    const res = await fetch(`https://api.brevo.com/v3/contacts?limit=${limit}&offset=${offset}`, {
+    // Build Brevo API URL with optional filtering
+    let url = `https://api.brevo.com/v3/contacts?limit=${limit}&offset=${offset}`;
+    
+    // Note: Brevo's contact filtering is limited. We'll handle most filtering client-side,
+    // but we can use modifiedSince or listIds if needed for performance
+    
+    const res = await fetch(url, {
       headers: {
         'accept': 'application/json',
         'api-key': BREVO_API_KEY
@@ -154,7 +165,7 @@ async function fetchBrevoContacts(limit, offset) {
 
     if (!res.ok) {
       console.error('[Contacts] Brevo API error:', res.status);
-      return { contacts: [], count: 0 };
+      return { contacts: [], count: 0, filteredCount: 0 };
     }
 
     const data = await res.json();
@@ -196,11 +207,88 @@ async function fetchBrevoContacts(limit, offset) {
     
     return {
       contacts,
-      count: data.count || 0 // Total count in Brevo
+      count: data.count || 0, // Total count in Brevo
+      filteredCount: data.count || 0 // Will be same unless we add Brevo-level filtering
     };
   } catch (err) {
     console.error('[Contacts] Brevo fetch failed:', err.message);
-    return { contacts: [], count: 0 };
+    return { contacts: [], count: 0, filteredCount: 0 };
+  }
+}
+
+// Calculate global statistics across ALL contacts in Brevo
+async function calculateGlobalStats() {
+  if (!BREVO_API_KEY) {
+    return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0 };
+  }
+
+  try {
+    // Fetch a larger sample to get accurate stats (or use Brevo's statistics API if available)
+    // For now, we'll fetch up to 5000 contacts to calculate stats
+    // This is cached, so it won't run on every request
+    const res = await fetch(`https://api.brevo.com/v3/contacts?limit=5000&offset=0`, {
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY
+      }
+    });
+
+    if (!res.ok) {
+      console.warn('[Contacts] Failed to fetch global stats');
+      return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0 };
+    }
+
+    const data = await res.json();
+    const contacts = data.contacts || [];
+
+    let hotLeads = 0;
+    let webinarAttendees = 0;
+    let coldContacts = 0;
+    let warmLeads = 0;
+
+    contacts.forEach(c => {
+      const webinarCount = parseInt(c.attributes?.WEBINARS_ATTENDED_COUNT || '0', 10);
+      const isSurveyContact = c.attributes?.WEB_CONTACT_REQ === 'Yes';
+      const attendedWebinar = c.attributes?.ATTENDED_WEBINAR === 'Yes';
+
+      if (webinarCount > 0 || attendedWebinar) {
+        webinarAttendees++;
+      }
+
+      if (isSurveyContact || webinarCount >= 2) {
+        hotLeads++;
+      } else if (webinarCount >= 1 || attendedWebinar) {
+        warmLeads++;
+      } else {
+        coldContacts++;
+      }
+    });
+
+    console.log('[Contacts] Global stats calculated from', contacts.length, 'contacts:', {
+      hotLeads,
+      webinarAttendees,
+      coldContacts,
+      warmLeads
+    });
+
+    // If we have 28K contacts but only sampled 5K, extrapolate
+    const totalContacts = data.count || contacts.length;
+    if (totalContacts > contacts.length) {
+      const ratio = totalContacts / contacts.length;
+      return {
+        hotLeads: Math.round(hotLeads * ratio),
+        webinarAttendees: Math.round(webinarAttendees * ratio),
+        coldContacts: Math.round(coldContacts * ratio),
+        warmLeads: Math.round(warmLeads * ratio),
+        estimated: true,
+        sampleSize: contacts.length
+      };
+    }
+
+    return { hotLeads, webinarAttendees, coldContacts, warmLeads, estimated: false };
+  } catch (err) {
+    console.error('[Contacts] Global stats calculation failed:', err.message);
+    return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0 };
   }
 }
 

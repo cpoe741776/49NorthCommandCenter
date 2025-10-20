@@ -245,24 +245,38 @@ const ContactCRM = () => {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-lg shadow border-2 border-red-200">
+          <div 
+            onClick={() => { setFilterType('hot-leads'); setPage(0); }}
+            className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-lg shadow border-2 border-red-200 cursor-pointer hover:shadow-lg transition-shadow"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-red-700 font-semibold">Hot Leads</p>
-                <p className="text-3xl font-bold text-red-900 mt-1">{summary.hotLeads}</p>
+                <p className="text-3xl font-bold text-red-900 mt-1">
+                  {summary.hotLeads}
+                  {summary.estimated && <span className="text-sm text-red-600 ml-1">*</span>}
+                </p>
               </div>
               <Star className="text-red-600" size={32} />
             </div>
+            <p className="text-xs text-red-600 mt-2">Click to filter</p>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div 
+            onClick={() => { setFilterType('webinar-attendees'); setPage(0); }}
+            className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Webinar Attendees</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{summary.webinarAttendees}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  {summary.webinarAttendees}
+                  {summary.estimated && <span className="text-sm text-gray-600 ml-1">*</span>}
+                </p>
               </div>
               <Users className="text-purple-600" size={32} />
             </div>
+            <p className="text-xs text-gray-500 mt-2">Click to filter</p>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow">
@@ -275,15 +289,31 @@ const ContactCRM = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div 
+            onClick={() => { setFilterType('cold-leads'); setPage(0); }}
+            className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Cold Contacts</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{summary.coldContacts}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  {summary.coldContacts}
+                  {summary.estimated && <span className="text-sm text-gray-600 ml-1">*</span>}
+                </p>
               </div>
               <AlertCircle className="text-gray-400" size={32} />
             </div>
+            <p className="text-xs text-gray-500 mt-2">Click to filter</p>
           </div>
+        </div>
+      )}
+
+      {/* Stats Note */}
+      {summary?.estimated && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+          <p className="text-sm text-yellow-900">
+            <strong>* Estimated:</strong> Stats calculated from a sample of {summary.sampleSize?.toLocaleString()} contacts and extrapolated across all {summary.totalContacts?.toLocaleString()} contacts for performance.
+          </p>
         </div>
       )}
 
