@@ -282,49 +282,294 @@ const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-semibold text-gray-600">Name:</span>
-                    <div className="text-gray-900">{details?.contact?.name || '—'}</div>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">Email:</span>
-                    <div className="text-gray-900">{details?.contact?.email || '—'}</div>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">Organization:</span>
-                    <div className="text-gray-900">{details?.contact?.organization || '—'}</div>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">Job Title:</span>
-                    <div className="text-gray-900">{details?.contact?.jobTitle || '—'}</div>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">Mobile:</span>
-                    <div className="text-gray-900">{details?.contact?.phoneMobile || '—'}</div>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">Office:</span>
-                    <div className="text-gray-900">{details?.contact?.phoneOffice || '—'}</div>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">Location:</span>
-                    <div className="text-gray-900">
-                      {details?.contact?.city && details?.contact?.state 
-                        ? `${details.contact.city}, ${details.contact.state}`
-                        : details?.contact?.state || details?.contact?.city || '—'}
+                <div className="space-y-6">
+                  {/* Basic Contact Info */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="font-semibold text-gray-600">First Name:</span>
+                      <div className="text-gray-900">{details?.contact?.firstName || '—'}</div>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-600">Last Name:</span>
+                      <div className="text-gray-900">{details?.contact?.lastName || '—'}</div>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="font-semibold text-gray-600">Email:</span>
+                      <div className="text-gray-900">{details?.contact?.email || '—'}</div>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-600">Job Title:</span>
+                      <div className="text-gray-900">{details?.contact?.jobTitle || '—'}</div>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-600">Credentials:</span>
+                      <div className="text-gray-900">{details?.contact?.attributes?.CREDENTIALS || '—'}</div>
                     </div>
                   </div>
-                  <div>
-                    <span className="font-semibold text-gray-600">LinkedIn:</span>
-                    <div className="text-gray-900">
-                      {details?.contact?.linkedin ? (
-                        <a href={details.contact.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          View Profile
-                        </a>
-                      ) : '—'}
+
+                  {/* Organization Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Organization</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">Organization Name:</span>
+                        <div className="text-gray-900">{details?.contact?.organization || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Organization Type:</span>
+                        <div className="text-gray-900">{details?.contact?.organizationType || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Organization Size:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.ORGANIZATION_SIZE || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Organization Address:</span>
+                        <div className="text-gray-900">{details?.contact?.organizationAddress || '—'}</div>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Location Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Location</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">City:</span>
+                        <div className="text-gray-900">{details?.contact?.city || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">State/Province:</span>
+                        <div className="text-gray-900">{details?.contact?.state || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">County:</span>
+                        <div className="text-gray-900">{details?.contact?.county || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Zip/Postal Code:</span>
+                        <div className="text-gray-900">{details?.contact?.zipCode || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Country/Region:</span>
+                        <div className="text-gray-900">{details?.contact?.country || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Methods */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Contact Methods</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">Office Phone:</span>
+                        <div className="text-gray-900">{details?.contact?.phoneOffice || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Mobile Phone:</span>
+                        <div className="text-gray-900">{details?.contact?.phoneMobile || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Phone Extension:</span>
+                        <div className="text-gray-900">{details?.contact?.phoneExtension || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">WhatsApp:</span>
+                        <div className="text-gray-900">{details?.contact?.whatsapp || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">LinkedIn Profile:</span>
+                        <div className="text-gray-900">
+                          {details?.contact?.linkedin ? (
+                            <a href={details.contact.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                              {details.contact.linkedin}
+                            </a>
+                          ) : '—'}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Webinar & Engagement Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Webinar & Engagement</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">Webinars Attended Count:</span>
+                        <div className="text-gray-900">{details?.contact?.webinarsAttendedCount || 0}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Attended Webinar:</span>
+                        <div className="text-gray-900">
+                          {details?.contact?.attendedWebinar === 'Yes' ? (
+                            <span className="text-green-600 font-semibold">✓ Yes</span>
+                          ) : (
+                            <span className="text-gray-500">No</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Survey Contact Request:</span>
+                        <div className="text-gray-900">
+                          {details?.contact?.surveyContact === 'Yes' ? (
+                            <span className="text-green-600 font-semibold">✓ Yes - Contact Me</span>
+                          ) : (
+                            <span className="text-gray-500">No</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Webinar ID:</span>
+                        <div className="text-gray-900">{details?.contact?.webinarId || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Webinar Topic:</span>
+                        <div className="text-gray-900">{details?.contact?.webinarTopic || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Webinar Start Time:</span>
+                        <div className="text-gray-900">{details?.contact?.webinarStartTime || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Registration Time:</span>
+                        <div className="text-gray-900">{details?.contact?.registrationTime || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Survey & Interest Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Survey & Interests</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Areas of Interest:</span>
+                        <div className="text-gray-900">{details?.contact?.areasOfInterest || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Importance of Mental Strength:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.IMPORTANCE_OF_MENTAL_STRENGTH || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Implemented Initiative:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.IMPLEMENTED_INITIATIVE || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Webinar Gain Expectation:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.WEBINAR_GAIN_EXPECTATION || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Org Promotes Mental Strength:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.ORG_PROMOTES_MENTAL_STRENGTH || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Org Has Effective Initiative:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.ORG_HAS_EFFECTIVE_INITIATIVE || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Leadership Mental Strength View:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.LEADERSHIP_MENTAL_STRENGTH_VIEW || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Will Share:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.WILL_SHARE || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Will Attend Again:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.WILL_ATTEND_AGAIN || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Quote Interest:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.QUOTE_INTEREST || '—'}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="font-semibold text-gray-600">Comments:</span>
+                        <div className="text-gray-900 whitespace-pre-wrap">{details?.contact?.attributes?.COMMENTS || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ratings */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Ratings & Feedback</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">Relevance Rating:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.RELEVANCE_RATING || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Rating - Rhonda:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.RATING_RHONDA || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Rating - Chris:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.RATING_CHRIS || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Rating - Guest:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.RATING_GUEST || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Source & Metadata */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3">Source & Tracking</h4>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="font-semibold text-gray-600">Sourced From:</span>
+                        <div className="text-gray-900">{details?.contact?.sourcedFrom || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">How Can We Assist:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.ASST_ORG_HOW || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Referral/How Heard:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.REFERRAL_HEAR || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Contact ID:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.CONTACT_ID || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Initial Contact Time:</span>
+                        <div className="text-gray-900">{details?.contact?.initialContactTime || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Last Changed:</span>
+                        <div className="text-gray-900">{details?.contact?.lastChanged || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Survey Submitted Time:</span>
+                        <div className="text-gray-900">{details?.contact?.attributes?.SURVEY_SUBMITTED_TIME || '—'}</div>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-600">Custom Tag:</span>
+                        <div className="text-gray-900">{details?.contact?.customTag || '—'}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Duration & Attendance Details */}
+                  {(details?.contact?.attributes?.JOIN_TIME || details?.contact?.attributes?.LEAVE_TIME || details?.contact?.attributes?.DURATION_MINUTES) && (
+                    <div className="border-t pt-4">
+                      <h4 className="font-semibold text-gray-700 mb-3">Attendance Details</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-semibold text-gray-600">Join Time:</span>
+                          <div className="text-gray-900">{details?.contact?.attributes?.JOIN_TIME || '—'}</div>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-600">Leave Time:</span>
+                          <div className="text-gray-900">{details?.contact?.attributes?.LEAVE_TIME || '—'}</div>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-gray-600">Duration (Minutes):</span>
+                          <div className="text-gray-900">{details?.contact?.attributes?.DURATION_MINUTES || '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
