@@ -1,8 +1,8 @@
 // src/components/ContactCRM.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Users, RefreshCw, Search, Filter, Download,
-  TrendingUp, Star, Calendar, AlertCircle, UserPlus, X
+  TrendingUp, Star, Calendar, AlertCircle, UserPlus, X, ChevronUp
 } from 'lucide-react';
 import ContactDetailModal from './ContactDetailModal';
 
@@ -27,6 +27,8 @@ const ContactCRM = () => {
     phone: '',
     jobTitle: ''
   });
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const topRef = useRef(null);
 
   const loadContacts = useCallback(async () => {
     try {
@@ -107,6 +109,28 @@ const ContactCRM = () => {
   useEffect(() => {
     loadContacts();
   }, [loadContacts]);
+
+  // Scroll to top when page changes
+  useEffect(() => {
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [page]);
+
+  // Show/hide back to top button
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 500);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    if (topRef.current) {
+      topRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   const handleSync = async () => {
     if (!window.confirm('Sync all webinar registrants and attendees to Brevo? This may take a few minutes.')) {
@@ -189,6 +213,9 @@ const ContactCRM = () => {
 
   return (
     <div className="space-y-6">
+      {/* Scroll anchor */}
+      <div ref={topRef} />
+      
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -378,29 +405,97 @@ const ContactCRM = () => {
         </div>
 
         {/* Pagination */}
-        {summary && summary.totalContacts > 1000 && (
-          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Page {page + 1} of {Math.ceil(summary.totalContacts / 1000)}
+        {summary && summary.totalContacts > 1000 && (() => {
+          const totalPages = Math.ceil(summary.totalContacts / 1000);
+          const currentPage = page + 1;
+          
+          // Calculate page range to show
+          let startPage = Math.max(1, currentPage - 2);
+          let endPage = Math.min(totalPages, currentPage + 2);
+          
+          // Adjust if we're at the beginning or end
+          if (currentPage <= 3) {
+            endPage = Math.min(7, totalPages);
+          } else if (currentPage >= totalPages - 2) {
+            startPage = Math.max(1, totalPages - 6);
+          }
+          
+          const pageNumbers = [];
+          for (let i = startPage; i <= endPage; i++) {
+            pageNumbers.push(i);
+          }
+          
+          return (
+            <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+              {/* Page numbers */}
+              <div className="flex items-center justify-center gap-1 flex-wrap">
+                {/* First page */}
+                {startPage > 1 && (
+                  <>
+                    <button
+                      onClick={() => setPage(0)}
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                    >
+                      1
+                    </button>
+                    {startPage > 2 && <span className="px-2 text-gray-400">...</span>}
+                  </>
+                )}
+                
+                {/* Page number buttons */}
+                {pageNumbers.map(pageNum => (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum - 1)}
+                    className={`px-3 py-1 text-sm rounded ${
+                      pageNum === currentPage
+                        ? 'bg-blue-600 text-white font-semibold'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                ))}
+                
+                {/* Last page */}
+                {endPage < totalPages && (
+                  <>
+                    {endPage < totalPages - 1 && <span className="px-2 text-gray-400">...</span>}
+                    <button
+                      onClick={() => setPage(totalPages - 1)}
+                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
+              </div>
+              
+              {/* Previous/Next buttons */}
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages} • Showing contacts {(page * 1000) + 1}-{Math.min((page + 1) * 1000, summary.totalContacts)}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    ← Previous
+                  </button>
+                  <button
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={(page + 1) * 1000 >= summary.totalContacts}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                ← Previous
-              </button>
-              <button
-                onClick={() => setPage(p => p + 1)}
-                disabled={(page + 1) * 1000 >= summary.totalContacts}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Contact List */}
@@ -652,6 +747,20 @@ const ContactCRM = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Back to Top Button */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-8 right-8 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:bg-blue-700 transition-all z-50 group"
+          aria-label="Back to top"
+        >
+          <ChevronUp size={24} className="group-hover:scale-110 transition-transform" />
+          <span className="absolute bottom-full mb-2 right-0 bg-gray-900 text-white text-xs px-3 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+            Back to Top
+          </span>
+        </button>
       )}
     </div>
   );
