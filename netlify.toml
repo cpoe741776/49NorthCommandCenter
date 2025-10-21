@@ -9,5 +9,5 @@
 
 # Scheduled function to auto-publish scheduled social media posts
 # Runs every hour at :00
-[[functions."publishScheduledPosts".schedule]]
-  cron = "0 * * * *"
+[functions.publishScheduledPosts]
+  schedule = "0 * * * *"
