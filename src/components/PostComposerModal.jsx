@@ -51,6 +51,9 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [mediaLibrary, setMediaLibrary] = useState([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
+  const [mediaPage, setMediaPage] = useState(1);
+  const [mediaPagination, setMediaPagination] = useState(null);
+  const [mediaSearch, setMediaSearch] = useState('');
   const fileInputRef = useRef(null);
 
   // Load initial post data when provided (for reusing posts)
@@ -201,14 +204,18 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
     }
   };
 
-  const loadMediaLibrary = async () => {
+  const loadMediaLibrary = async (page = 1, search = '') => {
     setLoadingMedia(true);
     try {
-      const response = await fetch('/.netlify/functions/getWordPressMedia?per_page=24');
+      let url = `/.netlify/functions/getWordPressMedia?per_page=24&page=${page}`;
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+      
+      const response = await fetch(url);
       const result = await response.json();
       
       if (result.success) {
         setMediaLibrary(result.media || []);
+        setMediaPagination(result.pagination);
       } else {
         console.error('Failed to load media:', result.error);
       }
@@ -219,6 +226,16 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
     }
   };
 
+  const handleMediaSearch = () => {
+    setMediaPage(1);
+    loadMediaLibrary(1, mediaSearch);
+  };
+
+  const handleMediaPageChange = (newPage) => {
+    setMediaPage(newPage);
+    loadMediaLibrary(newPage, mediaSearch);
+  };
+
   const handleSelectFromLibrary = (imageUrl) => {
     setFormData(prev => ({ ...prev, imageUrl }));
     setShowMediaLibrary(false);
@@ -227,7 +244,7 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
   // Load media library when shown
   React.useEffect(() => {
     if (showMediaLibrary && mediaLibrary.length === 0) {
-      loadMediaLibrary();
+      loadMediaLibrary(1, '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showMediaLibrary]);
@@ -711,44 +728,143 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
                   
                   {/* Media Library Modal */}
                   {showMediaLibrary && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300 max-h-96 overflow-y-auto">
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold text-gray-900">WordPress Media Library</h4>
                         <button
                           type="button"
-                          onClick={() => setShowMediaLibrary(false)}
+                          onClick={() => {
+                            setShowMediaLibrary(false);
+                            setMediaSearch('');
+                            setMediaPage(1);
+                          }}
                           className="text-gray-500 hover:text-gray-700"
                         >
                           <X size={20} />
                         </button>
                       </div>
-                      
-                      {loadingMedia ? (
-                        <div className="flex items-center justify-center py-8">
-                          <Loader className="animate-spin text-blue-600" size={32} />
+
+                      {/* Search */}
+                      <div className="flex gap-2 mb-3">
+                        <input
+                          type="text"
+                          value={mediaSearch}
+                          onChange={(e) => setMediaSearch(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && handleMediaSearch()}
+                          placeholder="Search images by name..."
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleMediaSearch}
+                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                        >
+                          Search
+                        </button>
+                      </div>
+
+                      {/* Pagination Info */}
+                      {mediaPagination && (
+                        <div className="text-xs text-gray-600 mb-2">
+                          Showing {((mediaPagination.page - 1) * mediaPagination.perPage) + 1}-
+                          {Math.min(mediaPagination.page * mediaPagination.perPage, mediaPagination.totalItems)} of {mediaPagination.totalItems} items
                         </div>
-                      ) : mediaLibrary.length === 0 ? (
-                        <p className="text-gray-500 text-center py-8">No images in library. Upload one first!</p>
-                      ) : (
-                        <div className="grid grid-cols-3 gap-2">
-                          {mediaLibrary.map(media => (
-                            <div
-                              key={media.id}
-                              onClick={() => handleSelectFromLibrary(media.url)}
-                              className="relative cursor-pointer group hover:opacity-75 transition-opacity"
-                            >
-                              <img
-                                src={media.thumbnail}
-                                alt={media.title}
-                                className="w-full h-24 object-cover rounded border border-gray-300"
-                              />
-                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded flex items-center justify-center">
-                                <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-semibold">
-                                  Select
-                                </span>
+                      )}
+                      
+                      {/* Media Grid */}
+                      <div className="max-h-80 overflow-y-auto">
+                        {loadingMedia ? (
+                          <div className="flex items-center justify-center py-8">
+                            <Loader className="animate-spin text-blue-600" size={32} />
+                          </div>
+                        ) : mediaLibrary.length === 0 ? (
+                          <p className="text-gray-500 text-center py-8">
+                            {mediaSearch ? 'No images found. Try a different search.' : 'No images in library. Upload one first!'}
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-4 gap-2">
+                            {mediaLibrary.map(media => (
+                              <div
+                                key={media.id}
+                                onClick={() => handleSelectFromLibrary(media.url)}
+                                className="relative cursor-pointer group hover:ring-2 hover:ring-blue-500 rounded transition-all"
+                                title={media.title}
+                              >
+                                <img
+                                  src={media.thumbnail}
+                                  alt={media.title}
+                                  className="w-full h-24 object-cover rounded border border-gray-300"
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-60 transition-all rounded flex flex-col items-center justify-center">
+                                  <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-semibold mb-1">
+                                    Select
+                                  </span>
+                                  <span className="text-white opacity-0 group-hover:opacity-100 text-[10px] px-2 text-center">
+                                    {media.title.substring(0, 30)}{media.title.length > 30 ? '...' : ''}
+                                  </span>
+                                </div>
                               </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Pagination Controls */}
+                      {mediaPagination && mediaPagination.totalPages > 1 && (
+                        <div className="mt-3 pt-3 border-t border-gray-300 flex items-center justify-between">
+                          <div className="text-xs text-gray-600">
+                            Page {mediaPagination.page} of {mediaPagination.totalPages}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleMediaPageChange(mediaPage - 1)}
+                              disabled={mediaPage <= 1}
+                              className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                            >
+                              ← Prev
+                            </button>
+                            
+                            {/* Page numbers */}
+                            <div className="flex gap-1">
+                              {Array.from({ length: Math.min(5, mediaPagination.totalPages) }, (_, i) => {
+                                let pageNum;
+                                if (mediaPagination.totalPages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (mediaPage <= 3) {
+                                  pageNum = i + 1;
+                                } else if (mediaPage >= mediaPagination.totalPages - 2) {
+                                  pageNum = mediaPagination.totalPages - 4 + i;
+                                } else {
+                                  pageNum = mediaPage - 2 + i;
+                                }
+                                
+                                return (
+                                  <button
+                                    key={pageNum}
+                                    type="button"
+                                    onClick={() => handleMediaPageChange(pageNum)}
+                                    className={`px-2 py-1 rounded text-xs ${
+                                      pageNum === mediaPage
+                                        ? 'bg-blue-600 text-white font-semibold'
+                                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                );
+                              })}
                             </div>
-                          ))}
+                            
+                            <button
+                              type="button"
+                              onClick={() => handleMediaPageChange(mediaPage + 1)}
+                              disabled={mediaPage >= mediaPagination.totalPages}
+                              className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                            >
+                              Next →
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
