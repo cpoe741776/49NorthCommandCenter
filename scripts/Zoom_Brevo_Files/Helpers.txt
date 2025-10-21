@@ -1,0 +1,218 @@
+//helpers.gs//
+
+/**
+ * Run this ONCE to store Zoom credentials securely
+ */
+function setupZoomCredentials() {
+  const props = PropertiesService.getScriptProperties();
+  
+  props.setProperty('zoom_client_id', 'Uzy724GXQ8u15xM1spZyCg');
+  props.setProperty('zoom_client_secret', 'vrSWsQwboZU2m3iFjU00wjFR0dvw45KQ');
+  props.setProperty('zoom_account_id', 'S6GWPc-aRFKbN_itS2LZtA');
+  
+  Logger.log('✓ Zoom credentials saved to Script Properties');
+}
+
+
+/**
+ * CREATE ALL TRIGGERS - Run this once to set up automated syncing
+ */
+function createAllWebinarTriggers() {
+  // Delete any existing triggers first to avoid duplicates
+  deleteAllWebinarTriggers();
+  
+  // 1. Daily attendance sync at 2 AM (catches previous day's webinars)
+  ScriptApp.newTrigger('syncZoomAttendance')
+    .timeBased()
+    .atHour(2)
+    .everyDays(1)
+    .create();
+  
+  // 2. Daily registration sync at 3 AM
+  ScriptApp.newTrigger('syncZoomRegistrations')
+    .timeBased()
+    .atHour(3)
+    .everyDays(1)
+    .create();
+  
+  // 3. Survey linking twice daily (9 AM and 5 PM to catch new responses)
+  ScriptApp.newTrigger('linkSurveyResponses')
+    .timeBased()
+    .atHour(9)
+    .everyDays(1)
+    .create();
+    
+  ScriptApp.newTrigger('linkSurveyResponses')
+    .timeBased()
+    .atHour(17)
+    .everyDays(1)
+    .create();
+  
+  // 4. Weekly full webinar sync on Mondays at 1 AM (catches new/future webinars)
+  ScriptApp.newTrigger('syncWebinarsFromZoom')
+    .timeBased()
+    .onWeekDay(ScriptApp.WeekDay.MONDAY)
+    .atHour(1)
+    .create();
+  
+  Logger.log('✓ All triggers created successfully');
+  Logger.log('Schedule:');
+  Logger.log('  - Webinar sync: Mondays at 1 AM');
+  Logger.log('  - Attendance sync: Daily at 2 AM');
+  Logger.log('  - Registration sync: Daily at 3 AM');
+  Logger.log('  - Survey linking: Daily at 9 AM and 5 PM');
+}
+
+/**
+ * DELETE ALL TRIGGERS - Use this to clean up before recreating
+ */
+function deleteAllWebinarTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  const webinarFunctions = [
+    'syncZoomAttendance',
+    'syncZoomRegistrations',
+    'linkSurveyResponses',
+    'syncWebinarsFromZoom'
+  ];
+  
+  let deletedCount = 0;
+  triggers.forEach(trigger => {
+    if (webinarFunctions.includes(trigger.getHandlerFunction())) {
+      ScriptApp.deleteTrigger(trigger);
+      deletedCount++;
+    }
+  });
+  
+  Logger.log(`Deleted ${deletedCount} webinar triggers`);
+}
+
+/**
+ * VIEW CURRENT TRIGGERS - See what's scheduled
+ */
+function viewWebinarTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  const webinarFunctions = [
+    'syncZoomAttendance',
+    'syncZoomRegistrations',
+    'linkSurveyResponses',
+    'syncWebinarsFromZoom'
+  ];
+  
+  Logger.log('=== ACTIVE WEBINAR TRIGGERS ===');
+  
+  let foundTriggers = 0;
+  triggers.forEach(trigger => {
+    const funcName = trigger.getHandlerFunction();
+    if (webinarFunctions.includes(funcName)) {
+      const eventType = trigger.getEventType();
+      Logger.log(`${funcName}: ${eventType}`);
+      foundTriggers++;
+    }
+  });
+  
+  if (foundTriggers === 0) {
+    Logger.log('No webinar triggers found. Run createAllWebinarTriggers() to set them up.');
+  } else {
+    Logger.log(`Total: ${foundTriggers} triggers`);
+  }
+}
+
+function removeDuplicateWebinars() {
+  const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+  const sheet = ss.getSheetByName('Webinars');
+  const data = sheet.getDataRange().getValues();
+  
+  const seen = new Map();
+  const rowsToDelete = [];
+  
+  for (let i = data.length - 1; i >= 1; i--) {
+    const webinarId = data[i][0];
+    const date = data[i][2];
+    const time = data[i][3];
+    const uniqueKey = `${webinarId}|${date}|${time}`;
+    
+    if (seen.has(uniqueKey)) {
+      rowsToDelete.push(i + 1);
+    } else {
+      seen.set(uniqueKey, i);
+    }
+  }
+  
+  rowsToDelete.forEach(rowNum => sheet.deleteRow(rowNum));
+  
+  Logger.log(`Removed ${rowsToDelete.length} duplicate rows`);
+}
+  /**
+ * Remove duplicate attendance records (run once to clean up)
+ */
+function removeDuplicateAttendance() {
+  const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+  const sheet = ss.getSheetByName('Attendance');
+  
+  if (!sheet) {
+    Logger.log('Attendance sheet not found');
+    return;
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const seen = new Map();
+  const rowsToDelete = [];
+  
+  // Start from bottom to avoid row number shifts
+  for (let i = data.length - 1; i >= 1; i--) {
+    const webinarId = data[i][0];
+    const email = data[i][2];
+    const joinTime = data[i][3];
+    const leaveTime = data[i][4];
+    const uniqueKey = `${webinarId}|${email}|${joinTime}|${leaveTime}`;
+    
+    if (seen.has(uniqueKey)) {
+      rowsToDelete.push(i + 1);
+    } else {
+      seen.set(uniqueKey, i);
+    }
+  }
+  
+  // Delete duplicates
+  rowsToDelete.forEach(rowNum => {
+    sheet.deleteRow(rowNum);
+  });
+  
+  Logger.log(`Removed ${rowsToDelete.length} duplicate attendance records`);
+}
+
+/**
+ * Remove duplicate registration records (run once to clean up)
+ */
+function removeDuplicateRegistrations() {
+  const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+  const sheet = ss.getSheetByName('Registrations');
+  
+  if (!sheet) {
+    Logger.log('Registrations sheet not found');
+    return;
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  const seen = new Map();
+  const rowsToDelete = [];
+  
+  for (let i = data.length - 1; i >= 1; i--) {
+    const timestamp = data[i][0];
+    const webinarId = data[i][1];
+    const email = data[i][3];
+    const uniqueKey = `${timestamp}|${webinarId}|${email}`;
+    
+    if (seen.has(uniqueKey)) {
+      rowsToDelete.push(i + 1);
+    } else {
+      seen.set(uniqueKey, i);
+    }
+  }
+  
+  rowsToDelete.forEach(rowNum => {
+    sheet.deleteRow(rowNum);
+  });
+  
+  Logger.log(`Removed ${rowsToDelete.length} duplicate registration records`);
+}

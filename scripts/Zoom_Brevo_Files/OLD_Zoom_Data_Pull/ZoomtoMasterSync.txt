@@ -1,0 +1,205 @@
+//ZoomtoMasterSync.gs//
+
+/**
+ * Case-insensitive header index lookup.
+ */
+function ciIndex_(headers, name) {
+  const target = String(name).toLowerCase().trim();
+  return headers.findIndex(h => String(h).toLowerCase().trim() === target);
+}
+
+/**
+ * Title Case utility.
+ */
+function toTitleCase_(str) {
+  return String(str || '')
+    .replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+}
+
+/**
+ * Exclude rules:
+ *  - Exclude ANY contact with last name exactly "Doe"
+ *  - Exclude contacts with last name "Poe" IF first name begins with "C" (case-insensitive)
+ */
+function shouldExcludeContact_(firstName, lastName) {
+  const ln = String(lastName || '').trim().toLowerCase();
+  const fn = String(firstName || '').trim().toLowerCase();
+  if (!ln) return false;
+
+  if (ln === 'doe') return true;
+  if (ln === 'poe' && fn.startsWith('c')) return true;
+
+  return false;
+}
+
+/**
+ * Sync Zoom Registration data to Master Contacts sheet,
+ * mapping Job_Title ➞ COURTESY_JOB_TITLE along with other fields.
+ * Skips any contact with last name "Doe" and "Poe" where first name starts with "C".
+ */
+function formatAndSyncZoomToMaster() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const zoomSheet = ss.getSheetByName('ZOOM_Registration_and_Participation_Data');
+  const masterSheet = ss.getSheetByName('Master Contacts');
+  if (!zoomSheet || !masterSheet) throw new Error('Missing one of the sheets.');
+
+  const zoomData = zoomSheet.getDataRange().getValues();
+  if (!zoomData.length) {
+    Logger.log('ℹ️ No Zoom data to process.');
+    return;
+  }
+
+  const zoomHeaders = zoomData[0];
+  const masterHeaders = masterSheet.getDataRange().getValues()[0];
+
+  // Indices (case-insensitive)
+  const emailColZoom = ciIndex_(zoomHeaders, 'Email');
+  const firstNameColZoom = ciIndex_(zoomHeaders, 'first_name');
+  const lastNameColZoom  = ciIndex_(zoomHeaders, 'last_name');
+
+  if (emailColZoom === -1) throw new Error('Email field missing in Zoom sheet headers.');
+  const emailColMaster = ciIndex_(masterHeaders, 'EMAIL');
+  if (emailColMaster === -1) throw new Error('EMAIL field missing in Master sheet headers.');
+
+  // Build Master map by email
+  const masterMap = {};
+  const masterData = masterSheet.getDataRange().getValues();
+  for (let i = 1; i < masterData.length; i++) {
+    const email = String(masterData[i][emailColMaster] || '').toLowerCase().trim();
+    if (email) masterMap[email] = i + 1; // 1-based row index
+  }
+
+  // Header mapping: Zoom ➜ Master (keys compared in lowercase)
+  const headerMap = {
+    'first_name': 'FIRST_NAME',
+    'last_name': 'LAST_NAME',
+    'email': 'EMAIL',
+    'city': 'CITY',
+    'state_province': 'STATE_PROVINCE',
+    'country_region': 'COUNTRY_REGION',
+    'job_title': 'COURTESY_JOB_TITLE',
+    'organization': 'ORGANIZATION_NAME',
+    'academic credentials (if any)': 'CREDENTIALS',
+    'registration time': 'REGISTRATION_TIME',
+    'join_time': 'JOIN_TIME',
+    'leave_time': 'LEAVE_TIME',
+    'duration_minutes': 'DURATION_MINUTES',
+    'importance_of_mental_strength': 'IMPORTANCE_OF_MENTAL_STRENGTH',
+    'implemented_mental_strength_initiative': 'IMPLEMENTED_INITIATIVE',
+    'webinar_gain_expectation': 'WEBINAR_GAIN_EXPECTATION',
+    'webinar_uuid': 'WEBINAR_UUID',
+    'webinar_topic': 'WEBINAR_TOPIC',
+    'webinar_start_time': 'WEBINAR_START_TIME',
+    'registrant_id': 'REGISTRANT_ID',
+    'zoom_event_timestamp': 'ZOOM_EVENT_TIMESTAMP'
+  };
+
+  const srcIdx = ciIndex_(masterHeaders, 'SOURCED_FROM');
+  const lcIdx  = ciIndex_(masterHeaders, 'LAST_CHANGED');
+
+  let processed = 0;
+  let skippedNoEmail = 0;
+  let excludedByRule = 0;
+  let updated = 0;
+  let inserted = 0;
+
+  for (let i = 1; i < zoomData.length; i++) {
+    const zRow = zoomData[i];
+    processed++;
+
+    const email = String(zRow[emailColZoom] || '').toLowerCase().trim();
+    if (!email) {
+      skippedNoEmail++;
+      continue;
+    }
+
+    // Pull names for exclusion logic (Title Case for consistency in Master)
+    const fRaw = firstNameColZoom > -1 ? zRow[firstNameColZoom] : '';
+    const lRaw = lastNameColZoom  > -1 ? zRow[lastNameColZoom]  : '';
+    const firstName = toTitleCase_(fRaw);
+    const lastName  = toTitleCase_(lRaw);
+
+    if (shouldExcludeContact_(firstName, lastName)) {
+      excludedByRule++;
+      Logger.log(`⏭️ Excluded by rule: ${firstName} ${lastName} <${email}>`);
+      continue;
+    }
+
+    // Prepare update row matching Master headers
+    const updateRow = Array(masterHeaders.length).fill('');
+
+    // mark source
+    if (srcIdx > -1) updateRow[srcIdx] = 'Webinar';
+
+    // Map fields
+    for (let j = 0; j < zoomHeaders.length; j++) {
+      const header = String(zoomHeaders[j] || '');
+      const key = header.toLowerCase();
+      const mappedColName = headerMap[key] || header.toUpperCase();
+      const mIdx = ciIndex_(masterHeaders, mappedColName);
+      if (mIdx === -1) continue;
+
+      let value = zRow[j];
+
+      // normalize strings
+      if (typeof value === 'string') value = value.trim();
+
+      switch (key) {
+        case 'first_name':
+        case 'last_name':
+        case 'city':
+          value = toTitleCase_(value);
+          break;
+        case 'state_province':
+          value = String(value || '').toUpperCase().trim();
+          break;
+        case 'country_region':
+          value = toTitleCase_(value);
+          break;
+        case 'job_title':
+          value = toTitleCase_(value);
+          break;
+        case 'academic credentials (if any)':
+          value = String(value || '')
+            .split(/[;,]+/)
+            .map(s => toTitleCase_(s.trim()))
+            .filter(Boolean)
+            .join('; ');
+          break;
+      }
+
+      updateRow[mIdx] = value;
+    }
+
+    // Ensure Name fields reflect the Title Case values we used for exclusion check
+    const mFirstIdx = ciIndex_(masterHeaders, 'FIRST_NAME');
+    const mLastIdx  = ciIndex_(masterHeaders, 'LAST_NAME');
+    if (mFirstIdx > -1) updateRow[mFirstIdx] = firstName;
+    if (mLastIdx  > -1) updateRow[mLastIdx]  = lastName;
+
+    // LAST_CHANGED timestamp
+    if (lcIdx > -1) updateRow[lcIdx] = new Date();
+
+    // Upsert to Master
+    if (masterMap[email]) {
+      masterSheet.getRange(masterMap[email], 1, 1, updateRow.length).setValues([updateRow]);
+      updated++;
+    } else {
+      masterSheet.appendRow(updateRow);
+      inserted++;
+    }
+  }
+
+  // Clear Zoom sheet data (except header)
+  const lastRow = zoomSheet.getLastRow();
+  if (lastRow > 1) {
+    zoomSheet.getRange(2, 1, lastRow - 1, zoomSheet.getLastColumn()).clearContent();
+  }
+
+  Logger.log(`✅ formatAndSyncZoomToMaster completed.
+    Processed: ${processed}
+    Inserted:  ${inserted}
+    Updated:   ${updated}
+    Skipped (no email): ${skippedNoEmail}
+    Excluded by rule:   ${excludedByRule}`);
+}

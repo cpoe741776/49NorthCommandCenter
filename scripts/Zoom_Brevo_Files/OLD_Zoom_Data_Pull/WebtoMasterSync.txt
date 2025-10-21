@@ -1,0 +1,153 @@
+//WebtoMasterSync.gs//
+
+function mapWebsiteToMasterContacts() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const leadsSheet = ss.getSheetByName('Website Leads');
+  const masterSheet = ss.getSheetByName('Master Contacts');
+  if (!leadsSheet || !masterSheet) throw new Error('❌ One or both required sheets not found.');
+
+  const leadsData = leadsSheet.getDataRange().getValues();
+  const leadsHeaders = leadsData[0];
+  const masterData = masterSheet.getDataRange().getValues();
+  const masterHeaders = masterData[0];
+
+  const emailIdxMaster = masterHeaders.indexOf('EMAIL');
+  const emailIdxLeads = leadsHeaders.findIndex(h => String(h).toLowerCase().includes('email'));
+  if (emailIdxLeads === -1 || emailIdxMaster === -1)
+    throw new Error('❌ Email column not found in one or both sheets.');
+
+  const usStates = {
+    "alabama":"AL","alaska":"AK","arizona":"AZ","arkansas":"AR","california":"CA","colorado":"CO",
+    "connecticut":"CT","delaware":"DE","florida":"FL","georgia":"GA","hawaii":"HI","idaho":"ID",
+    "illinois":"IL","indiana":"IN","iowa":"IA","kansas":"KS","kentucky":"KY","louisiana":"LA",
+    "maine":"ME","maryland":"MD","massachusetts":"MA","michigan":"MI","minnesota":"MN",
+    "mississippi":"MS","missouri":"MO","montana":"MT","nebraska":"NE","nevada":"NV",
+    "new hampshire":"NH","new jersey":"NJ","new mexico":"NM","new york":"NY","north carolina":"NC",
+    "north dakota":"ND","ohio":"OH","oklahoma":"OK","oregon":"OR","pennsylvania":"PA",
+    "rhode island":"RI","south carolina":"SC","south dakota":"SD","tennessee":"TN","texas":"TX",
+    "utah":"UT","vermont":"VT","virginia":"VA","washington":"WA","west virginia":"WV",
+    "wisconsin":"WI","wyoming":"WY"
+  };
+
+  const fieldMap = {
+    "Timestamp": "INITIAL_CONTACT_TIME",
+    "Your Best Contact Email Address": "EMAIL",
+    "First Name": "FIRST_NAME",
+    "Last Name": "LAST_NAME",
+    "Courtesy or Job Title": "COURTESY_JOB_TITLE",
+    "Academic Credentials (Optional)": "CREDENTIALS",
+    "Your Organization Name": "ORGANIZATION_NAME",
+    "Organization Street Address (Optional)": "ORGANIZATION_STREET_ADDRESS",
+    "Organization City/Town (Optional)": "CITY",
+    "Organization State/Region (Optional)": "STATE_PROVINCE",
+    "🌍 “If you selected 'Outside the United States,' from the question above, please enter your country and region/province.” (Optional)": "COUNTRY_REGION",
+    "Zip or Post Code (Optional)": "ZIP_OR_POSTAL_CODE",
+    "Organization Type": "ORGANIZATION_TYPE",
+    "Office Phone number (Optional)": "PHONE_OFFICE",
+    "Mobile Phone number (Optional)": "PHONE_MOBILE",
+    "Areas of Interest (Optional)": "AREAS_OF_INTEREST",
+    "Please tell us more about how we can assist you or your organization (Optional)": "CONTACT_COMMENTS",
+    "How did you hear about us? (Optional)": "REFERRAL_HEAR",
+    "Do you need us to contact you?": "WEB_CONTACT_REQ"
+  };
+
+  // Build Master map by normalized email
+  const masterMap = {};
+  for (let i = 1; i < masterData.length; i++) {
+    const email = String(masterData[i][emailIdxMaster] || '').toLowerCase().trim();
+    if (email) masterMap[email] = i + 1; // row number
+  }
+
+  for (let i = 1; i < leadsData.length; i++) {
+    const row = leadsData[i];
+    const email = String(row[emailIdxLeads] || '').toLowerCase().trim();
+    if (!email) continue;
+
+    const rowDataToUpdate = Array(masterHeaders.length).fill('');
+    let setCountryFromState = false;
+
+    for (let j = 0; j < leadsHeaders.length; j++) {
+      const sourceField = String(leadsHeaders[j] || '');
+      const targetField = fieldMap[sourceField];
+      const masterIdx = masterHeaders.indexOf(targetField);
+      let val = row[j];
+
+      if (targetField && masterIdx !== -1) {
+        switch (targetField) {
+          case "FIRST_NAME":
+          case "LAST_NAME":
+          case "CITY":
+          case "ORGANIZATION_NAME":
+          case "COURTESY_JOB_TITLE":
+            val = toTitleCase(val);
+            break;
+          case "CREDENTIALS":
+            val = String(val || '').toUpperCase();
+            break;
+          case "STATE_PROVINCE": {
+            const stateInput = String(val || '').trim().toLowerCase();
+            if (usStates[stateInput]) {
+              val = usStates[stateInput];
+              setCountryFromState = true;
+            } else if (Object.values(usStates).includes(stateInput.toUpperCase())) {
+              val = stateInput.toUpperCase();
+              setCountryFromState = true;
+            } else {
+              val = "Other";
+            }
+            break;
+          }
+          case "COUNTRY_REGION": {
+            if (setCountryFromState) {
+              val = "United States";
+            } else {
+              const raw = String(val || '').trim();
+              val = raw ? toTitleCase(raw) : "Other";
+            }
+            break;
+          }
+          default:
+            // leave as-is
+            break;
+        }
+        rowDataToUpdate[masterIdx] = val;
+      }
+    }
+
+    // 🕒 LAST_CHANGED
+    const lastChangedIdx = masterHeaders.indexOf("LAST_CHANGED");
+    if (lastChangedIdx !== -1) rowDataToUpdate[lastChangedIdx] = new Date();
+
+    // 📌 Source tag
+    setSourcedFrom(rowDataToUpdate, masterHeaders, "Website Form – Contact Us");
+
+    // 🔁 Upsert with MERGE on update (don’t wipe existing data with blanks)
+    if (masterMap[email]) {
+      const rowNum   = masterMap[email];
+      const existing = masterSheet.getRange(rowNum, 1, 1, masterHeaders.length).getValues()[0];
+      const merged   = existing.slice();
+
+      for (let c = 0; c < masterHeaders.length; c++) {
+        const v = rowDataToUpdate[c];
+        if (v !== '' && v != null) merged[c] = v;
+      }
+      if (lastChangedIdx !== -1) merged[lastChangedIdx] = new Date();
+
+      masterSheet.getRange(rowNum, 1, 1, masterHeaders.length).setValues([merged]);
+    } else {
+      masterSheet.appendRow(rowDataToUpdate);
+    }
+  }
+
+  // 🧹 Clear Website Leads (preserve headers)
+  const lastRow = leadsSheet.getLastRow();
+  if (lastRow > 1) {
+    leadsSheet.getRange(2, 1, lastRow - 1, leadsSheet.getLastColumn()).clearContent();
+    Logger.log("🧹 Website Leads sheet cleared after sync.");
+  }
+
+  
+  Logger.log('✅ Website and Phantom Clean leads successfully mapped and merged into Master Contacts.');
+}
+
+

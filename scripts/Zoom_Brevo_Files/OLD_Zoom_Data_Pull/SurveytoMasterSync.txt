@@ -1,0 +1,86 @@
+//surveytoMastersync.gs//
+
+function syncZoomSurveyToMaster(e) {
+  const ss          = SpreadsheetApp.getActiveSpreadsheet();
+  const surveySheet = ss.getSheetByName("Form Responses 1");
+  const masterSheet = ss.getSheetByName("Master Contacts");
+  const archiveSheet= ss.getSheetByName("Survey Archive") || ss.insertSheet("Survey Archive");
+  if (!surveySheet || !masterSheet) { Logger.log("❌ Required sheet not found."); return; }
+
+  // If invoked by form submit (has event), process the single row then delete it
+  if (e && e.values && e.range) {
+    const surveyHeaders = surveySheet.getRange(1,1,1,surveySheet.getLastColumn()).getValues()[0] || [];
+    const newRow = e.values;
+    updateMasterSafe_(newRow, surveyHeaders, masterSheet);
+    archiveSheet.appendRow(newRow);
+    surveySheet.deleteRow(e.range.getRow());
+    Logger.log("✅ Form row processed (Master + Archive).");
+    return;
+  }
+
+  // Batch mode (time-driven cron): process all rows, then clear contents
+  const last = surveySheet.getLastRow();
+  if (last <= 1) { Logger.log("ℹ️ No survey rows to process."); return; }
+  const width = surveySheet.getLastColumn();
+  const surveyHeaders = surveySheet.getRange(1,1,1,width).getValues()[0] || [];
+  const rows = surveySheet.getRange(2,1,last-1,width).getValues();
+
+  rows.forEach(r => {
+    if (r.every(v => v === "")) return;
+    updateMasterSafe_(r, surveyHeaders, masterSheet);
+    archiveSheet.appendRow(r);
+  });
+
+  surveySheet.getRange(2,1,last-1,width).clearContent(); // preserve header
+  Logger.log(`✅ Batch processed ${rows.length} survey rows (Master + Archive).`);
+}
+
+/* helper: upsert Master Contacts (case-insensitive headers) */
+function updateMasterSafe_(newRow, surveyHeaders, masterSheet) {
+  const mData = masterSheet.getDataRange().getValues();
+  const mHead = mData[0] || [];
+  const idxEForm = ciIndex(surveyHeaders, "email address");
+  const idxEMast = ciIndex(mHead,       "email");
+  if (idxEForm === -1 || idxEMast === -1) { Logger.log("❌ Email column missing."); return; }
+
+  const email = String(newRow[idxEForm]||"").trim().toLowerCase();
+  if (!email) { Logger.log("⚠️ Blank email—skipped."); return; }
+
+  const rowIdx = mData.slice(1)
+    .findIndex(r => String(r[idxEMast]||"").toLowerCase().trim() === email) + 1;
+
+  const target = rowIdx >= 1
+    ? masterSheet.getRange(rowIdx + 1, 1, 1, mHead.length).getValues()[0]
+    : Array(mHead.length).fill("");
+
+  target[idxEMast] = email;
+
+  const idxTimeF = ciIndex(surveyHeaders, "timestamp");
+  const idxTimeM = ciIndex(mHead,         "survey_submitted_time");
+  if (idxTimeF !== -1 && idxTimeM !== -1) target[idxTimeM] = newRow[idxTimeF];
+
+  const map = [
+    {f:"relevance",   m:"relevance_rating"},
+    {f:"[rhonda]",    m:"rating_rhonda"},
+    {f:"[chris]",     m:"rating_chris"},
+    {f:"[guest]",     m:"rating_guest"},
+    {f:"[sharing]",   m:"will_share"},
+    {f:"[attending]", m:"will_attend_again"},
+    {f:"quote",       m:"quote_interest"},
+    {f:"comments",    m:"comments"}
+  ];
+  map.forEach(({f,m})=>{
+    const sIdx = surveyHeaders.findIndex(h => String(h||"").toLowerCase().includes(f));
+    const dIdx = ciIndex(mHead, m);
+    if (sIdx !== -1 && dIdx !== -1) target[dIdx] = newRow[sIdx];
+  });
+
+  const idxLC  = ciIndex(mHead, "last_changed");
+  const idxSrc = ciIndex(mHead, "sourced_from");
+  if (idxLC !== -1) target[idxLC] = new Date();
+  if (idxSrc !== -1) target[idxSrc] = "Webinar Survey";
+
+  (rowIdx >= 1)
+    ? masterSheet.getRange(rowIdx + 1, 1, 1, target.length).setValues([target])
+    : masterSheet.appendRow(target);
+}

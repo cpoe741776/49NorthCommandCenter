@@ -1,0 +1,2366 @@
+// --- CONFIGURATION ---
+// These are constants for accessing Script Properties
+const SCRIPT_PROPERTIES_KEYS = {
+  WP_USERNAME: "WP_USERNAME",
+  MA_BLOG_POST: "MA_BLOG_POST", // WordPress Application Password
+  BREVO_API_KEY: "BREVO_API_KEY",
+  // YOU MUST ADD THESE FOUR TO YOUR SCRIPT PROPERTIES (File > Project properties > Script properties)
+  BREVO_SENDER_NAME: "BREVO_SENDER_NAME",
+  BREVO_SENDER_EMAIL: "BREVO_SENDER_EMAIL",
+  BREVO_API_BASE_URL: "BREVO_API_BASE_URL",
+  // END NEW BREVO KEYS
+  LINKEDIN_KEY: "LINKEDIN_KEY", // LinkedIn Access Token
+  LINKEDIN_CLIENT_ID: "LINKEDIN_CLIENT_ID",
+  LINKEDIN_CLIENT_SECRET: "LINKEDIN_CLIENT_SECRET",
+  FACEBOOK_KEY: "FACEBOOK_KEY", // Facebook Page Access Token
+  FACEBOOK_PAGE_ID: "FACEBOOK_PAGE_ID",
+  // NEW: Add fallback image URL to script properties
+  FALLBACK_IMAGE_URL: "FALLBACK_IMAGE_URL"
+};
+
+let SCRIPT_PROPERTIES = null;
+
+function getScriptProperties() {
+  if (!SCRIPT_PROPERTIES) {
+    SCRIPT_PROPERTIES = PropertiesService.getScriptProperties().getProperties();
+  }
+  return SCRIPT_PROPERTIES;
+}
+
+// --- GLOBAL STANDARDIZED LINKS ---
+const MA_BLUE = "#003049";
+const MFA_CTA = 'Take the MFA';
+const MFA_URL = 'https://mymentalarmor.com/take-your-free-mental-fitness-assessment-online/';
+const SITE_CTA = 'Browse Our Website';
+const SITE_URL = 'https://mymentalarmor.com';
+const ONLINE_CTA = 'Train Anytime with Mental Armor™ Online';
+const ONLINE_URL = 'https://mymentalarmor.com/courses/mental-armor-online/'; // Corrected URL
+// --- END GLOBAL STANDARDIZED LINKS ---
+
+// === VIDEO WHITELIST START ===================================================
+// Hosts whose URLs already render a thumbnail/player on Facebook & LinkedIn.
+const VIDEO_WHITELIST = [
+  // --- Major Social Media & Video Platforms ---
+  'youtube.com', 'youtu.be',
+  'vimeo.com', 'player.vimeo.com',
+  'drive.google.com',
+  'facebook.com', 'fb.watch', // Native Facebook videos and short links
+  'instagram.com', // Reels and other video content
+  'twitter.com', 'x.com', // Twitter/X videos
+  'tiktok.com', // Short-form video platform
+  'twitch.tv', // Live streaming and clips
+  'loom.com', // Screen recording videos
+  'wistia.com', // Marketing video platform
+
+  // --- Enterprise & Niche Platforms ---
+  'brightcove.com',
+  'kaltura.com',
+  'microsoftstream.com',
+  'sproutvideo.com',
+  'jwplayer.com',
+  'streamable.com',
+  'rumble.com',
+  'dailymotion.com',
+  'ted.com',
+
+  // --- Hosting, CDN & Generic Patterns ---
+  'videos.cdn.*', // Wildcard for various CDNs
+  'cloudflarestream.com', // Cloudflare's video service
+  'amazon.com', // Prime Video and other embeds
+  'video.google.com', // Google's own video hosting service
+];
+
+/**
+ * Checks if a video URL is from a platform that displays thumbnails/players well on social media.
+ * @param {string} url The video URL to check.
+ * @returns {boolean} True if the URL is from a preview-friendly platform.
+ */
+function isPreviewFriendly(url) {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return VIDEO_WHITELIST.some(h => host.endsWith(h));
+  } catch (_) {
+    Logger.log(`[Whitelist] Invalid URL: ${url}`);
+    return false;
+  }
+}
+// === VIDEO WHITELIST END =====================================================
+
+/**
+ * Main function to process new content from the WeeklyContentArchive.
+ * This function will be set on a time-driven trigger.
+ */
+function processNewContentFromArchive() {
+  Logger.log("Starting processNewContentFromArchive at " + new Date());
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("WeeklyContentArchive");
+  if (!sheet) {
+    Logger.log("Error: Sheet 'WeeklyContentArchive' not found. Cannot process content.");
+    return;
+  }
+
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  const headers = values[0];
+  const lastRow = values.length;
+
+  const statusColIndex = headers.indexOf("status");
+  const publishToColIndex = headers.indexOf("publishTo");
+
+  if (statusColIndex === -1 || publishToColIndex === -1) {
+    Logger.log("Error: Missing 'status' or 'publishTo' column in headers of WeeklyContentArchive. Cannot process content.");
+    return;
+  }
+
+  let processedCount = 0;
+
+  for (let i = 1; i < lastRow; i++) {
+    const row = values[i];
+    const status = row[statusColIndex];
+
+    if (status !== '✓' && status !== 'Error' && status !== 'Skipped') {
+      const contentData = {};
+      headers.forEach((header, index) => {
+        contentData[header] = row[index];
+      });
+
+      // Ensure key image/alt text fields are explicitly included from column data
+      contentData.primaryImageUrl = contentData.primaryImageUrl || '';
+      contentData.guestSpeakerImageUrl = contentData.guestSpeakerImageUrl || '';
+      contentData.imageAltText = contentData.imageAltText || '';
+
+      // NEW: Map the new video upload fields. Prioritize the form upload field.
+      contentData.videoUrl = contentData['weekly-video-upload'] || contentData['weekly-video-url'] || '';
+
+      // Determine content type for the router
+      if (contentData['weekly-title'] && contentData['weekly-title'].length > 0) {
+        contentData.type = 'weeklyContent';
+        contentData.postTitle = contentData['weekly-title'];
+        contentData.whyItMatters = contentData['weekly-why'];
+        contentData.fromTheField = contentData['weekly-field'];
+        contentData.keyTakeaway = contentData['weekly-takeaway'];
+        contentData.briefingBody = contentData['weekly-body'];
+        contentData.mentalArmorSkillTags = contentData['weekly-tags'];
+        contentData.externalLinks = contentData['weekly-externalLinks'] ? contentData['weekly-externalLinks'].split('\n').filter(Boolean) : [];
+        contentData.internalLinks = contentData['weekly-internalLinks'] ? contentData['weekly-internalLinks'].split('\n').filter(Boolean) : [];
+      } else if (contentData['webinar-title'] && contentData['webinar-title'].length > 0) {
+        contentData.type = 'webinar';
+        contentData.postTitle = contentData['webinar-title'];
+        contentData.headlineHook = contentData['webinar-headlineHook'];
+        contentData.webinarDate = contentData['webinar-date'];
+        contentData.webinarTime = contentData['webinar-time'];
+        contentData.whatSessionCovers = contentData['webinar-sessionCovers'];
+        contentData.whySessionMatters = contentData['webinar-sessionMatters'];
+        contentData.whoAttend = contentData['webinar-whoShouldAttend'];
+        contentData.walkAwayWith = contentData['webinar-walkAwayWith'];
+        contentData.speakerBioIntro = contentData['webinar-speakerBioIntr'];
+        contentData.emailSubjectLine = contentData['webinar-emailSubjectLine'];
+        contentData.emailPreviewText = contentData['webinar-emailPreviewText'];
+        contentData.internalNotes = contentData['webinar-internalNotes'];
+      } else {
+        Logger.log(`Skipping row ${i + 1}: Neither weekly-title nor webinar-title found. Content type indeterminate.`);
+        sheet.getRange(i + 1, statusColIndex + 1).setValue('Skipped');
+        continue;
+      }
+
+      Logger.log(`Processing content row ${i + 1} (${contentData.type}): "${contentData.postTitle}"`);
+
+      try {
+        _routeContentToChannels(contentData);
+        sheet.getRange(i + 1, statusColIndex + 1).setValue('✓');
+        processedCount++;
+        Logger.log(`Successfully processed row ${i + 1} from WeeklyContentArchive.`);
+      } catch (e) {
+        Logger.log(`Error processing row ${i + 1} from WeeklyContentArchive: ${e.message}`);
+        sheet.getRange(i + 1, statusColIndex + 1).setValue('Error');
+      }
+    }
+  }
+  Logger.log(`processNewContentFromArchive complete. ${processedCount} rows processed.`);
+}
+
+/**
+ * Routes content to various publishing channels based on contentData.publishTo.
+ * @param {object} contentData The structured content data from WeeklyContentArchive.
+ */
+function _routeContentToChannels(contentData) {
+  const scriptProps = getScriptProperties();
+  const destinations = contentData.publishTo ? contentData.publishTo.split(',').map(d => d.trim()) : [];
+
+  let postPermalink = null;
+  let finalImageUrlForChannels = null;
+  let videoBlob = null;
+  let videoUrlForChannels = null;
+  let wordpressMediaResult = null;
+
+  // --- NEW LOGIC: Determine video source (blob or URL) and correct URL format ---
+   // --- Prefer native uploads when given a direct MP4 (WordPress uploads or any .mp4 URL) ---
+  if (!videoBlob && contentData.videoUrl && /\.mp4(\?|$)/i.test(contentData.videoUrl)) {
+    try {
+      Logger.log('[Router] Direct MP4 detected; attempting fetch for native upload…');
+      const fetchedBlob = getUrlVideoBlob(contentData.videoUrl, 45); // ~45MB ceiling
+      if (fetchedBlob) {
+        videoBlob = fetchedBlob;          // triggers native path for LI/FB
+        videoUrlForChannels = null;       // disable external link mode
+        Logger.log('[Router] MP4 fetched successfully; using native upload for platforms.');
+      } else {
+        Logger.log('[Router] MP4 too large/unsupported; will fall back to link/image logic.');
+      }
+    } catch (e) {
+      Logger.log(`[Router] MP4 fetch error: ${e.message}. Falling back to link/image.`);
+    }
+  }
+  if (contentData.videoUrl) {
+    if (contentData.videoUrl.includes('drive.google.com')) {
+      Logger.log('[Router] Google Drive video URL detected. Attempting to get video blob...');
+      videoBlob = getDriveVideoBlob(contentData.videoUrl);
+      if (videoBlob) {
+        Logger.log('[Router] Video blob found. Will attempt native video posts.');
+      } else {
+        Logger.log('[Router] Video URL was provided, but blob could not be processed. Falling back to image/link.');
+      }
+    } else if (contentData.videoUrl.includes('youtube.com') || contentData.videoUrl.includes('youtu.be') || contentData.videoUrl.includes('vimeo.com')) {
+      Logger.log('[Router] External video URL detected. Standardizing URL...');
+      videoUrlForChannels = standardizeYoutubeUrl(contentData.videoUrl);
+      if (!videoUrlForChannels) {
+        // If standardization fails, fall back to simple URL
+        videoUrlForChannels = contentData.videoUrl;
+      }
+    } else {
+      Logger.log('[Router] Unrecognized external video URL format. Will use URL for posting as-is.');
+      videoUrlForChannels = contentData.videoUrl;
+    }
+  }
+
+  // === WHITELIST – flag it once here ===================================
+  const isFriendlyVideoUrl = videoUrlForChannels && isPreviewFriendly(videoUrlForChannels);
+  Logger.log(`[Router] isFriendlyVideoUrl = ${isFriendlyVideoUrl} for URL: ${videoUrlForChannels}`);
+  // =====================================================================
+
+  // Use a placeholder image for WordPress if a video is present and no image is provided.
+  if ((videoBlob || videoUrlForChannels) && !contentData.primaryImageUrl && !contentData.guestSpeakerImageUrl) {
+    finalImageUrlForChannels = scriptProps[SCRIPT_PROPERTIES_KEYS.FALLBACK_IMAGE_URL] || 'https://mymentalarmor.com/wp-content/uploads/default-image.jpg';
+    Logger.log('[Router] Using video placeholder image for featured media as no image was provided.');
+  } else if (contentData.type === 'webinar' && contentData.guestSpeakerImageUrl) {
+    finalImageUrlForChannels = contentData.guestSpeakerImageUrl;
+    Logger.log('[Router] Prioritizing guestSpeakerImageUrl for featured image.');
+  } else if (contentData.primaryImageUrl) {
+    finalImageUrlForChannels = contentData.primaryImageUrl;
+    Logger.log('[Router] Using primaryImageUrl for featured image.');
+  } else if (contentData.guestSpeakerImageUrl) {
+    finalImageUrlForChannels = contentData.guestSpeakerImageUrl;
+    Logger.log('[Router] Using guestSpeakerImageUrl as fallback for featured image.');
+  }
+
+  // Always upload the selected image to WordPress to get a featured media ID.
+  if (finalImageUrlForChannels) {
+    Logger.log('[Router] Attempting to upload image to WordPress Media Library for featured image...');
+    const wpUsername = scriptProps[SCRIPT_PROPERTIES_KEYS.WP_USERNAME];
+    const wpApplicationPassword = scriptProps[SCRIPT_PROPERTIES_KEYS.MA_BLOG_POST];
+
+    try {
+      wordpressMediaResult = getOrCreateWordPressMediaId(finalImageUrlForChannels, contentData.imageAltText, wpUsername, wpApplicationPassword);
+      if (wordpressMediaResult && wordpressMediaResult.url) {
+        finalImageUrlForChannels = wordpressMediaResult.url;
+        Logger.log(`[Router] Image successfully uploaded to WP Media Library: ${finalImageUrlForChannels}`);
+      } else {
+        Logger.log('[Router] Warning: getOrCreateWordPressMediaId did not return a valid URL. Will proceed with original image URL if available.');
+      }
+    } catch (e) {
+      Logger.log(`[Router] Error uploading image to WP Media Library: ${e.message}. Will proceed with original image URL if available.`);
+    }
+  }
+
+  Logger.log(`[Router] Routing content for: "${contentData.postTitle}". Destinations: ${destinations.join(', ')}`);
+
+  // === 1. Publish to Website (WordPress) ===
+  if (destinations.includes('Website (mymentalarmor.com)')) {
+    Logger.log('[Router] Publishing to Website (WordPress)...');
+    try {
+      const wpUsername = scriptProps[SCRIPT_PROPERTIES_KEYS.WP_USERNAME];
+      const wpApplicationPassword = scriptProps[SCRIPT_PROPERTIES_KEYS.MA_BLOG_POST];
+      const blogResult = publishToBlog(contentData, wordpressMediaResult, videoUrlForChannels, wpUsername, wpApplicationPassword);
+      if (blogResult && blogResult.permalink) {
+        postPermalink = blogResult.permalink;
+        Logger.log(`[Router] WordPress Post Permalink: ${postPermalink}`);
+      } else {
+        Logger.log('[Router] Warning: WordPress publishing did not return a permalink.');
+      }
+    } catch (e) {
+      Logger.log(`[Router] Error publishing to Website (WordPress): ${e.message}`);
+    }
+  } else {
+    Logger.log('[Router] Skipping Website (WordPress) publishing (not selected).');
+  }
+
+  // === 2. Publish to LinkedIn ===
+  if (destinations.includes('LinkedIn (49 North)')) {
+    Logger.log('[Router] Publishing to LinkedIn...');
+    try {
+      const linkedinAccessToken = scriptProps[SCRIPT_PROPERTIES_KEYS.LINKEDIN_KEY];
+      const linkedinClientId = scriptProps[SCRIPT_PROPERTIES_KEYS.LINKEDIN_CLIENT_ID];
+      const linkedinClientSecret = scriptProps[SCRIPT_PROPERTIES_KEYS.LINKEDIN_CLIENT_SECRET];
+
+      if (videoBlob) {
+        publishToLinkedIn(contentData, videoBlob, null, null, linkedinAccessToken, linkedinClientId, linkedinClientSecret, postPermalink);
+      } else if (videoUrlForChannels) {
+        publishToLinkedIn(contentData, null, null, videoUrlForChannels, linkedinAccessToken, linkedinClientId, linkedinClientSecret, postPermalink, isFriendlyVideoUrl);
+      } else {
+        publishToLinkedIn(contentData, null, finalImageUrlForChannels, null, linkedinAccessToken, linkedinClientId, linkedinClientSecret, postPermalink);
+      }
+    } catch (e) {
+      Logger.log(`[Router] Error publishing to LinkedIn: ${e.message}`);
+    }
+  } else {
+    Logger.log('[Router] Skipping LinkedIn publishing (not selected).');
+  }
+
+  // === 3. Publish to Facebook ===
+  if (destinations.includes('Facebook (49 North)')) {
+    Logger.log('[Router] Publishing to Facebook...');
+    try {
+      const facebookPageAccessToken = scriptProps[SCRIPT_PROPERTIES_KEYS.FACEBOOK_KEY];
+      const facebookPageId = scriptProps[SCRIPT_PROPERTIES_KEYS.FACEBOOK_PAGE_ID];
+
+      if (videoBlob) {
+        publishToFacebook(contentData, videoBlob, null, null, facebookPageAccessToken, facebookPageId, postPermalink);
+      } else if (videoUrlForChannels) {
+        publishToFacebook(contentData, null, null, videoUrlForChannels, facebookPageAccessToken, facebookPageId, postPermalink, isFriendlyVideoUrl);
+      } else {
+        publishToFacebook(contentData, null, finalImageUrlForChannels, null, facebookPageAccessToken, facebookPageId, postPermalink);
+      }
+    } catch (e) {
+      Logger.log(`[Router] Error publishing to Facebook: ${e.message}`);
+    }
+  } else {
+    Logger.log('[Router] Skipping Facebook publishing (not selected).');
+  }
+
+  // === 4. Draft a Mass Email (Brevo / Sendinblue) ===
+  if (destinations.includes('Draft a Mass Email (All 49 North Contacts - 28k+)')) {
+    Logger.log('[Router] Drafting Mass Email (Brevo)...');
+    Logger.log(`[Router] Brevo target image URL (passed to draftEmailInBrevo): ${finalImageUrlForChannels}`);
+    try {
+      draftEmailInBrevo(contentData, postPermalink, finalImageUrlForChannels);
+    } catch (e) {
+      Logger.log(`[Router] Error drafting Mass Email (Brevo): ${e.message}`);
+    }
+  } else {
+    Logger.log('[Router] Skipping Mass Email drafting (not selected).');
+  }
+}
+
+/**
+ * Publishes content to your blog on mymentalarmor.com using WordPress REST API.
+ * @param {object} contentData The structured content data.
+ * @param {object|null} wordpressMediaResult Object containing {id: number, url: string} from WordPress Media Library.
+ * @param {string|null} videoUrl An external video URL to embed.
+ * @param {string} wpUsername WordPress username.
+ * @param {string} wpApplicationPassword WordPress application password.
+ * @returns {object|null} An object with {permalink: string, mediaUrl: string} if successful, null otherwise.
+ */
+function publishToBlog(contentData, wordpressMediaResult, videoUrl, wpUsername, wpApplicationPassword) {
+  if (!wpUsername || !wpApplicationPassword) {
+    Logger.log('[WordPress] WP_USERNAME or MA_BLOG_POST (Application Password) not set in Script Properties. Skipping blog publishing.');
+    return null;
+  }
+
+  Logger.log(`[WordPress] Attempting to publish to blog: ${contentData.postTitle}`);
+
+  const blogBaseUrl = 'https://mymentalarmor.com/wp-json/wp/v2';
+  const postApiUrl = `${blogBaseUrl}/posts`;
+  const tagsApiUrl = `${blogBaseUrl}/tags`;
+
+  let postContent = '';
+  let postTitle = contentData.postTitle;
+  let tagsToProcess = [];
+  let featuredMediaId = null;
+  let wordpressMediaUrl = null;
+
+  if (wordpressMediaResult && wordpressMediaResult.id) {
+    featuredMediaId = wordpressMediaResult.id;
+    wordpressMediaUrl = wordpressMediaResult.url;
+    Logger.log(`[WordPress] Using pre-uploaded Media ID: ${featuredMediaId}, URL: ${wordpressMediaUrl}`);
+  } else {
+    Logger.log(`[WordPress] Warning: No WordPress Media ID available for featured_media. Post will proceed without it.`);
+  }
+
+  // NEW: Add a video player or link to the post content.
+  if (contentData.videoUrl) {
+    let embedUrl = contentData.videoUrl;
+    let embedCode = '';
+
+    // Check for Google Drive URL
+    const driveFileIdMatch = embedUrl.match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+    if (driveFileIdMatch && driveFileIdMatch[1]) {
+      const fileId = driveFileIdMatch[1];
+      embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+      Logger.log(`[WordPress] Correcting Google Drive URL for embedding: ${embedUrl}`);
+      embedCode = `<div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; max-width: 100%;"><iframe style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="${embedUrl}" frameborder="0" allowfullscreen></iframe></div>`;
+    }
+    // --- YouTube URL ---
+    else if (embedUrl.includes('youtube.com') || embedUrl.includes('youtu.be')) {
+      // Extract the 11-char ID from any format
+      const idMatch = embedUrl.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+      const videoId = idMatch ? idMatch[1] : null;
+
+      if (videoId) {
+        embedUrl = `https://www.youtube.com/embed/${videoId}`; // <-- THE fix
+        Logger.log(`[WordPress] Converted YouTube URL for embed: ${embedUrl}`);
+
+        embedCode = `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;max-width:100%;">
+                        <iframe src="${embedUrl}"
+                                style="position:absolute;top:0;left:0;width:100%;height:100%;"
+                                frameborder="0"
+                                allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                                allowfullscreen>
+                        </iframe>
+                      </div>`;
+      } else {
+        Logger.log('[WordPress] Could not extract YouTube ID—falling back to link.');
+        embedCode = `<p><a href="${embedUrl}" target="_blank" rel="noopener">Watch on YouTube</a></p>`;
+      }
+    }
+    // For all other URLs, just provide a link
+    else {
+      Logger.log(`[WordPress] Unrecognized video URL format. Providing a link instead of an embed.`);
+      embedCode = `<p><a href="${embedUrl}" target="_blank">Click here to watch the video</a></p>`;
+    }
+
+    postContent += embedCode;
+  }
+
+  if (contentData.type === 'weeklyContent') {
+    postContent += `<h1>${contentData['weekly-title']}</h1>`;
+    if (contentData['weekly-takeaway']) postContent += `<p><strong>Takeaway:</strong> ${contentData['weekly-takeaway']}</p>`;
+    if (contentData['weekly-why']) postContent += `<p><strong>Why is this important?:</strong> ${contentData['weekly-why']}</p>`;
+    if (contentData['weekly-field']) postContent += `<p><strong>From the field:</strong> ${contentData['weekly-field']}</p>`;
+    if (contentData['weekly-body']) postContent += `<p>${contentData['weekly-body']}</p>`;
+    if (contentData['weekly-tags']) postContent += `<p><strong>Tags:</strong> ${contentData['weekly-tags']}</p>`;
+    if (contentData.externalLinks && contentData.externalLinks.length > 0) {
+      postContent += `<p><strong>Ext. References:</strong> ${contentData.externalLinks.map(link => `<a href="${link}" target="_blank">${link}</a>`).join(', ')}</p>`;
+    }
+    if (contentData.internalLinks && contentData.internalLinks.length > 0) {
+      postContent += `<p><strong>Int. References:</strong> ${contentData.internalLinks.map(link => `<a href="${link}" target="_blank">${link}</a>`).join(', ')}</p>`;
+    }
+
+    postContent += `<hr style="border-top:1px solid #eee;margin:40px 0;">`;
+    postContent += `<h2 style="font-size:22px;text-align:center;color:${MA_BLUE};margin-bottom:20px;">More Ways to Strengthen Resilience</h2>`;
+    postContent += `<ul>`;
+    postContent += `<li><a href="${MFA_URL}" target="_blank">${MFA_CTA}</a></li>`;
+    postContent += `<li><a href="${SITE_URL}" target="_blank">${SITE_CTA}</a></li>`;
+    postContent += `<li><a href="${ONLINE_URL}" target="_blank">${ONLINE_CTA}</a></li>`;
+    postContent += `</ul>`;
+
+
+    if (contentData['weekly-tags']) tagsToProcess = contentData['weekly-tags'].split(',').map(tag => tag.trim()).filter(Boolean);
+
+  } else if (contentData.type === 'webinar') {
+    postContent += `<p><strong>Webinar Title:</strong> ${contentData['webinar-title']}</p>`;
+    if (contentData['webinar-headlineHook']) postContent += `<p><strong>Headline/Hook:</strong> ${contentData['webinar-headlineHook']}</p>`;
+    if (contentData['webinar-date'] && contentData['webinar-time']) {
+      postContent += `<p>${formatWebinarTimezones(contentData['webinar-date'], contentData['webinar-time']).replace(/\n/g, '<br>')}</p>`;
+    }
+    if (contentData['webinar-sessionCovers']) postContent += `<p><strong>What this session covers:</strong> ${contentData['webinar-sessionCovers']}</p>`;
+    if (contentData['webinar-sessionMatters']) postContent += `<p><strong>Why this session matters:</strong> ${contentData['webinar-sessionMatters']}</p>`;
+    if (contentData['webinar-whoShouldAttend']) postContent += `<p><strong>Who should attend:</strong> ${contentData['webinar-whoShouldAttend']}</p>`;
+    if (contentData['webinar-walkAwayWith']) postContent += `<p><strong>What you'll walk away with:</strong> ${contentData['webinar-walkAwayWith']}</p>`;
+    if (contentData['webinar-speakerBioIntro']) postContent += `<p><strong>Speaker:</strong> ${contentData['webinar-speakerBioIntro']}</p>`;
+    postContent += `<p><strong><a href="https://mymentalarmor.com/webinar-choice/">Click here to register for the webinar!</a></strong></p>`;
+
+    postContent += `<hr style="border-top:1px solid #eee;margin:40px 0;">`;
+    postContent += `<h2 style="font-size:22px;text-align:center;color:${MA_BLUE};margin-bottom:20px;">More Ways to Strengthen Resilience</h2>`;
+    postContent += `<ul>`;
+    postContent += `<li><a href="${MFA_URL}" target="_blank">${MFA_CTA}</a></li>`;
+    postContent += `<li><a href="${SITE_URL}" target="_blank">${SITE_CTA}</a></li>`;
+    postContent += `<li><a href="${ONLINE_URL}" target="_blank">${ONLINE_CTA}</a></li>`;
+    postContent += `</ul>`;
+  }
+
+  const foundTagObjects = getWordPressTermIdsByNames(tagsApiUrl, wpUsername, wpApplicationPassword, tagsToProcess, 'tags');
+  const tagIds = foundTagObjects.map(tag => tag.id);
+
+  const payload = {
+    title: postTitle,
+    content: postContent,
+    status: 'publish',
+    tags: tagIds,
+    featured_media: featuredMediaId,
+  };
+
+  const authString = Utilities.base64Encode(`${wpUsername}:${wpApplicationPassword}`);
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'Authorization': `Basic ${authString}`
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  // === CORRECTED: Added the missing UrlFetchApp.fetch() call ===
+  try {
+    Logger.log('[WordPress] Sending post creation request...');
+    const response = UrlFetchApp.fetch(postApiUrl, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode >= 200 && responseCode < 300) {
+      const result = JSON.parse(responseBody);
+      Logger.log(`[WordPress] Post created successfully. Permalink: ${result.link}`);
+      return {
+        permalink: result.link,
+        mediaUrl: wordpressMediaUrl
+      };
+    } else {
+      Logger.log(`[WordPress] Error creating post: HTTP ${responseCode} - ${responseBody}`);
+      throw new Error(`WordPress API Error: ${responseBody}`);
+    }
+  } catch (e) {
+    Logger.log(`[WordPress] API call failed: ${e.message}`);
+    throw e;
+  }
+}
+
+// === Brevo Campaign Drafting Function ===
+/**
+ * Drafts an email campaign in Brevo (Sendinblue) using content from WeeklyContentArchive.
+ * This function will now rely on Brevo's inlineImageActivation for images via the provided URL.
+ * @param {object} contentData The structured content data from WeeklyContentArchive.
+ * @param {string|null} postPermalink The permalink of the blog post, if available.
+ * @param {string|null} finalImageUrlForEmail The final image URL to use in the email (e.g., WordPress Media URL).
+ */
+function draftEmailInBrevo(contentData, postPermalink, finalImageUrlForEmail) {
+  const scriptProps = getScriptProperties();
+  const brevoApiKey = scriptProps[SCRIPT_PROPERTIES_KEYS.BREVO_API_KEY];
+  const brevoSenderName = scriptProps[SCRIPT_PROPERTIES_KEYS.BREVO_SENDER_NAME];
+  const brevoSenderEmail = scriptProps[SCRIPT_PROPERTIES_KEYS.BREVO_SENDER_EMAIL];
+  const brevoApiBaseUrl = scriptProps[SCRIPT_PROPERTIES_KEYS.BREVO_API_BASE_URL];
+
+  if (!brevoApiKey || !brevoSenderEmail || !brevoApiBaseUrl) {
+    Logger.log('[Brevo] BREVO_API_KEY, SENDER_EMAIL, or BASE_URL not set in Script Properties. Skipping Brevo email drafting.');
+    return;
+  }
+
+  Logger.log(`[Brevo] Attempting to draft email campaign for: ${contentData.postTitle}`);
+
+  // --- Map contentData fields to email variables ---
+  const title = contentData['webinar-title'] || contentData['weekly-title'] || 'Upcoming Mental Armor™ Content';
+  const headline = contentData['webinar-headlineHook'] || contentData['weekly-takeaway'] || '';
+  const whatCovers = contentData['webinar-sessionCovers'] || '';
+  const whyMatters = contentData['webinar-sessionMatters'] || contentData['weekly-why'] || '';
+  const whoShouldAttend = contentData['webinar-whoShouldAttend'] || '';
+  const takeaways = contentData['webinar-walkAwayWith'] || contentData['weekly-takeaway'] || '';
+  const speakerBio = contentData['webinar-speakerBioIntro'] || '';
+
+  const fallbackImage = scriptProps[SCRIPT_PROPERTIES_KEYS.FALLBACK_IMAGE_URL] || 'https://mymentalarmor.com/wp-content/uploads/default-image.jpg';
+  const bannerAlt = contentData.imageAltText || title || 'Mental Armor™ Content Banner';
+
+  const subjectLine = contentData['webinar-emailSubjectLine'] || contentData['weekly-title'] || `You're Invited: ${title}`;
+  const previewText = contentData['webinar-emailPreviewText'] || 'Resilience is a series of skills—not traits! This webinar makes it personal and practical.';
+
+  let linkForEmailCampaign = 'https://mymentalarmor.com/webinar-choice/';
+  if (contentData.type === 'weeklyContent') {
+    linkForEmailCampaign = postPermalink || 'https://mymentalarmor.com/blog/';
+  }
+
+
+  // 🔒 Standardized Resilience Links (Hardcoded - from original Brevo function)
+  const MA_BLUE = "#003049";
+  const mfaCTA = 'Take the MFA';
+  const mfaURL = 'https://mymentalarmor.com/take-your-free-mental-fitness-assessment-online/';
+  const siteCTA = 'Browse Our Website';
+  const siteURL = 'https://mymentalarmor.com';
+  const onlineCTA = 'Train Anytime with Mental Armor™ Online';
+  const onlineURL = 'https://mymentalarmor.com/courses/mental-armor-online/';
+
+  // ✍️ Construct HTML email
+  let htmlBody = '';
+
+  // Use the image URL passed (which should now be the WordPress URL) directly in the HTML
+  const finalImageToEmbed = finalImageUrlForEmail || fallbackImage; // Use WP URL or fallback
+
+  if (contentData.type === 'webinar') {
+    // MODIFIED: Use formatWebinarTimezones for date and time formatting
+    const formattedWebinarDate = Utilities.formatDate(contentData.webinarDate, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "MMM dd, yyyy");
+    const formattedWebinarTime = Utilities.formatDate(contentData.webinarTime, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "h:mm a");
+
+    htmlBody = `<div style="font-family: Arial, sans-serif;">
+      <h1 style="text-align:center;">${title}</h1>
+      <h2 style="text-align:center;font-style:italic;color:#555;">${headline}</h2>
+      <p style="text-align:center;margin:20px 0;">
+        <img src="${finalImageToEmbed}" alt="${bannerAlt}" style="max-width:300px;height:auto;border-radius:8px;" />
+      </p>
+
+      ${whatCovers ? `<p><strong>What We'll Cover:</strong> ${whatCovers}</p>` : ''}
+      ${whyMatters ? `<p><strong>Why This Matters:</strong> ${whyMatters}</p>` : ''}
+      ${whoShouldAttend ? `<p><strong>Who Should Attend:</strong> ${whoShouldAttend}</p>` : ''}
+      ${takeaways ? `<p><strong>What You'll Walk Away With:</strong> ${takeaways}</p>` : ''}
+      ${speakerBio ? `<p><strong>Speaker Bio:</strong> ${speakerBio}</p>` : ''}
+
+      <br>
+      <p><center>Live on Zoom!</center></p>
+      <p><center><i>No, you don't need a camera or a microphone... Just you and a laptop or a smartphone.</i></center></p>
+
+      <div style="background-color:#f6f6f6;padding:15px;border-radius:8px;margin:20px 0;text-align:center;font-size:16px;">
+        <p style="margin:5px 0;"><strong>📅 Date:</strong> ${formattedWebinarDate}</p>
+        <p style="margin:5px 0;"><strong>🕚 Time:</strong> ${formattedWebinarTime} (Eastern Time)</p>
+        <p>${formatWebinarTimezones(contentData.webinarDate, contentData.webinarTime).replace(/🗓️ Date:.*?\n\n⏰ Time:\n/, '')}</p> </div>
+
+      <p style="text-align:center;margin:30px 0;">
+        <a href="${linkForEmailCampaign}" target="_blank" style="
+          background-color:${MA_BLUE};
+          padding:15px 25px;
+          font-size:18px;
+          font-weight:bold;
+          color:white;
+          text-decoration:none;
+          border-radius:5px;">
+          Reserve Your Seat
+        </a>
+      </p>
+
+      <hr style="border-top:1px solid #eee;margin:40px 0;">
+      <h2 style="font-size:22px;text-align:center;color:${MA_BLUE};margin-bottom:20px;">
+        More Ways to Strengthen Resilience
+      </h2>
+
+      <table align="center" cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto; text-align: center;">
+        <tr>
+          <td style="padding: 5px;">
+            <a href="${mfaURL}" target="_blank" style="
+              display:inline-block;
+              background-color:${MA_BLUE};
+              color:#ffffff;
+              text-decoration:none;
+              font-size:14px;
+              font-family:Arial, sans-serif;
+              border-radius:6px;
+              padding:10px 20px;
+              font-weight:bold;">${mfaCTA}</a>
+          </td>
+          <td style="padding: 5px;">
+            <a href="${siteURL}" target="_blank" style="
+              display:inline-block;
+              background-color:${MA_BLUE};
+              color:#ffffff;
+              text-decoration:none;
+              font-size:14px;
+              font-family:Arial, sans-serif;
+              border-radius:6px;
+              padding:10px 20px;
+              font-weight:bold;">${siteCTA}</a>
+          </td>
+          <td style="padding: 5px;">
+            <a href="${onlineURL}" target="_blank" style="
+              display:inline-block;
+              background-color:${MA_BLUE};
+              color:#ffffff;
+              text-decoration:none;
+              font-size:14px;
+              font-family:Arial, sans-serif;
+              border-radius:6px;
+              padding:10px 20px;
+              font-weight:bold;">${onlineCTA}</a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size:14px;color:#888;text-align:center;margin-top:30px;">
+        &copy; ${new Date().getFullYear()}
+        <a href="https://www.mymentalarmor.com" target="_blank">49 North™</a>,
+        a division of
+        <a href="http://www.techwerks-llc.com" target="_blank">TechWerks™ LLC</a>.
+        All rights reserved.
+      </p>
+    </div>`;
+
+  } else if (contentData.type === 'weeklyContent') {
+    // Get the final video URL formatted for public viewing
+    let videoLinkForEmail = '';
+    if (contentData.videoUrl) {
+      const fileIdMatch = contentData.videoUrl.match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+      if (fileIdMatch && fileIdMatch[1]) {
+        videoLinkForEmail = `https://drive.google.com/file/d/${fileIdMatch[1]}/view?usp=sharing`;
+        Logger.log(`[Brevo] Correcting Google Drive video URL for email: ${videoLinkForEmail}`);
+      } else {
+        videoLinkForEmail = contentData.videoUrl;
+        Logger.log(`[Brevo] Using non-Drive video URL for email: ${videoLinkForEmail}`);
+      }
+    }
+
+    // Basic HTML template for weekly content emails.
+    htmlBody = `<div style="font-family: Arial, sans-serif;">
+      <h1 style="text-align:center;">${contentData['weekly-title']}</h1>
+      <p style="text-align:center;margin:20px 0;">
+        <img src="${finalImageToEmbed}" alt="${bannerAlt}" style="max-width:300px;height:auto;border-radius:8px;" />
+      </p>
+      ${contentData['weekly-takeaway'] ? `<p><strong>Takeaway:</strong> ${contentData['weekly-takeaway']}</p>` : ''}
+      ${contentData['weekly-why'] ? `<p><strong>Why is this important?:</strong> ${contentData['weekly-why']}</p>` : ''}
+      ${contentData['weekly-field'] ? `<p><strong>From the field:</strong> ${contentData['weekly-field']}</p>` : ''}
+      ${contentData['weekly-body'] ? `<p>${contentData['weekly-body']}</p>` : ''}
+
+      ${videoLinkForEmail ? `<p style="text-align:center;margin:20px 0;"><a href="${videoLinkForEmail}" target="_blank" style="
+        background-color:${MA_BLUE};
+        padding:10px 20px;
+        font-size:16px;
+        font-weight:bold;
+        color:white;
+        text-decoration:none;
+        border-radius:5px;">
+        Watch the Video
+      </a></p>` : ''}
+
+      ${contentData.externalLinks && contentData.externalLinks.length > 0 ? `<p><strong>Ext. References:</strong><br>${contentData.externalLinks.map(link => `<a href="${link}" target="_blank">${link}</a>`).join('<br>')}</p>` : ''}
+      ${contentData.internalLinks && contentData.internalLinks.length > 0 ? `<p><strong>Int. References:</strong><br>${contentData.internalLinks.map(link => `<a href="${link}" target="_blank">${link}</a>`).join('<br>')}</p>` : ''}
+      ${contentData['weekly-tags'] ? `<p><strong>Tags:</strong> ${contentData['weekly-tags']}</p><br><br>` : ''}
+      <p style="text-align:center;"><a href="${linkForEmailCampaign}" target="_blank" style="
+        background-color:${MA_BLUE};
+        padding:10px 20px;
+        font-size:16px;
+        font-weight:bold;
+        color:white;
+        text-decoration:none;
+        border-radius:5px;">
+        Read more about Building Resilience, Wellbeing and Mental Armor
+      </a></p>
+      <hr style="border-top:1px solid #eee;margin:40px 0;">
+      <h2 style="font-size:22px;text-align:center;color:${MA_BLUE};margin-bottom:20px;">
+        More Ways to Strengthen Resilience
+      </h2>
+
+      <table align="center" cellpadding="0" cellspacing="0" role="presentation" style="margin: 0 auto; text-align: center;">
+        <tr>
+          <td style="padding: 5px;">
+            <a href="${mfaURL}" target="_blank" style="
+              display:inline-block;
+              background-color:${MA_BLUE};
+              color:#ffffff;
+              text-decoration:none;
+              font-size:14px;
+              font-family:Arial, sans-serif;
+              border-radius:6px;
+              padding:10px 20px;
+              font-weight:bold;">${mfaCTA}</a>
+          </td>
+          <td style="padding: 5px;">
+            <a href="${siteURL}" target="_blank" style="
+              display:inline-block;
+              background-color:${MA_BLUE};
+              color:#ffffff;
+              text-decoration:none;
+              font-size:14px;
+              font-family:Arial, sans-serif;
+              border-radius:6px;
+              padding:10px 20px;
+              font-weight:bold;">${siteCTA}</a>
+          </td>
+          <td style="padding: 5px;">
+            <a href="${onlineURL}" target="_blank" style="
+              display:inline-block;
+              background-color:${MA_BLUE};
+              color:#ffffff;
+              text-decoration:none;
+              font-size:14px;
+              font-family:Arial, sans-serif;
+              border-radius:6px;
+              padding:10px 20px;
+              font-weight:bold;">${onlineCTA}</a>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size:14px;color:#888;text-align:center;margin-top:30px;">
+        &copy; ${new Date().getFullYear()}
+        <a href="https://www.mymentalarmor.com" target="_blank">49 North™</a>,
+        a division of
+        <a href="http://www.techwerks-llc.com" target="_blank">TechWerks™ LLC</a>.
+        All rights reserved.
+      </p>
+    </div>`;
+  } else {
+    Logger.log('[Brevo] Content type unknown for email drafting. Skipping.');
+    return;
+  }
+
+  const payload = {
+    name: `Campaign: ${title} (${new Date().toLocaleDateString()})`,
+    subject: subjectLine,
+    preheader: previewText,
+    sender: {
+      name: brevoSenderName,
+      email: brevoSenderEmail
+    },
+    htmlContent: htmlBody,
+    mirrorActive: true,
+    inlineImageActivation: true,
+    status: 'draft',
+    // recipients: {
+    //  listIds: [1]
+    // },
+  };
+
+  const options = {
+    method: "POST",
+    contentType: "application/json",
+    headers: {
+      "api-key": brevoApiKey,
+      "accept": "application/json"
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  Logger.log("🚀 Sending Brevo Campaign Draft...");
+  try {
+    const response = UrlFetchApp.fetch(`${brevoApiBaseUrl}/emailCampaigns`, options);
+    const code = response.getResponseCode();
+    const body = response.getContentText();
+
+    Logger.log(`[Brevo] Response code: ${code}`);
+    Logger.log(`[Brevo] Response body: ${body}`);
+
+    if (code === 201) {
+      Logger.log("✅ Brevo campaign draft created successfully.");
+    } else {
+      Logger.log(`❌ Failed to create Brevo campaign. Review the response above. Full Error: ${body}`);
+      throw new Error(`Brevo API Error: HTTP ${code} - ${body}`);
+    }
+  } catch (error) {
+    Logger.log("❗ Error sending Brevo campaign: " + error.message);
+    throw error;
+  }
+}
+
+/**
+ * Formats webinar date and time across multiple timezones.
+ * It expects dateValue as "MM/DD/YYYY" and timeValue as "hh:mm A/PM" (e.g., "11:00 AM").
+ * It now relies solely on string input for timeValue, based on form validation.
+ * @param {string|Date} dateValue The raw date value from the form (string "MM/DD/YYYY" or Date object).
+ * @param {string} timeValue The raw time value from the form (string "hh:mm A/PM").
+ * @returns {string} Formatted string with date and times for various zones.
+ */
+function formatWebinarTimezones(dateValue, timeValue) {
+  // MODIFIED: Ensure dateValue is a string
+  let processedDateString;
+  if (dateValue instanceof Date) {
+    processedDateString = Utilities.formatDate(dateValue, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "MM/dd/yyyy");
+    Logger.log(`[formatWebinarTimezones] Converted dateValue Date object to string: ${processedDateString}`);
+  } else if (typeof dateValue === 'string' && dateValue.trim() !== '') {
+    processedDateString = dateValue.trim();
+  } else {
+    Logger.log(`[formatWebinarTimezones] Invalid or empty dateValue: ${dateValue}`);
+    return "Error: Invalid Date";
+  }
+
+  // MODIFIED: Ensure timeValue is a string
+  let processedTimeString;
+  if (timeValue instanceof Date) {
+    processedTimeString = Utilities.formatDate(timeValue, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "hh:mm a");
+    Logger.log(`[formatWebinarTimezones] Converted timeValue Date object to string: ${processedTimeString}`);
+  } else if (typeof timeValue === 'string' && timeValue.trim() !== '') {
+    processedTimeString = timeValue.trim();
+  } else {
+    Logger.log(`[formatWebinarTimezones] Invalid or empty timeValue: ${timeValue}`);
+    return "Error: Invalid Time";
+  }
+
+  const fullDateTimeStringToParse = `${processedDateString} ${processedTimeString.split(' ')[0]}:00 ${processedTimeString.split(' ')[1]}`;
+  Logger.log(`[DEBUG TZ FINAL] Full string to parse for baseEventDate: "${fullDateTimeStringToParse}"`);
+
+  let baseEventDate;
+  try {
+    baseEventDate = Utilities.parseDate(
+      fullDateTimeStringToParse,
+      "America/New_York",
+      "MM/dd/yyyy hh:mm:ss a"
+    );
+
+    Logger.log(`[DEBUG TZ FINAL] baseEventDate (parsed and validated): ${baseEventDate}`);
+    Logger.log(`[DEBUG TZ FINAL] baseEventDate.getTime() (ms from epoch): ${baseEventDate.getTime()}`);
+
+  } catch (e) {
+    Logger.log(`[formatWebinarTimezones] ERROR: Failed to parse date/time with Utilities.parseDate. Input: "${fullDateTimeStringToParse}", Error: ${e.message}`);
+    return "Error: Date/Time Parsing Failed";
+  }
+
+  if (isNaN(baseEventDate.getTime())) {
+    Logger.log(`[formatWebinarTimezones] baseEventDate is Invalid Date after final parse: ${baseEventDate}`);
+    return "Error: Could not create valid Date object";
+  }
+
+  let timezoneString = "";
+  timezoneString += `🗓️ Date: ${Utilities.formatDate(baseEventDate, SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone(), "MMM dd, yyyy")}\n\n`; // Use sheet TZ for date
+  timezoneString += `⏰ Time:\n`;
+
+  const zones = {
+    "New York (ET)": "America/New_York",
+    "Chicago (CT)": "America/Chicago",
+    "Denver (MT)": "America/Denver",
+    "Los Angeles (PT)": "America/Los_Angeles",
+    "London (GMT/BST)": "Europe/London"
+  };
+
+  for (const label in zones) {
+    const tzId = zones[label];
+    const startTimeFormatted = Utilities.formatDate(baseEventDate, tzId, "h:mm a");
+    const endTimeFormatted = Utilities.formatDate(new Date(baseEventDate.getTime() + 60 * 60 * 1000), tzId, "h:mm a");
+    timezoneString += `${label}: ${startTimeFormatted} - ${endTimeFormatted}\n`;
+  }
+  return timezoneString.trim();
+}
+
+/**
+ * Gets a Google Apps Script Blob for a file uploaded via a Google Form to Drive.
+ * This function is specifically designed to parse the URL format typically provided
+ * by Google Forms' file upload questions in the linked Google Sheet.
+ * The script must have permission to access the file in Drive.
+ * @param {string} driveFileUrl The Google Drive URL of the uploaded file (e.g., https://drive.google.com/file/d/FILE_ID/view?usp=drive_link or https://drive.google.com/open?id=FILE_ID).
+ * @returns {GoogleAppsScript.Base.Blob|null} A Blob representing the image file, or null if unsuccessful.
+ */
+function getDriveFileBlob(driveFileUrl) {
+  if (!driveFileUrl) {
+    Logger.log('No Drive file URL provided for Blob retrieval.');
+    return null;
+  }
+
+  const fileIdMatch = driveFileUrl.match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+  if (!fileIdMatch || !fileIdMatch[1]) {
+    Logger.log(`[DriveApp] Could not extract file ID from Drive URL: ${driveFileUrl}`);
+    return null;
+  }
+  const fileId = fileIdMatch[1];
+
+  try {
+    const file = DriveApp.getFileById(fileId);
+    Logger.log(`[DriveApp] Successfully accessed file: ${file.getName()} (ID: ${fileId})`);
+    return file.getBlob();
+  } catch (e) {
+    Logger.log(`[DriveApp] Error accessing Drive file (ID: ${fileId}): ${e.message}. Ensure script has Drive permissions and file exists in the form owner's Drive.`);
+    return null;
+  }
+}
+
+/**
+ * Helper function to get WordPress Term IDs by name.
+ * It searches for existing tags (or categories) by their names and returns their IDs.
+ * If a tag/category is not found, it's skipped.
+ * @param {string} apiUrl The base API URL for the terms (e.g., https://yourdomain.com/wp-json/wp/v2/tags).
+ * @param {string} wpUsername WordPress username.
+ * @param {string} wpApplicationPassword WordPress application password.
+ * @param {string[]} termNames An array of term names to look up.
+ * @param {string} termType 'tags' or 'categories' for logging.
+ * @returns {Array<object>} An array of objects with {id: integer, name: string} for found terms.
+ */
+function getWordPressTermIdsByNames(apiUrl, wpUsername, wpApplicationPassword, termNames, termType) {
+  const foundTerms = [];
+  if (!termNames || termNames.length === 0) {
+    return foundTerms;
+  }
+
+  const authString = Utilities.base64Encode(`${wpUsername}:${wpApplicationPassword}`);
+  const options = {
+    method: 'get',
+    headers: {
+      'Authorization': `Basic ${authString}`
+    },
+    muteHttpExceptions: true
+  };
+
+  termNames.forEach(name => {
+    try {
+      const encodedName = encodeURIComponent(name);
+      const searchUrl = `${apiUrl}?search=${encodedName}`;
+      const response = UrlFetchApp.fetch(searchUrl, options);
+      const responseCode = response.getResponseCode();
+      const responseBody = response.getContentText();
+
+      if (responseCode === 200) {
+        const results = JSON.parse(responseBody);
+        const exactMatch = results.find(term => term.name.toLowerCase() === name.toLowerCase());
+
+        if (exactMatch) {
+          foundTerms.push({ id: exactMatch.id, name: exactMatch.name });
+          Logger.log(`[WordPress ${termType}] Found existing term "${name}" with ID: ${exactMatch.id}`);
+        } else {
+          Logger.log(`[WordPress ${termType}] Term "${name}" not found on site. It will not be assigned.`);
+        }
+      } else {
+        Logger.log(`[WordPress ${termType}] Error searching for term "${name}": HTTP ${responseCode} - ${responseBody}`);
+      }
+    } catch (e) {
+      Logger.log(`[WordPress ${termType}] Failed to fetch term "${name}": ${e.message}`);
+    }
+  });
+
+  return foundTerms;
+}
+
+/**
+ * Gets the ID of an image in the WordPress Media Library by its URL/filename.
+ * If not found, attempts to upload it.
+ * @param {string|GoogleAppsScript.Base.Blob} imageSource The direct URL of the image, or a Blob object.
+ * @param {string} altText Slt text for the image.
+ * @param {string} wpUsername WordPress username.
+ * @param {string} wpApplicationPassword WordPress application password.
+ * @param {string} [originalFilenameForUpload] Optional: The original filename to use for WordPress upload.
+ * @returns {object|null} An object { id: number, url: string } if successful, null otherwise.
+ */
+function getOrCreateWordPressMediaId(imageSource, altText, wpUsername, wpApplicationPassword, originalFilenameForUpload) {
+  if (!imageSource) {
+    Logger.log('[WordPress Media] No image source (URL or Blob) provided.');
+    return null;
+  }
+  if (!wpUsername || !wpApplicationPassword) {
+    Logger.log('[WordPress Media] WP_USERNAME or MA_BLOG_POST not set. Cannot process image.');
+    return null;
+  }
+
+  const mediaApiUrl = 'https://mymentalarmor.com/wp-json/wp/v2/media';
+  const authString = Utilities.base64Encode(`${wpUsername}:${wpApplicationPassword}`);
+  const headers = { 'Authorization': `Basic ${authString}` };
+
+  let imageBlob = null;
+  let fileName = '';
+  let fileExtension = '';
+
+  if (typeof imageSource === 'string') {
+    try {
+      // --- helpers ---
+      const getDriveId = (u) => {
+        const m = String(u).match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+        return m ? m[1] : '';
+      };
+      const isDrive = (u) => /drive\.google\.com/.test(String(u));
+      const makeName = (base, ext) => {
+        base = (base || 'image').replace(/[^\w.-]+/g, '_');
+        if (!base.match(/\.[a-z0-9]+$/i)) base += '.' + ext;
+        return base;
+      };
+
+      let rawBlob, originalName = 'image';
+      if (isDrive(imageSource)) {
+        const id = getDriveId(imageSource);
+        if (!id) throw new Error('Drive URL provided but no fileId could be parsed.');
+        const file = DriveApp.getFileById(id);
+        rawBlob = file.getBlob();
+        originalName = file.getName() || originalName;
+      } else {
+        const resp = UrlFetchApp.fetch(imageSource);
+        rawBlob = resp.getBlob();
+        originalName = imageSource.split('/').pop().split('?')[0] || originalName;
+      }
+
+      // If we accidentally grabbed HTML (viewer), refetch via Drive ID if possible
+      const ct0 = String(rawBlob.getContentType() || '').toLowerCase();
+      if (ct0.indexOf('text/html') !== -1) {
+        const id = getDriveId(imageSource);
+        if (id) {
+          const file = DriveApp.getFileById(id);
+          rawBlob = file.getBlob();
+        }
+      }
+
+      // Normalize to JPEG (broadly accepted by WP)
+      imageBlob = rawBlob.getAs('image/jpeg');
+      fileName = makeName(originalName.replace(/\.[^.]+$/, '') || 'image', 'jpg');
+      Logger.log(`[WordPress Media] Prepared JPEG blob. name=${fileName}, ct=${imageBlob.getContentType()}`);
+    } catch (e) {
+      Logger.log(`[WordPress Media] Failed to obtain image blob from "${imageSource}": ${e.message}`);
+      return null;
+    }
+
+
+    // --- END INSERTION FOR IMAGE RE-PROCESSING ---
+
+
+  } else if (imageSource instanceof Object && typeof imageSource.getBytes === 'function' && typeof imageSource.getContentType === 'function') {
+    imageBlob = imageSource;
+    // For a Blob, use its getName() or generate a name, preferring originalFilenameForUpload
+    if (originalFilenameForUpload && originalFilenameForUpload.length > 0) {
+      fileName = originalFilenameForUpload;
+      fileExtension = fileName.split('.').pop() || '';
+    } else {
+      const uniqueSuffix = new Date().getTime();
+      let inferredExtension = 'jpg';
+
+      const contentType = imageBlob.getContentType();
+      if (contentType) {
+        const parts = contentType.split('/');
+        if (parts.length > 1) {
+          const type = parts[1];
+          if (type === 'jpeg') inferredExtension = 'jpg';
+          else inferredExtension = type.split('+')[0];
+        }
+      }
+      fileName = `MA_uploaded_image_${uniqueSuffix}.${inferredExtension}`;
+      fileExtension = inferredExtension;
+    }
+
+    Logger.log(`[WordPress Media] Using provided image blob. Filename for WP: ${fileName}, ContentType: ${imageBlob.getContentType()}`);
+  } else {
+    Logger.log('[WordPress Media] Invalid imageSource type. Must be URL string or a Google Apps Script Blob object.');
+    return null;
+  }
+
+  try {
+    Logger.log(`[WordPress Media] Searching for existing image "${fileName}".`);
+    const searchOptions = {
+      method: 'get',
+      headers: headers,
+      muteHttpExceptions: true
+    };
+    const searchResponse = UrlFetchApp.fetch(`${mediaApiUrl}?search=${encodeURIComponent(fileName)}`, searchOptions);
+    const searchResponseBody = searchResponse.getContentText();
+    const existingMedia = JSON.parse(searchResponseBody);
+
+    let mediaId = null;
+    let mediaUrl = null;
+
+    if (existingMedia && existingMedia.length > 0) {
+      // Find exact match by filename or URL (robust search)
+      const exactMatch = existingMedia.find(item => {
+        const itemFileName = item.source_url ? item.source_url.split('/').pop().split('?')[0] : '';
+        return itemFileName.toLowerCase() === fileName.toLowerCase();
+      }) || existingMedia.find(item => item.guid.rendered === imageSource);
+
+      if (exactMatch) {
+        mediaId = exactMatch.id;
+        mediaUrl = exactMatch.source_url;
+        Logger.log(`[WordPress Media] Found existing image "${fileName}" with ID: ${mediaId}.`);
+      }
+    }
+
+    if (!mediaId) {
+      Logger.log(`[WordPress Media] Image "${fileName}" not found in Media Library. Attempting to upload.`);
+
+      const uploadOptions = {
+        method: 'post',
+        contentType: imageBlob.getContentType(),
+        headers: {
+          'Authorization': `Basic ${authString}`,
+          'Content-Disposition': `attachment; filename="${fileName}"`,
+        },
+        payload: imageBlob.getBytes(),
+        muteHttpExceptions: true
+      };
+
+      const uploadResponse = UrlFetchApp.fetch(mediaApiUrl, uploadOptions);
+      const uploadResponseCode = uploadResponse.getResponseCode();
+      if (uploadResponseCode >= 200 && uploadResponseCode < 300) {
+        const uploadResponseBody = uploadResponse.getContentText();
+        const responseJson = JSON.parse(uploadResponseBody);
+        mediaId = responseJson.id;
+        mediaUrl = responseJson.source_url;
+        Logger.log(`[WordPress Media] Image uploaded successfully. Media ID: ${mediaId}, URL: ${mediaUrl}`);
+      } else {
+        const errorResponseBody = uploadResponse.getContentText();
+        Logger.log(`[WordPress Media] Error uploading new image "${fileName}": HTTP ${uploadResponseCode} - ${errorResponseBody}`);
+        return null;
+      }
+    }
+
+    if (mediaId && altText) {
+      const updateAltOptions = {
+        method: 'post',
+        contentType: 'application/json',
+        headers: {
+          'Authorization': `Basic ${authString}`
+        },
+        payload: JSON.stringify({
+          alt_text: altText
+        }),
+        muteHttpExceptions: true
+      };
+      const updateResponse = UrlFetchApp.fetch(`${mediaApiUrl}/${mediaId}`, updateAltOptions);
+      if (updateResponse.getResponseCode() >= 200 && updateResponse.getResponseCode() < 300) {
+        Logger.log(`[WordPress Media] Alt text updated for media ID: ${mediaId}`);
+      } else {
+        Logger.log(`[WordPress Media] Failed to update alt text for media ID: ${mediaId}. Response: ${updateResponse.getContentText()}`);
+      }
+    }
+
+    if (mediaId && mediaUrl) {
+      return {
+        id: mediaId,
+        url: mediaUrl
+      };
+    } else {
+      Logger.log('[WordPress Media] Could not obtain valid Media ID/URL after search/upload attempts.');
+      return null;
+    }
+
+  } catch (e) {
+    Logger.log(`[WordPress Media] Failed to process image: ${e.message}`);
+    return null;
+  }
+}
+
+
+/**
+ * publishToLinkedIn.js - rev 2025-08-06
+ *
+ * Consolidated function that chooses the **right** LinkedIn share type
+ * automatically:
+ * • Native video upload  ➞  VIDEO post with inline playback
+ * • External video URL   ➞  ARTICLE post with thumbnail (if we supply one)
+ * or let LinkedIn scrape (YouTube, Vimeo, etc.)
+ * • Image (with or w/o link) ➞  ARTICLE post (link preview) **or** IMAGE post
+ * • No media             ➞  plain ARTICLE link‑share
+ *
+ * NOTE  ➜  Uses the classic v2 ugcPosts endpoint because it still supports
+ * org‑page posting without additional permissions. If/when you
+ * migrate to the new /rest/posts API just swap the final fetch
+ * call – the payloads are compatible.
+ */
+
+//--------------------------------------------------------------------
+// Main entry
+//--------------------------------------------------------------------
+function publishToLinkedIn(
+  contentData,
+  videoBlob, // native video file (Blob)
+  primaryImageSource, // URL or Blob for image (thumbnail or photo post)
+  videoUrl, // external video link (YouTube, Rumble, Drive…)
+  linkedinAccessToken,
+  linkedinClientId,
+  linkedinClientSecret,
+  postPermalink = null // canonical blog URL (for link previews)
+) {
+  if (!linkedinAccessToken) {
+    Logger.log('[LinkedIn] Access‑token missing ‑ aborting.');
+    return;
+  }
+
+  const authorUrn = 'urn:li:organization:107582691';
+
+  // 1️⃣ Generate commentary text + link using sheet columns
+  const {
+    commentary,
+    linkToDisplay
+  } = buildWeeklyOrWebinarCommentary(
+    contentData,
+    postPermalink
+  );
+
+  // 2️⃣ Decide which media path we’re on
+  const haveNativeVideo = !!videoBlob;
+  const haveExternalVideo = !!videoUrl && !haveNativeVideo;
+  const haveImage = !!primaryImageSource && !haveNativeVideo && !haveExternalVideo;
+
+  // 3️⃣ Build payload
+  let payload;
+
+  //------------------------------------------------------------------
+  // A. Native video ➞ VIDEO post
+  //------------------------------------------------------------------
+  if (haveNativeVideo) {
+    const videoUrn = uploadVideoToLinkedIn(videoBlob, linkedinAccessToken, authorUrn);
+if (!waitForLinkedInAssetReady(videoUrn, linkedinAccessToken, 60000)) {
+  throw new Error('[LinkedIn] Video asset never became AVAILABLE within timeout.');
+}
+    payload = {
+      author: authorUrn,
+      lifecycleState: 'PUBLISHED',
+      specificContent: {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: {
+            text: commentary
+          },
+          shareMediaCategory: 'VIDEO',
+          media: [{
+            status: 'READY',
+            media: videoUrn,
+            title: {
+              text: contentData.postTitle || contentData['weekly-title'] || 'Video'
+            },
+            description: {
+              text: contentData.videoSummary || contentData['weekly-takeaway'] || ''
+            }
+          }]
+        }
+      },
+      visibility: {
+        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+      }
+    };
+  }
+
+  //------------------------------------------------------------------
+  // B. External video URL ➞ ARTICLE post
+  //------------------------------------------------------------------
+  else if (haveExternalVideo) {
+    // If caller passed an image, turn it into a proper thumbnail URN.
+    // If *no* image: we omit title/description so LinkedIn will scrape
+    // (works best for YouTube/Vimeo‑style links that already expose OG tags).
+    let thumbnailUrn = null;
+    if (primaryImageSource) {
+      thumbnailUrn = registerAndUploadImage(primaryImageSource, linkedinAccessToken, authorUrn);
+    }
+
+    const mediaEntry = {
+      status: 'READY',
+      originalUrl: videoUrl
+    };
+
+
+    //  → If thumbnailUrn is null we intentionally leave out title/desc so
+    //    LinkedIn’s scraper grabs YouTube/Rumble preview automatically.
+
+    payload = {
+      author: authorUrn,
+      lifecycleState: 'PUBLISHED',
+      specificContent: {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: {
+            text: commentary
+          },
+          shareMediaCategory: 'ARTICLE',
+          media: [mediaEntry]
+        }
+      },
+      visibility: {
+        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+      }
+    };
+  }
+
+  //------------------------------------------------------------------
+  // C. Image supplied ➞ always IMAGE post (LinkedIn ignores custom thumbnails for ARTICLE via ugcPosts)
+  //------------------------------------------------------------------
+  else if (haveImage) {
+    const imageUrn = registerAndUploadImage(primaryImageSource, linkedinAccessToken, authorUrn);
+
+    payload = {
+      author: authorUrn,
+      lifecycleState: 'PUBLISHED',
+      specificContent: {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: {
+            text: commentary
+          },
+          shareMediaCategory: 'IMAGE',
+          media: [{
+            status: 'READY',
+            media: imageUrn,
+            title: {
+              text: contentData.postTitle || contentData['weekly-title'] || ''
+            }
+          }]
+        }
+      },
+      visibility: {
+        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+      }
+    };
+  }
+
+  //------------------------------------------------------------------
+  // D. No media ➞ plain ARTICLE link‑share
+  //------------------------------------------------------------------ No media ➞ plain ARTICLE link‑share
+  //------------------------------------------------------------------
+  else {
+    payload = {
+      author: authorUrn,
+      lifecycleState: 'PUBLISHED',
+      specificContent: {
+        'com.linkedin.ugc.ShareContent': {
+          shareCommentary: {
+            text: commentary
+          },
+          shareMediaCategory: 'ARTICLE',
+          media: [{
+            status: 'READY',
+            originalUrl: linkToDisplay
+          }]
+        }
+      },
+      visibility: {
+        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+      }
+    };
+  }
+
+  //------------------------------------------------------------------
+  // 4️⃣ Fire the request
+  //------------------------------------------------------------------
+  const resp = UrlFetchApp.fetch('https://api.linkedin.com/v2/ugcPosts', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: `Bearer ${linkedinAccessToken}`,
+      'X-Restli-Protocol-Version': '2.0.0'
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const code = resp.getResponseCode();
+  if (code < 200 || code >= 300) {
+    throw new Error(`[LinkedIn] Post failed (${code}): ${resp.getContentText()}`);
+  }
+  Logger.log('[LinkedIn] Post successful.');
+}
+
+//--------------------------------------------------------------------
+// Helper: registerAndUploadImage - returns image URN
+//--------------------------------------------------------------------
+function registerAndUploadImage(imageSource, accessToken, ownerUrn) {
+  const regResp = UrlFetchApp.fetch('https://api.linkedin.com/v2/assets?action=registerUpload', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'X-Restli-Protocol-Version': '2.0.0'
+    },
+    payload: JSON.stringify({
+      registerUploadRequest: {
+        owner: ownerUrn,
+        recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
+        serviceRelationships: [{
+          identifier: 'urn:li:userGeneratedContent',
+          relationshipType: 'OWNER'
+        }],
+        supportedUploadMechanism: ['SYNCHRONOUS_UPLOAD']
+      }
+    })
+  });
+
+  const regData = JSON.parse(regResp.getContentText());
+  const uploadUrl = regData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+  const assetUrn = regData.value.asset;
+
+  let blob;
+  if (typeof imageSource === 'string') {
+    blob = UrlFetchApp.fetch(imageSource).getBlob();
+  } else {
+    blob = imageSource;
+  }
+
+  UrlFetchApp.fetch(uploadUrl, {
+    method: 'post',
+    contentType: blob.getContentType(),
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    payload: blob.getBytes()
+  });
+
+  return assetUrn;
+}
+
+//--------------------------------------------------------------------
+// Helper: buildWeeklyOrWebinarCommentary - minimal stub
+//--------------------------------------------------------------------
+function buildWeeklyOrWebinarCommentary(data, permalink) {
+  let c = '';
+  let link = permalink;
+
+  if (data.type === 'weeklyContent') {
+    link = link || 'https://mymentalarmor.com/blog/';
+    c += `Your Mental Armor™ Weekly Brief 📋
+
+`;
+    c += `${data['weekly-title'] || ''}
+
+`;
+    if (data['weekly-takeaway']) c += `Takeaway: ${data['weekly-takeaway']}
+
+`;
+    if (data['weekly-why']) c += `Why: ${data['weekly-why']}
+
+`;
+    if (data['weekly-field']) c += `From the field: ${data['weekly-field']}
+
+`;
+    if (data['weekly-body']) c += `${data['weekly-body']}
+
+`;
+    // CORRECTED: Check if externalLinks is an array and has content
+    if (data.externalLinks && data.externalLinks.length > 0) c += `References: ${data.externalLinks.join('\n')}
+
+`;
+    if (data['weekly-tags']) c += `${data['weekly-tags']}
+
+`;
+  } else if (data.type === 'webinar') {
+    link = 'https://mymentalarmor.com/webinar-choice/';
+    c += `📢 Your Upcoming Mental Armor™ Webinar
+
+`;
+    c += `${data['webinar-title'] || ''}
+
+`;
+    if (data['webinar-headlineHook']) c += `"${data['webinar-headlineHook']}"
+
+`;
+    if (data['webinar-date'] && data['webinar-time'])
+      c += `${data['webinar-date']} at ${data['webinar-time']}
+
+`;
+    if (data['webinar-sessionCovers']) c += `What this session covers: ${data['webinar-sessionCovers']}
+
+`;
+    if (data['webinar-sessionMatters']) c += `Why this session matters: ${data['webinar-sessionMatters']}
+
+`;
+    if (data['webinar-whoShouldAttend']) c += `Who should attend: ${data['webinar-whoShouldAttend']}
+
+`;
+  }
+
+  c = c.trim();
+  return {
+    commentary: c,
+    linkToDisplay: link
+  };
+}
+
+// EOF
+
+
+
+
+
+/**
+ * Publishes content to Facebook Page.
+ * @param {object} contentData The structured content data.
+ * @param {GoogleAppsScript.Base.Blob|null} videoBlob A video file as a Blob for native upload.
+ * @param {string|null} finalImageUrlForChannels An image URL for an image post.
+ * @param {string|null} videoUrl An external video URL for a link share.
+ * @param {string} facebookPageAccessToken Your Facebook Page Access Token.
+ * @param {string} facebookPageId Your Facebook Page ID.
+ * @param {string|null} postPermalink The permalink of the blog post, if available.
+ */
+function publishToFacebook(contentData, videoBlob, finalImageUrlForChannels, videoUrl, facebookPageAccessToken, facebookPageId, postPermalink = null) {
+  if (!facebookPageAccessToken || !facebookPageId) {
+    Logger.log('[Facebook] FACEBOOK_KEY (Page Access Token) or FACEBOOK_PAGE_ID not set in Script Properties. Skipping Facebook publishing. OAuth2 setup for page tokens is required.');
+    return;
+  }
+
+  Logger.log(`[Facebook] Attempting to publish to Facebook Page: ${facebookPageId}`);
+
+  let linkUrl = '';
+  let postMessage = '';
+
+  if (contentData.type === 'weeklyContent') {
+    linkUrl = postPermalink || 'https://mymentalarmor.com/blog/';
+
+    postMessage = `${contentData['weekly-title']}\n\n`; // No label
+    if (contentData['weekly-takeaway']) postMessage += `**Takeaway:** ${contentData['weekly-takeaway']}\n\n`;
+    if (contentData['weekly-why']) postMessage += `**Why is this important?:** ${contentData['weekly-why']}\n\n`;
+    if (contentData['weekly-field']) postMessage += `**From the field:** ${contentData['weekly-field']}\n\n`;
+    if (contentData['weekly-body']) postMessage += `${contentData['weekly-body']}\n\n`; // No label
+
+    // External References
+    if (contentData.externalLinks && contentData.externalLinks.length > 0) {
+      postMessage += `**Ext. References:**\n${contentData.externalLinks.join('\n')}\n\n`; // Newline for each link
+    }
+
+    // Internal References
+    if (contentData.internalLinks && contentData.internalLinks.length > 0) {
+      postMessage += `**Int. References:**\n${contentData.internalLinks.join('\n')}\n\n`; // Newline for each link
+    }
+
+    postMessage += `Read the full brief and explore more on our blog:\n🔗 ${linkUrl}\n\n`;
+
+    let processedFbTags = [];
+    if (contentData['weekly-tags']) {
+      postMessage += `**Tags:** `; // Label for tags
+      contentData['weekly-tags'].split(',').map(tag => {
+        let cleanedTag = tag.trim().replace(/^#/, '');
+        cleanedTag = cleanedTag.replace(/\s+/g, '_');
+        if (cleanedTag) processedFbTags.push(`#${cleanedTag}`);
+      });
+    }
+    postMessage += processedFbTags.join(' ');
+    postMessage = postMessage.trim();
+
+    // Add Standardized Resilience Links (for Weekly Content)
+    postMessage += `\n\n---\n`;
+    postMessage += `**More Ways to Strengthen Resilience:**\n`;
+    postMessage += `- ${MFA_CTA}: ${MFA_URL}\n`;
+    postMessage += `- ${SITE_CTA}: ${SITE_URL}\n`;
+    postMessage += `- ${ONLINE_CTA}: ${ONLINE_URL}\n`;
+
+  } else if (contentData.type === 'webinar') {
+    linkUrl = 'https://mymentalarmor.com/webinar-choice/';
+
+    postMessage = `📢 Your Upcoming Live Mental Armor™ Webinar\n\n`;
+    postMessage += `**${contentData['webinar-title']}**\n\n`;
+    if (contentData['webinar-headlineHook']) postMessage += `"${contentData['webinar-headlineHook']}"\n\n`;
+    if (contentData['webinar-date'] && contentData['webinar-time']) {
+      postMessage += `${formatWebinarTimezones(contentData['webinar-date'], contentData['webinar-time'])}\n\n`;
+    }
+    if (contentData['webinar-sessionCovers']) postMessage += `**What this session covers:** ${contentData['webinar-sessionCovers']}\n\n`;
+    if (contentData['webinar-sessionMatters']) postMessage += `**Why this session matters:** ${contentData['webinar-sessionMatters']}\n\n`;
+    if (contentData['webinar-whoShouldAttend']) postMessage += `**Who should attend:** ${contentData['webinar-whoShouldAttend']}\n\n`;
+    if (contentData['webinar-walkAwayWith']) postMessage += `**What you'll walk away with:** ${contentData['webinar-walkAwayWith']}\n\n`;
+    if (contentData['webinar-speakerBioIntro']) postMessage += `**Speaker:** ${contentData['webinar-speakerBioIntro']}\n\n`;
+
+    postMessage += `Secure your spot now! Register at this link!\n🔗 ${linkUrl}\n\n`;
+    postMessage += `#MentalArmor #Resilience #Webinar #Leadership #ProfessionalDevelopment`;
+    postMessage = postMessage.trim();
+
+    // Add Standardized Resilience Links (for Webinar type too)
+    postMessage += `\n\n---\n`;
+    postMessage += `**More Ways to Strengthen Resilience:**\n`;
+    postMessage += `- ${MFA_CTA}: ${MFA_URL}\n`;
+    postMessage += `- ${SITE_CTA}: ${SITE_URL}\n`;
+    postMessage += `- ${ONLINE_CTA}: ${ONLINE_URL}\n`;
+  }
+
+  // NEW: Video post logic
+  if (videoBlob) {
+    try {
+      const videoId = uploadVideoToFacebook(videoBlob, facebookPageAccessToken, facebookPageId, contentData.postTitle, postMessage);
+      if (videoId) {
+        Logger.log(`[Facebook] Video upload successful. The video is now processing on Facebook. Post can be found on Facebook Page with Video ID: ${videoId}`);
+        return; // Exit the function as video is already posted
+      }
+    } catch (e) {
+      Logger.log(`[Facebook] Video upload failed with error: ${e.message}. Falling back to image/link.`);
+    }
+  }
+
+  // --- CORRECTED LOGIC FOR EXTERNAL VIDEO URLS ---
+  if (videoUrl) {
+    // Corrected payload for external link share
+    const payload = {
+      message: postMessage,
+      link: videoUrl,
+      access_token: facebookPageAccessToken,
+    };
+    Logger.log('[Facebook] Attempting external video link share.');
+
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    try {
+      const response = UrlFetchApp.fetch(`https://graph.facebook.com/v19.0/${facebookPageId}/feed`, options);
+      const responseCode = response.getResponseCode();
+      const responseBody = response.getContentText();
+
+      if (responseCode >= 200 && responseCode < 300) {
+        Logger.log(`[Facebook] Post created successfully. Response: ${responseBody}`);
+        return; // Exit here as the post was successful
+      } else {
+        Logger.log(`[Facebook] Error creating post: HTTP ${responseCode} - ${responseBody}`);
+        Logger.log(`[Facebook] Request Payload: ${JSON.stringify(payload)}`);
+        throw new Error(`Facebook API Error: ${responseBody}`);
+      }
+    } catch (e) {
+      Logger.log(`[Facebook] API call failed: ${e.message}`);
+      throw e;
+    }
+  }
+
+  // Fallback to existing image/link post logic
+  let payload;
+  if (finalImageUrlForChannels) {
+    payload = {
+      message: postMessage,
+      link: linkUrl,
+      picture: finalImageUrlForChannels,
+      name: contentData.postTitle,
+      description: contentData.headlineHook || contentData.sessionCovers || contentData.sessionMatters || contentData.keyTakeaway || '',
+      access_token: facebookPageAccessToken,
+    };
+    Logger.log('[Facebook] Attempting link share with explicit picture parameter.');
+  } else {
+    payload = {
+      message: postMessage,
+      link: linkUrl,
+      access_token: facebookPageAccessToken,
+    };
+    Logger.log('[Facebook] Attempting standard link share (no explicit picture parameter).');
+  }
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(`https://graph.facebook.com/v19.0/${facebookPageId}/feed`, options);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode >= 200 && responseCode < 300) {
+      Logger.log(`[Facebook] Post created successfully. Response: ${responseBody}`);
+    } else {
+      Logger.log(`[Facebook] Error creating post: HTTP ${responseCode} - ${responseBody}`);
+      Logger.log(`[Facebook] Request Payload: ${JSON.stringify(payload)}`);
+      throw new Error(`Facebook API Error: ${responseBody}`);
+    }
+  } catch (e) {
+    Logger.log(`[Facebook] API call failed: ${e.message}`);
+    throw e;
+  }
+}
+
+
+// --- NEW VIDEO UPLOAD FUNCTIONS ---
+/**
+ * Gets a Google Apps Script Blob for a video file uploaded via a Google Form to Drive.
+ * The script must have permission to access the file in Drive.
+ * It also checks file size and type.
+ * @param {string} driveFileUrl The Google Drive URL of the uploaded file.
+ * @returns {GoogleAppsScript.Base.Blob|null} A Blob representing the video file, or null if unsuccessful.
+ */
+function getDriveVideoBlob(driveFileUrl) {
+  if (!driveFileUrl) {
+    Logger.log('No Drive file URL provided for video Blob retrieval.');
+    return null;
+  }
+
+  const fileIdMatch = driveFileUrl.match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+  if (!fileIdMatch || !fileIdMatch[1]) {
+    Logger.log(`[DriveApp] Could not extract file ID from Drive video URL: ${driveFileUrl}`);
+    return null;
+  }
+  const fileId = fileIdMatch[1];
+
+  try {
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+
+    // Check file size (3.5 MB limit)
+    const MAX_VIDEO_SIZE_BYTES = 45 * 1024 * 1024;
+    if (blob.getBytes().length > MAX_VIDEO_SIZE_BYTES) {
+      Logger.log(`[DriveApp] Video file size (${(blob.getBytes().length / 1024 / 1024).toFixed(2)} MB) exceeds 3.5 MB limit. Skipping video post.`);
+      return null;
+    }
+
+    // Check file type (MIME type validation)
+    const videoMimeTypes = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-flv', 'video/x-ms-wmv', 'video/mpeg'];
+    if (!videoMimeTypes.includes(blob.getContentType())) {
+      Logger.log(`[DriveApp] File is not a supported video type. MIME: ${blob.getContentType()}. Skipping video post.`);
+      return null;
+    }
+
+    Logger.log(`[DriveApp] Successfully accessed video file: ${file.getName()} (ID: ${fileId})`);
+    return blob;
+  } catch (e) {
+    Logger.log(`[DriveApp] Error accessing Drive video file (ID: ${fileId}): ${e.message}. Ensure script has Drive permissions and file exists.`);
+    return null;
+  }
+}
+
+/**
+ * Uploads a video to LinkedIn.
+ * @param {GoogleAppsScript.Base.Blob} videoBlob The video file as a Blob.
+ * @param {string} linkedinAccessToken A valid LinkedIn access token.
+ * @param {string} authorUrn The LinkedIn organization URN.
+ * @returns {string|null} The asset URN if successful, null otherwise.
+ */
+function uploadVideoToLinkedIn(videoBlob, linkedinAccessToken, authorUrn) {
+  Logger.log('[LinkedIn Video] Starting video upload process.');
+  const registerUploadUrl = 'https://api.linkedin.com/v2/assets?action=registerUpload';
+  const registerUploadPayload = {
+    registerUploadRequest: {
+      owner: authorUrn,
+      recipes: ["urn:li:digitalmediaRecipe:feedshare-video"],
+      serviceRelationships: [{
+        identifier: "urn:li:userGeneratedContent",
+        relationshipType: "OWNER"
+      }],
+      supportedUploadMechanism: ["SYNCHRONOUS_UPLOAD"]
+    }
+  };
+
+  const registerUploadOptions = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'Authorization': `Bearer ${linkedinAccessToken}`,
+      'X-Restli-Protocol-Version': '2.0.0',
+    },
+    payload: JSON.stringify(registerUploadPayload),
+    muteHttpExceptions: true
+  };
+
+  let uploadUrl = null;
+  let assetUrn = null;
+
+  try {
+    const registerResponse = UrlFetchApp.fetch(registerUploadUrl, registerUploadOptions);
+    const registerResponseBody = JSON.parse(registerResponse.getContentText());
+
+    uploadUrl = registerResponseBody.value.uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
+    assetUrn = registerResponseBody.value.asset;
+    Logger.log(`[LinkedIn Video] Video upload URL obtained: ${uploadUrl}, Asset URN: ${assetUrn}`);
+  } catch (e) {
+    Logger.log(`[LinkedIn Video] Error registering video upload: ${e.message}`);
+    throw new Error(`LinkedIn Video Upload Registration Error: ${e.message}`);
+  }
+
+  // Perform the actual binary upload
+  const uploadVideoOptions = {
+    method: 'post',
+    contentType: videoBlob.getContentType(),
+    headers: {
+      'Authorization': `Bearer ${linkedinAccessToken}`,
+    },
+    payload: videoBlob.getBytes(),
+    muteHttpExceptions: true
+  };
+
+  try {
+    UrlFetchApp.fetch(uploadUrl, uploadVideoOptions);
+    Logger.log('[LinkedIn Video] Video successfully uploaded to LinkedIn.');
+    return assetUrn;
+  } catch (e) {
+    Logger.log(`[LinkedIn Video] Error uploading video binary: ${e.message}`);
+    throw new Error(`LinkedIn Video Binary Upload Error: ${e.message}`);
+  }
+}
+
+/**
+ * Uploads a video to Facebook.
+ * @param {GoogleAppsScript.Base.Blob} videoBlob The video file as a Blob.
+ * @param {string} facebookPageAccessToken Your Facebook Page Access Token.
+ * @param {string} facebookPageId Your Facebook Page ID.
+ * @param {string} videoTitle The title of the video.
+ * @param {string} videoDescription The description/message for the video.
+ * @returns {string|null} The video ID if successful, null otherwise.
+ */
+function uploadVideoToFacebook(videoBlob, facebookPageAccessToken, facebookPageId, videoTitle, videoDescription) {
+  Logger.log('[Facebook Video] Starting video upload process.');
+  const videoApiUrl = `https://graph-video.facebook.com/v19.0/${facebookPageId}/videos`;
+
+  const videoOptions = {
+    method: 'post',
+    payload: {
+      source: videoBlob,
+      access_token: facebookPageAccessToken,
+      title: videoTitle,
+      description: videoDescription, // Now uses the full message
+    },
+    muteHttpExceptions: true,
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(videoApiUrl, videoOptions);
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    if (responseCode >= 200 && responseCode < 300) {
+      const responseJson = JSON.parse(responseBody);
+      const videoId = responseJson.id;
+      Logger.log(`[Facebook Video] Video uploaded successfully. Video ID: ${videoId}`);
+      return videoId;
+    } else {
+      Logger.log(`[Facebook Video] Error uploading video: HTTP ${responseCode} - ${responseBody}`);
+      throw new Error(`Facebook Video API Error: ${responseBody}`);
+    }
+  } catch (e) {
+    Logger.log(`[Facebook Video] API call failed: ${e.message}`);
+    throw e;
+  }
+}
+
+// === Helper Function: Appends data to WeeklyContentArchive ===
+function appendRowToArchive(dataPayload) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("WeeklyContentArchive");
+  if (!sheet) throw new Error("Sheet 'WeeklyContentArchive' not found.");
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const row = [];
+
+  headers.forEach(header => {
+    if (header.toLowerCase() === 'timestamp') {
+      row.push(new Date());
+    } else {
+      let value = '';
+      if (header === 'primaryImageUrl') {
+        value = dataPayload.primaryImageUrl || '';
+      } else if (header === 'weekly-video-upload') {
+        // Map the consolidated videoUrl from the form handler to this field
+        value = dataPayload.videoUrl || '';
+      } else if (header === 'weekly-video-url') {
+        // Also map the consolidated videoUrl here for redundancy and clarity
+        value = dataPayload.videoUrl || '';
+      } else {
+        // For all other headers, use the existing mapping
+        value = dataPayload[header] || '';
+      }
+      row.push(value);
+    }
+  });
+
+  sheet.appendRow(row);
+  Logger.log("Data appended to WeeklyContentArchive successfully.");
+}
+
+// === NEW HELPER FUNCTIONS: For URL Standardization ===
+/**
+ * Standardizes Google Drive URLs to the uc?id= format.
+ * @param {string} url The input URL.
+ * @returns {string} The standardized URL.
+ */
+function standardizeDriveUrl(url) {
+  if (typeof url !== 'string' || url.length === 0) {
+    return url;
+  }
+  const fileIdMatch = url.match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+  if (fileIdMatch && fileIdMatch[1]) {
+    const fileId = fileIdMatch[1];
+    return `https://drive.google.com/uc?id=${fileId}`;
+  }
+  return url;
+}
+
+/**
+ * Ensures a URL starts with https://, adding it if missing or correcting http://.
+ * @param {string} url The input URL.
+ * @returns {string} The URL with https:// prefix.
+ */
+function ensureHttpsUrl(url) {
+  if (typeof url === 'string' && url.length > 0) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return 'https://' + url;
+    }
+    if (url.startsWith('http://drive.google.com')) {
+      return 'https://' + url.substring(7);
+    }
+  }
+  return url;
+}
+
+
+// === Helper function to send notification emails (newly created) ===
+function sendNotificationEmail(mappedData) {
+  const notificationRecipients = [
+    "rhonda@technologywerks.com",
+    "guy@technologywerks.com",
+    "justin@technologywerks.com",
+    "chris@technologywerks.com",
+    "mike@technologywerks.com"
+  ];
+
+  try {
+    const subject = `New ${mappedData['weekly-title'] ? 'Weekly Content' : 'Webinar'} Submission: ${mappedData['weekly-title'] || mappedData['webinar-title']}`;
+    const bodyHtml = `
+      <p>A new submission was received and archived.</p>
+      <p><strong>Submitter:</strong> ${mappedData.submitterEmail || 'Unknown'}</p>
+      <p><strong>Title:</strong> ${mappedData['weekly-title'] || mappedData['webinar-title'] || '(no title)'}</p>
+      <p><strong>Key Takeaway / Hook:</strong> ${mappedData['weekly-takeaway'] || mappedData['webinar-headlineHook'] || ''}</p>
+      <p><strong>Why it matters / Session Covers:</strong> ${mappedData['weekly-why'] || mappedData['webinar-sessionCovers'] || ''}</p>
+      <p><strong>Body / Webinar Details:</strong> ${mappedData['weekly-body'] || mappedData['webinar-sessionMatters'] || ''}</p>
+    `;
+
+    MailApp.sendEmail({
+      to: notificationRecipients.join(","),
+      subject: subject,
+      htmlBody: bodyHtml
+    });
+
+    Logger.log(`✅ Notification sent to ${notificationRecipients.join(", ")}`);
+  } catch (err) {
+    Logger.log("❌ Failed to send notification: " + err.message);
+  }
+}
+
+
+// === Main Handler: Accepts POST from Netlify and writes to WeeklyContentArchive ===
+function doPost(e) {
+  Logger.log('🧾 Incoming Payload:', JSON.stringify(e.postData.contents));
+
+  try {
+    const data = JSON.parse(e.postData.contents);
+    Logger.log("doPost RECEIVED DATA from Netlify app: " + JSON.stringify(data));
+
+    const mappedData = {};
+
+    mappedData.submitterEmail = data.submitterEmail || '';
+    mappedData.publishTo = data.publishTo || '';
+    mappedData.primaryImageUrl = ensureHttpsUrl(toDriveContentUrl(extractFirstDriveUrl(data.primaryImageUrl)));
+    mappedData.guestSpeakerImageUrl = ensureHttpsUrl(toDriveContentUrl(extractFirstDriveUrl(data.guestSpeakerImageUrl)));
+
+    mappedData.imageAltText = data.imageAltText || '';
+
+    // NEW: Map video fields from Netlify app
+    mappedData.videoUrl = ensureHttpsUrl(standardizeDriveUrl(data.videoUrl));
+
+    if (data.formType === 'weekly') {
+      Logger.log('🔍 Parsed data (weekly):', JSON.stringify(data));
+      Logger.log('📌 primaryImageUrl value:', data.primaryImageUrl);
+      Logger.log("doPost: Detected Weekly Content submission from Netlify app via 'formType'.");
+      mappedData['weekly-title'] = data['weekly-title'] || '';
+      mappedData['weekly-takeaway'] = data['weekly-takeaway'] || '';
+      mappedData['weekly-why'] = data['weekly-why'] || '';
+      mappedData['weekly-field'] = data['weekly-field'] || '';
+      mappedData['weekly-body'] = data['weekly-body'] || '';
+      mappedData['weekly-tags'] = data['weekly-tags'] || '';
+      mappedData['weekly-externalLinks'] = data['weekly-externalLinks'] || '';
+      mappedData['weekly-internalLinks'] = data['weekly-internalLinks'] || ''; // CORRECTED: Changed `data['internalLinks']` to `data['weekly-internalLinks']`
+      mappedData['weekly-uploadImages'] = data['weekly-uploadImages'] || '';
+    } else if (data.formType === 'webinar') {
+      Logger.log("doPost: Detected Webinar Content submission from Netlify app via 'formType'.");
+      mappedData['webinar-date'] = data['webinar-date'] || '';
+      mappedData['webinar-time'] = data['webinar-time'] || '';
+      mappedData['webinar-title'] = data['webinar-title'] || '';
+      mappedData['webinar-headlineHook'] = data['webinar-headlineHook'] || '';
+      mappedData['webinar-sessionCovers'] = data['webinar-sessionCovers'] || '';
+      mappedData['webinar-sessionMatters'] = data['webinar-sessionMatters'] || '';
+      mappedData['webinar-whoShouldAttend'] = data['webinar-whoShouldAttend'] || '';
+      mappedData['webinar-walkAwayWith'] = data['webinar-walkAwayWith'] || '';
+      mappedData['webinar-speakerBioIntro'] = data['webinar-speakerBioIntr'] || '';
+      mappedData['webinar-emailSubjectLine'] = data['webinar-emailSubjectLine'] || '';
+      mappedData['webinar-emailPreviewText'] = data['webinar-emailPreviewText'] || '';
+      mappedData['webinar-internalNotes'] = data['webinar-internalNotes'] || '';
+    } else {
+      Logger.log("Warning: Could not determine content type from Netlify app submission (missing or unknown 'formType' in payload). Data: " + JSON.stringify(data));
+    }
+
+    appendRowToArchive(mappedData);
+    // --- Send notification copies to Rhonda, Guy, Justin ---
+    sendNotificationEmail(mappedData);
+
+    Logger.log("doPost: Data appended. Preparing success response.");
+
+    return ContentService.createTextOutput(JSON.stringify({
+        success: true
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    Logger.log("Error caught in doPost try/catch block: " + err.message);
+    return ContentService.createTextOutput(JSON.stringify({
+        success: false,
+        error: err.message
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// === Google Forms Submission Handler ===
+function handleFormSubmit(e) {
+  const formResponseSheetName = e.source.getActiveSheet().getName();
+  Logger.log("Form submitted from tab: " + formResponseSheetName);
+
+  const rawFormData = e.namedValues;
+  const mappedData = {};
+
+  if (rawFormData["Email Address"]) mappedData.submitterEmail = rawFormData["Email Address"][0];
+  if (rawFormData["Status"]) mappedData.status = rawFormData["Status"][0];
+
+  if (rawFormData["Where do you want this content to publish to?"]) {
+    mappedData.publishTo = rawFormData["Where do you want this content to publish to?"][0];
+  } else if (rawFormData["Where do you want to post the webinar invites?"]) {
+    mappedData.publishTo = rawFormData["Where do you want to post the webinar invites?"][0];
+  }
+
+  // NEW: Consolidate Video URL mapping from form responses
+  const videoFromUpload = rawFormData["Upload a Video for Post (Optional)"] ? rawFormData["Upload a Video for Post (Optional)"][0] : '';
+  const videoFromUrl = rawFormData["URL Video for Post (Optional)"] ? rawFormData["URL Video for Post (Optional)"][0] : '';
+  mappedData.videoUrl = ensureHttpsUrl(standardizeDriveUrl(videoFromUpload || videoFromUrl));
+
+  // Consolidate Primary Image URL mapping
+  const imageFromUploadRaw = rawFormData["Upload Images for Post (Optional)"] ? rawFormData["Upload Images for Post (Optional)"][0] : '';
+  const imageFromUpload = extractFirstDriveUrl(imageFromUploadRaw);
+  const imageFromUrl = rawFormData["URL Image for Post (Optional)"] ? rawFormData["URL Image for Post (Optional)"][0] : '';
+  const mainImageUrl = rawFormData["Main Image URL"] ? rawFormData["Main Image URL"][0] : '';
+
+  const chosenImage = imageFromUpload || imageFromUrl || mainImageUrl;
+  mappedData.primaryImageUrl = ensureHttpsUrl(toDriveContentUrl(chosenImage));
+
+  if (rawFormData["Guest Speaker Image URL (Optional)"]) mappedData.guestSpeakerImageUrl = ensureHttpsUrl(standardizeDriveUrl(rawFormData["Guest Speaker Image URL (Optional)"][0]));
+  if (rawFormData["Main Image Alt Text"]) mappedData.imageAltText = rawFormData["Main Image Alt Text"][0];
+
+  if (formResponseSheetName === "Form Responses 1") {
+    if (rawFormData["Post Title"]) mappedData['weekly-title'] = rawFormData["Post Title"][0];
+    if (rawFormData["Key Takeaway"]) mappedData['weekly-takeaway'] = rawFormData["Key Takeaway"][0];
+    if (rawFormData["Why it matters"]) mappedData['weekly-why'] = rawFormData["Why it matters"][0];
+    if (rawFormData["From the field"]) mappedData['weekly-field'] = rawFormData["From the field"][0];
+    if (rawFormData["Briefing Body"]) mappedData['weekly-body'] = rawFormData["Briefing Body"][0];
+    if (rawFormData["Mental Armor Skill Tags (Optional)"]) mappedData['weekly-tags'] = rawFormData["Mental Armor Skill Tags (Optional)"][0];
+    if (rawFormData["External Links (one per line - optional)"]) mappedData['weekly-externalLinks'] = rawFormData["External Links (one per line - optional)"][0];
+    if (rawFormData["Internal Links (one per line)"]) mappedData['weekly-internalLinks'] = rawFormData["Internal Links (one per line)"][0];
+  }
+
+  if (formResponseSheetName === "Webinar Responses") {
+    if (rawFormData["Webinar Date"]) mappedData['webinar-date'] = rawFormData["Webinar Date"][0];
+    if (rawFormData["Webinar Time"]) mappedData['webinar-time'] = rawFormData["Webinar Time"][0];
+    if (rawFormData["Webinar Title"]) mappedData['webinar-title'] = rawFormData["Webinar Title"][0];
+    if (rawFormData["Headline/Hook"]) mappedData['webinar-headlineHook'] = rawFormData["Headline/Hook"][0];
+    if (rawFormData["What this session covers"]) mappedData['webinar-sessionCovers'] = rawFormData["What this session covers"][0];
+    if (rawFormData["Why this session matters"]) mappedData['webinar-sessionMatters'] = rawFormData["Why this session matters"][0];
+    if (rawFormData["Who should attend"]) mappedData['webinar-whoShouldAttend'] = rawFormData["Who should attend"][0];
+    if (rawFormData["What you'll walk away with"]) mappedData['webinar-walkAwayWith'] = rawFormData["What you'll walk away with"][0];
+    if (rawFormData["Speaker Bio/Intro"]) mappedData['webinar-speakerBioIntro'] = rawFormData["Speaker Bio/Intro"][0];
+    if (rawFormData["Email Subject Line"]) mappedData['webinar-emailSubjectLine'] = rawFormData["Email Subject Line"][0];
+    if (rawFormData["Email Preview Text"]) mappedData['webinar-emailPreviewText'] = rawFormData["Email Preview Text"][0];
+    if (rawFormData["Internal Notes (Optional)"]) mappedData['webinar-internalNotes'] = rawFormData["Internal Notes (Optional)"][0];
+  }
+
+  if (mappedData['weekly-title'] || mappedData['webinar-title']) {
+    appendRowToArchive(mappedData);
+    // --- Send notification copies to Rhonda, Guy, Justin ---
+    sendNotificationEmail(mappedData);
+
+  } else {
+    Logger.log("No valid content found to append to archive. Skipping row.");
+  }
+}
+
+// === Health Check or Debug Endpoint ===
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+      status: "ok",
+      timestamp: new Date().toISOString()
+    }))
+    .setMimeType(ContentService.MimeType.JSON)
+    .appendHeader("Access-Control-Allow-Origin", "*")
+    .appendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+    .appendHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+// === Required for CORS Preflight ===
+function doOptions(e) {
+  return ContentService.createTextOutput('')
+    .setMimeType(ContentService.MimeType.TEXT)
+    .appendHeader('Access-Control-Allow-Origin', '*')
+    .appendHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+    .appendHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+// --- Triggered by a timer to process new content from WeeklyContentArchive for social media posting ---
+function checkForUnprocessedWeeklyContent() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("WeeklyContentArchive");
+  if (!sheet) {
+    Logger.log("Sheet 'WeeklyContentArchive' not found. Please ensure the header matches exactly.");
+    return;
+  }
+
+  const dataRange = sheet.getDataRange();
+  const values = dataRange.getValues();
+  const headers = values[0];
+  const statusColIndex = headers.indexOf("status");
+
+  if (statusColIndex === -1) {
+    Logger.log(`No 'status' column found in headers of ${sheet.getName()}. Please ensure the header matches exactly.`);
+    return;
+  }
+
+  let processedCount = 0;
+
+  for (let row = 1; row < values.length; row++) {
+    const status = values[row][statusColIndex];
+    if (!status) {
+      const contentData = {};
+      headers.forEach((header, index) => {
+        contentData[header] = values[row][index];
+      });
+
+      // NEW: Ensure key image/alt/video fields are correctly mapped from column data
+      contentData.primaryImageUrl = contentData.primaryImageUrl || '';
+      contentData.guestSpeakerImageUrl = contentData.guestSpeakerImageUrl || '';
+      contentData.imageAltText = contentData.imageAltText || '';
+      contentData.videoUrl = contentData['weekly-video-upload'] || contentData['weekly-video-url'] || '';
+
+      if (contentData['weekly-title'] && contentData['weekly-title'].length > 0) {
+        contentData.type = 'weeklyContent';
+        contentData.postTitle = contentData['weekly-title'];
+        contentData.whyItMatters = contentData['weekly-why'];
+        contentData.fromTheField = contentData['weekly-field'];
+        contentData.keyTakeaway = contentData['weekly-takeaway'];
+        contentData.briefingBody = contentData['weekly-body'];
+        contentData.mentalArmorSkillTags = contentData['weekly-tags'];
+        contentData.externalLinks = contentData['weekly-externalLinks'] ? contentData['weekly-externalLinks'].split('\n').filter(Boolean) : [];
+        contentData.internalLinks = contentData['weekly-internalLinks'] ? contentData['weekly-internalLinks'].split('\n').filter(Boolean) : [];
+      } else if (contentData['webinar-title'] && contentData['webinar-title'].length > 0) {
+        contentData.type = 'webinar';
+        contentData.postTitle = contentData['webinar-title'];
+        contentData.headlineHook = contentData['webinar-headlineHook'];
+        contentData.webinarDate = contentData['webinar-date'];
+        contentData.webinarTime = contentData['webinar-time'];
+        contentData.whatSessionCovers = contentData['webinar-sessionCovers'];
+        contentData.whySessionMatters = contentData['webinar-sessionMatters'];
+        contentData.whoAttend = contentData['webinar-whoShouldAttend'];
+        contentData.walkAwayWith = contentData['webinar-walkAwayWith'];
+        contentData.speakerBioIntro = contentData['webinar-speakerBioIntro'];
+        contentData.emailSubjectLine = contentData['webinar-emailSubjectLine'];
+        contentData.emailPreviewText = contentData['webinar-emailPreviewText'];
+        contentData.internalNotes = contentData['webinar-internalNotes'];
+      } else {
+        Logger.log(`Skipping row ${row + 1}: Neither weekly-title nor webinar-title found. Content type indeterminate.`);
+        sheet.getRange(row + 1, statusColIndex + 1).setValue('Skipped');
+        continue;
+      }
+
+      Logger.log(`Processing content row ${row + 1} (${contentData.type}): "${contentData.postTitle}"`);
+
+      try {
+        _routeContentToChannels(contentData);
+
+        sheet.getRange(row + 1, statusColIndex + 1).setValue('✓');
+        processedCount++;
+        Logger.log(`Successfully processed row ${row + 1} from WeeklyContentArchive.`);
+      } catch (e) {
+        Logger.log(`Error processing row ${row + 1} from WeeklyContentArchive: ${e.message}`);
+        sheet.getRange(row + 1, statusColIndex + 1).setValue('Error');
+      }
+    }
+  }
+  Logger.log(`checkForUnprocessedWeeklyContent complete. ${processedCount} rows processed.`);
+}
+
+/**
+ * Normalises just about any YouTube URL into https://www.youtube.com/watch?v=VIDEO_ID[&t=…]
+ * @param {string} url
+ * @return {string}
+ */
+function standardizeYoutubeUrl(url) {
+  if (typeof url !== 'string') return url;
+
+  const YT_HOSTS = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'];
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (e) {
+    return url; // not a valid URL
+  }
+
+  if (!YT_HOSTS.some(h => parsed.hostname.endsWith(h))) {
+    return url; // not YouTube
+  }
+
+  let videoId = '';
+
+  // Handle youtu.be/<id>
+  if (parsed.hostname.endsWith('youtu.be')) {
+    videoId = parsed.pathname.slice(1);
+  }
+
+  // Handle youtube.com/shorts/<id>, /embed/<id>, /v/<id>
+  const pathMatch = parsed.pathname.match(/\/(?:shorts|embed|v)\/([^/?#]+)/);
+  if (!videoId && pathMatch) {
+    videoId = pathMatch[1];
+  }
+
+  // Handle watch?v=<id>
+  if (!videoId) {
+    videoId = parsed.searchParams.get('v') || '';
+  }
+
+  // Validate (YouTube video IDs are 11 chars)
+  if (!/^[\w-]{11}$/.test(videoId)) {
+    Logger.log(`[YouTube Helper] Could not extract video ID from: ${url}`);
+    return url;
+  }
+
+  // Preserve start time if present
+  const t = parsed.searchParams.get('t') || parsed.searchParams.get('start');
+  return `https://www.youtube.com/watch?v=${videoId}${t ? `&t=${t}` : ''}`;
+}
+
+/**
+ * Builds an embeddable HTML snippet for common video hosts.
+ * Falls back to a clickable link when iframe won't work.
+ * @param {string} url
+ * @return {string} Safe HTML
+ */
+function buildVideoEmbed(url) {
+  if (!url) return '';
+
+  // --- YouTube ---
+  const yt = url.match(/(?:youtu\.be\/|v=|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (yt) {
+    const vid = yt[1];
+    const embedSrc = `https://www.youtube.com/embed/${vid}`;
+    return `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;max-width:100%;">
+              <iframe src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;"
+                      frameborder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                      allowfullscreen></iframe>
+            </div>`;
+  }
+
+  // --- Google Drive ---
+  const drive = url.match(/(?:file\/d\/|id=)([a-zA-Z0-9_-]+)/);
+  if (drive) {
+    const fileId = drive[1];
+    const embedSrc = `https://drive.google.com/file/d/${fileId}/preview`;
+    return `<div style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;max-width:100%;">
+              <iframe src="${embedSrc}" style="position:absolute;top:0;left:0;width:100%;height:100%;"
+                      frameborder="0" allowfullscreen></iframe>
+            </div>`;
+  }
+
+  // --- Direct MP4 / WebM ---
+  if (url.match(/\.(mp4|webm|ogg)(\?|$)/i)) {
+    return `<video controls style="max-width:100%;height:auto;">
+              <source src="${url}">
+              <p>Your browser can’t play this video. <a href="${url}" target="_blank">Download instead</a>.</p>
+            </video>`;
+  }
+
+  // --- Fallback ---
+  return `<p><a href="${url}" target="_blank" rel="noopener">Click here to watch the video</a></p>`;
+}
+
+function extractFirstDriveUrl(maybeMulti) {
+  if (!maybeMulti) return '';
+  return String(maybeMulti).split(',')[0].trim();
+}
+function extractDriveFileId(url) {
+  if (!url) return '';
+  const m = String(url).match(/(?:id=|file\/d\/)([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+function toDriveContentUrl(anyUrl) {
+  const id = extractDriveFileId(anyUrl);
+  return id ? `https://drive.google.com/uc?id=${id}` : (anyUrl || '');
+}
+
+function getUrlVideoBlob(mp4Url, maxMB) {
+  if (!mp4Url) return null;
+  maxMB = maxMB || 45; // practical Apps Script limit
+  const resp = UrlFetchApp.fetch(mp4Url, { muteHttpExceptions: true });
+  if (resp.getResponseCode() < 200 || resp.getResponseCode() >= 300) return null;
+  const blob = resp.getBlob();
+  const sizeMB = blob.getBytes().length / (1024*1024);
+  if (sizeMB > maxMB) { Logger.log(`[Video] ${sizeMB.toFixed(2)}MB > ${maxMB}MB`); return null; }
+  const ct = (blob.getContentType() || '').toLowerCase();
+  if (!/video\/(mp4|webm|ogg|quicktime|x\-ms\-wmv|mpeg)/.test(ct)) { Logger.log(`[Video] Unsupported type: ${ct}`); return null; }
+  blob.setName('mma_video.mp4');
+  return blob;
+}
+
+/**
+ * Poll LinkedIn until the uploaded asset is AVAILABLE (or we timeout).
+ * Returns true if AVAILABLE, false otherwise.
+ */
+function waitForLinkedInAssetReady(assetUrn, accessToken, timeoutMs) {
+  const deadline = Date.now() + (timeoutMs || 60000); // 60s default
+  const url = `https://api.linkedin.com/v2/assets/${encodeURIComponent(assetUrn)}?projection=(recipes~(status))`;
+  while (Date.now() < deadline) {
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'X-Restli-Protocol-Version': '2.0.0'
+      },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() >= 200 && resp.getResponseCode() < 300) {
+      const data = JSON.parse(resp.getContentText());
+      // recipes~ is an array; we expect status AVAILABLE when processing completes
+      const statuses = (data['recipes~'] || []).map(r => (r.status || '').toUpperCase());
+      if (statuses.includes('AVAILABLE')) return true;
+    }
+    Utilities.sleep(2000); // wait 2s then poll again
+  }
+  return false;
+}

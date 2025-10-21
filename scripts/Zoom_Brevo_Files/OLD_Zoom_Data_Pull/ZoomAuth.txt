@@ -1,0 +1,52 @@
+//ZoomAuth.gs//
+
+
+function getZoomAccessToken_49North() {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('zoom_access_token');
+  const expiresAt = parseInt(props.getProperty('zoom_token_expires_at'), 10);
+  const now = Date.now();
+
+  // ✅ Return valid cached token if still fresh
+  if (token && expiresAt && now < expiresAt - 60000) { // refresh 1 min before expiration
+    Logger.log('♻️ Using cached Zoom access token.');
+    return token;
+  }
+
+  // 🔐 Credentials
+  const clientId = 'Uzy724GXQ8u15xM1spZyCg';
+  const clientSecret = 'vrSWsQwboZU2m3iFjU00wjFR0dvw45KQ';
+  const accountId = 'S6GWPc-aRFKbN_itS2LZtA';
+  const credentials = Utilities.base64Encode(`${clientId}:${clientSecret}`);
+  const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`;
+
+  const options = {
+    method: 'post',
+    headers: {
+      Authorization: 'Basic ' + credentials
+    },
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(tokenUrl, options);
+    const data = JSON.parse(response.getContentText());
+
+    if (data.access_token) {
+      const expiresInMs = (data.expires_in || 3600) * 1000;
+      const newExpiry = Date.now() + expiresInMs;
+
+      props.setProperty('zoom_access_token', data.access_token);
+      props.setProperty('zoom_token_expires_at', newExpiry.toString());
+
+      Logger.log('🔄 Zoom access token refreshed.');
+      return data.access_token;
+    } else {
+      Logger.log('❌ Failed to retrieve token: ' + response.getContentText());
+      return null;
+    }
+  } catch (e) {
+    Logger.log('🚨 Error refreshing Zoom token: ' + e.message);
+    return null;
+  }
+}

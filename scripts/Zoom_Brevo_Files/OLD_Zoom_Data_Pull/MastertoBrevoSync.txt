@@ -1,0 +1,201 @@
+//Mastertobrevo.gs//
+
+/**
+ * 🔄 NIGHTLY BREVO SYNC – Push Master Contacts rows to Brevo
+ */
+function pushMasterContactsToBrevo() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('Master Contacts');
+  const dashboard = ss.getSheetByName('MAWSR');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const apiKey = PropertiesService.getScriptProperties().getProperty('brevo_key');
+  const baseUrl = 'https://api.brevo.com/v3/contacts/';
+  const listId = 108; // DATABASE MASTER list ID
+
+  // 🔍 Fetch Brevo attribute list
+  const attrResponse = UrlFetchApp.fetch("https://api.brevo.com/v3/contacts/attributes", {
+    method: 'get',
+    headers: {
+      'api-key': apiKey,
+      'accept': 'application/json'
+    }
+  });
+  const attrList = JSON.parse(attrResponse.getContentText()).attributes;
+  const brevoAttributes = attrList.map(attr => attr.name);
+
+  const emailIdx = headers.indexOf('EMAIL');
+
+  const FIELD_MAP = {
+    'FIRST_NAME': 'FIRSTNAME',
+    'LAST_NAME': 'LASTNAME',
+    'PHONE_MOBILE': 'PHONE_MOBILE',
+    'PHONE_WHATSAPP': 'WHATSAPP1',
+    'PHONE_OFFICE': 'PHONE_OFFICE',
+    'COURTESY_JOB_TITLE': 'JOB_TITLE',
+    'LINKEDIN_PROFILE': 'LINKEDIN',
+    'ORG_PROMOTES_MENTAL_STRENGTH': 'PROMOTES_MENTAL_STRENGTH_ORG',
+    'ORG_HAS_EFFECTIVE_INITIATIVE': 'EFFECTIVE_INITIATIVE_ORG',
+    'LEADERSHIP_MENTAL_STRENGTH_VIEW': 'LEADERSHIP_VIEWS_ON_MENTAL_STRENGTH',
+    'ASST_ORG_HOW': 'ASSIST_ORGANIZATION',
+    'REFERRAL_HEAR': 'REFERRAL_HEAR',
+    'ZOOM_EVENT_TIMESTAMP': 'ZOOM_EVENT_TIMESTAMP',
+    'WEBINAR_ID': 'WEBINAR_ID',
+    'WEBINAR_UUID': 'WEBINAR_UUID',
+    'WEBINAR_TOPIC': 'WEBINAR_TOPIC',
+    'WEBINAR_START_TIME': 'WEBINAR_START_TIME',
+    'REGISTRANT_ID': 'REGISTRANT_ID',
+    'CREDENTIALS': 'CREDENTIALS',
+    'ORGANIZATION_NAME': 'ORGANIZATION_NAME',
+    'ORGANIZATION_STREET_ADDRESS': 'ORGANIZATION_STREET_ADDRESS',
+    'CITY': 'CITY',
+    'STATE_PROVINCE': 'STATE_PROVINCE',
+    'COUNTRY_REGION': 'COUNTRY_REGION',
+    'ZIP_OR_POSTAL_CODE': 'ZIP_OR_POSTAL_CODE',
+    'COUNTY': 'COUNTY',
+    'REGISTRATION_TIME': 'REGISTRATION_TIME',
+    'INITIAL_CONTACT_TIME': 'INITIAL_CONTACT_TIME',
+    'IMPORTANCE_OF_MENTAL_STRENGTH': 'IMPORTANCE_OF_MENTAL_STRENGTH',
+    'IMPLEMENTED_INITIATIVE': 'IMPLEMENTED_INITIATIVE',
+    'WEBINAR_GAIN_EXPECTATION': 'WEBINAR_GAIN_EXPECTATION',
+    'JOIN_TIME': 'JOIN_TIME',
+    'LEAVE_TIME': 'LEAVE_TIME',
+    'DURATION_MINUTES': 'DURATION_MINUTES',
+    'RELEVANCE_RATING': 'RELEVANCE_RATING',
+    'RATING_RHONDA': 'RATING_RHONDA',
+    'RATING_CHRIS': 'RATING_CHRIS',
+    'RATING_GUEST': 'RATING_GUEST',
+    'WILL_SHARE': 'WILL_SHARE',
+    'WILL_ATTEND_AGAIN': 'WILL_ATTEND_AGAIN',
+    'QUOTE_INTEREST': 'QUOTE_INTEREST',
+    'COMMENTS': 'COMMENTS',
+    'AREAS_OF_INTEREST': 'AREAS_OF_INTEREST',
+    'LAST_CHANGED': 'LAST_CHANGED',
+    'CONTACT_ID': 'CONTACT_ID',
+    'SURVEY_SUBMITTED_TIME': 'SURVEY_SUBMITTED_TIME',
+    'ATTENDED_WEBINAR': 'ATTENDED_WEBINAR',
+    'ORGANIZATION_SIZE': 'ORGANIZATION_SIZE',
+    'WEBINARS_ATTENDED_COUNT': 'WEBINARS_ATTENDED_COUNT',
+    'PHONE_EXTENSION': 'PHONE_EXTENSION',
+    'ORGANIZATION_TYPE': 'ORGANIZATION_TYPE',
+    'SOURCED_FROM': 'SOURCED_FROM',
+    'WEB_CONTACT_REQ': 'WEB_CONTACT_REQ'
+  };
+
+  let pushedCount = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const email = row[emailIdx];
+    if (!email) continue;
+
+    const attributes = {};
+    for (let j = 0; j < headers.length; j++) {
+      const field = headers[j];
+      if (field === 'EMAIL') continue;
+      const brevoField = FIELD_MAP[field] || field;
+      const val = String(row[j] ?? '').trim();
+      if (val && brevoAttributes.includes(brevoField)) {
+        attributes[brevoField] = val;
+      }
+    }
+
+    const payload = {
+      email: email,
+      updateEnabled: true,
+      attributes: attributes
+    };
+
+    const putOptions = {
+      method: 'put',
+      contentType: 'application/json',
+      headers: {
+        'api-key': apiKey,
+        'accept': 'application/json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    try {
+      const response = UrlFetchApp.fetch(baseUrl + encodeURIComponent(email), putOptions);
+      const code = response.getResponseCode();
+      const responseText = response.getContentText();
+      Logger.log(`🔁 Brevo PUT Response (${code}): ${responseText}`);
+
+      if (code === 404) {
+        const postPayload = {
+          email: email,
+          attributes: attributes,
+          updateEnabled: true,
+          listIds: [listId]
+        };
+
+        const postOptions = {
+          method: 'post',
+          contentType: 'application/json',
+          headers: {
+            'api-key': apiKey,
+            'accept': 'application/json'
+          },
+          payload: JSON.stringify(postPayload),
+          muteHttpExceptions: true
+        };
+
+        const createResponse = UrlFetchApp.fetch(baseUrl, postOptions);
+        Logger.log(`🌟 Brevo POST Response (${createResponse.getResponseCode()}): ${createResponse.getContentText()}`);
+      }
+
+      pushedCount++;
+      Logger.log(`✅ Synced: ${email} → ${code}`);
+
+    } catch (error) {
+      Logger.log(`❌ Error syncing ${email}: ${error}`);
+    }
+  }
+
+  // 📊 Dashboard update
+  if (dashboard) {
+    const timestamp = new Date();
+    const masterCount = data.length - 1;
+    const statusNote = pushedCount > 0
+      ? `✅ Success @ ${timestamp.toLocaleTimeString()}`
+      : `⚠️ No contacts to push @ ${timestamp.toLocaleTimeString()}`;
+
+    dashboard.getRange("A4").setValue("Date / Time");
+    dashboard.getRange("B4").setValue(timestamp);
+    dashboard.getRange("A5").setValue("Contacts in Master Sheet");
+    dashboard.getRange("B5").setValue(masterCount);
+    dashboard.getRange("A6").setValue("Contacts Pushed to Brevo");
+    dashboard.getRange("B6").setValue(pushedCount);
+    dashboard.getRange("A7").setValue("Push Status");
+    dashboard.getRange("B7").setValue(statusNote);
+  }
+
+  // 🧹 Clear Master after sync
+  if (pushedCount > 0) {
+    clearMasterDataButKeepHeaders();
+  }
+}
+
+/**
+ * 🧹 Clear Master Sheet Data (Keep Headers)
+ */
+function clearMasterDataButKeepHeaders() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const master = ss.getSheetByName("Master Contacts");
+  if (!master) {
+    Logger.log("❌ Master Contacts sheet not found.");
+    return;
+  }
+
+  const lastRow = master.getLastRow();
+  const lastCol = master.getLastColumn();
+
+  if (lastRow > 1) {
+    master.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+    Logger.log(`🧹 Cleared ${lastRow - 1} rows from Master Contacts (headers preserved).`);
+  } else {
+    Logger.log("✅ No rows to clear below headers.");
+  }
+}

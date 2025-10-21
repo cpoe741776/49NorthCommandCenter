@@ -1,0 +1,656 @@
+
+//Zoom_Sync.gs //
+// ==================================================
+// ZOOM ATTENDANCE SYNC - Webinar Operations
+// ==================================================
+// Run as: chris@technologywerks.com
+// Purpose: Pull Zoom attendance data into Attendance tab
+// ==================================================
+
+const WEBINAR_SHEET_ID = '1EffYYNULGwN8QgUw4XUQkIG3FEVWg4Y2G0UZ87gDoDA';
+
+/**
+ * Get Zoom Access Token (Server-to-Server OAuth)
+ */
+function getZoomAccessToken() {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty('zoom_access_token');
+  const expiresAt = parseInt(props.getProperty('zoom_token_expires_at'), 10);
+  const now = Date.now();
+
+  if (token && expiresAt && now < expiresAt - 60000) {
+    Logger.log('Using cached Zoom token');
+    return token;
+  }
+
+  const clientId = props.getProperty('zoom_client_id');
+  const clientSecret = props.getProperty('zoom_client_secret');
+  const accountId = props.getProperty('zoom_account_id');
+  
+  if (!clientId || !clientSecret || !accountId) {
+    throw new Error('Zoom credentials not found. Run setupZoomCredentials() first.');
+  }
+  
+  const credentials = Utilities.base64Encode(`${clientId}:${clientSecret}`);
+  const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`;
+
+  const options = {
+    method: 'post',
+    headers: { Authorization: 'Basic ' + credentials },
+    muteHttpExceptions: true
+  };
+
+  try {
+    const response = UrlFetchApp.fetch(tokenUrl, options);
+    const data = JSON.parse(response.getContentText());
+
+    if (data.access_token) {
+      const expiresInMs = (data.expires_in || 3600) * 1000;
+      const newExpiry = Date.now() + expiresInMs;
+      props.setProperty('zoom_access_token', data.access_token);
+      props.setProperty('zoom_token_expires_at', newExpiry.toString());
+      Logger.log('Zoom token refreshed');
+      return data.access_token;
+    } else {
+      Logger.log('Failed to get token: ' + response.getContentText());
+      return null;
+    }
+  } catch (e) {
+    Logger.log('Error: ' + e.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch all occurrences of a recurring webinar
+ */
+function fetchWebinarOccurrences(token, webinarId) {
+  const url = `https://api.zoom.us/v2/past_webinars/${webinarId}/instances`;
+  const options = {
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const data = JSON.parse(response.getContentText());
+    return data.webinars || [];
+  } catch (e) {
+    Logger.log(`Error fetching occurrences: ${e.message}`);
+    return [];
+  }
+}
+
+function getOccurrenceIdForDate(token, webinarId, targetDate) {
+  // Try past occurrences first
+  const pastUrl = `https://api.zoom.us/v2/past_webinars/${webinarId}/instances`;
+  try {
+    const pastResponse = UrlFetchApp.fetch(pastUrl, {
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    const pastData = JSON.parse(pastResponse.getContentText());
+    const pastOccurrences = pastData.webinars || [];
+    
+    const match = pastOccurrences.find(occ => {
+      const occDate = new Date(occ.start_time);
+      return occDate.toDateString() === targetDate.toDateString();
+    });
+    
+    if (match) return match.uuid;
+  } catch (e) {
+    Logger.log(`Could not fetch past occurrences: ${e.message}`);
+  }
+  
+  // Try future occurrences
+  const futureUrl = `https://api.zoom.us/v2/webinars/${webinarId}`;
+  try {
+    const futureResponse = UrlFetchApp.fetch(futureUrl, {
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    const futureData = JSON.parse(futureResponse.getContentText());
+    const futureOccurrences = futureData.occurrences || [];
+    
+    const match = futureOccurrences.find(occ => {
+      const occDate = new Date(occ.start_time);
+      return occDate.toDateString() === targetDate.toDateString();
+    });
+    
+    if (match) return match.occurrence_id;
+  } catch (e) {
+    Logger.log(`Could not fetch future occurrences: ${e.message}`);
+  }
+  
+  return null;
+}
+/**
+ * Main sync function - pulls attendance for completed webinars
+ */
+/**
+ * Main sync function - pulls attendance for completed webinars
+ */
+/**
+ * Main sync function - pulls attendance for completed webinars
+ * Fixed to avoid duplicate processing of recurring webinar occurrences
+ */
+function syncZoomAttendance() {
+  const startTime = new Date();
+  
+  try {
+    Logger.log('=== ZOOM ATTENDANCE SYNC ===');
+    Logger.log(`Time: ${startTime}`);
+    
+    const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+    const webinarsSheet = ss.getSheetByName('Webinars');
+    const attendanceSheet = ss.getSheetByName('Attendance');
+    const logSheet = ss.getSheetByName('Processing_Log');
+    
+    if (!webinarsSheet || !attendanceSheet) {
+      throw new Error('Required sheets not found');
+    }
+    
+    const token = getZoomAccessToken();
+    if (!token) throw new Error('Failed to get Zoom token');
+    
+    // Get all webinar data
+    const webinarData = webinarsSheet.getDataRange().getValues();
+    const headers = webinarData[0];
+    const webinarIdIdx = headers.indexOf('Webinar ID');
+    const statusIdx = headers.indexOf('Status');
+    const dateIdx = headers.indexOf('Date');
+    const timeIdx = headers.indexOf('Time');
+    const attendanceCountIdx = headers.indexOf('Attendance Count');
+    
+    let syncedCount = 0;
+    let errorCount = 0;
+    
+    // Process each row individually (each is a specific occurrence)
+    for (let i = 1; i < webinarData.length; i++) {
+      const row = webinarData[i];
+      const webinarId = row[webinarIdIdx];
+      const status = row[statusIdx];
+      const webinarDate = new Date(row[dateIdx]);
+      
+      // Only sync completed webinars
+      if (status !== 'Completed') {
+        Logger.log(`Skipping row ${i + 1}: Status is ${status}`);
+        continue;
+      }
+      
+      Logger.log(`Syncing attendance for: ${webinarId}`);
+      
+      try {
+        // For recurring webinars, we need to get the specific occurrence UUID
+        // Try to find the occurrence that matches this specific date/time
+        const occurrences = fetchWebinarOccurrences(token, webinarId);
+        
+        let participants = [];
+        let matchedOccurrence = null;
+        
+        if (occurrences.length > 0) {
+          // Find the occurrence that matches this row's date
+          matchedOccurrence = occurrences.find(occ => {
+            const occDate = new Date(occ.start_time);
+            return occDate.toDateString() === webinarDate.toDateString();
+          });
+          
+          if (matchedOccurrence) {
+            Logger.log(`  Found matching occurrence: ${matchedOccurrence.uuid}`);
+            participants = fetchZoomParticipants(token, matchedOccurrence.uuid);
+          } else {
+            Logger.log(`  No matching occurrence found for date: ${webinarDate}`);
+          }
+        } else {
+          // Single webinar - use webinar ID directly
+          participants = fetchZoomParticipants(token, webinarId);
+        }
+        
+        if (participants.length > 0) {
+          // Write attendance data for this specific occurrence only
+          writeAttendanceData(attendanceSheet, webinarId, participants);
+          
+          // Update attendance count in Webinars tab
+          webinarsSheet.getRange(i + 1, attendanceCountIdx + 1).setValue(participants.length);
+          
+          Logger.log(`  Wrote ${participants.length} participants`);
+          syncedCount++;
+        } else {
+          Logger.log(`  No participants found`);
+        }
+        
+        Utilities.sleep(500); // Rate limit protection
+        
+      } catch (err) {
+        Logger.log(`Error syncing ${webinarId}: ${err.message}`);
+        errorCount++;
+      }
+    }
+    
+    const endTime = new Date();
+    const duration = Math.round((endTime - startTime) / 1000);
+    
+    Logger.log(`\n=== SYNC COMPLETE ===`);
+    Logger.log(`Webinars synced: ${syncedCount}`);
+    Logger.log(`Errors: ${errorCount}`);
+    Logger.log(`Duration: ${duration}s`);
+    
+    // Log to sheet
+    if (logSheet) {
+      logSheet.appendRow([
+        startTime,
+        'Zoom Attendance Sync',
+        syncedCount,
+        errorCount,
+        `Synced ${syncedCount} webinars (${duration}s)`
+      ]);
+    }
+    
+  } catch (error) {
+    Logger.log(`ERROR: ${error.message}`);
+    Logger.log(error.stack);
+    throw error;
+  }
+}
+
+/**
+ * Fetch participants for a specific webinar
+ */
+function fetchZoomParticipants(token, webinarId) {
+  const url = `https://api.zoom.us/v2/report/webinars/${webinarId}/participants?page_size=300`;
+  const options = {
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true
+  };
+  
+  try {
+    const response = UrlFetchApp.fetch(url, options);
+    const data = JSON.parse(response.getContentText());
+    return data.participants || [];
+  } catch (e) {
+    Logger.log(`Error fetching participants: ${e.message}`);
+    return [];
+  }
+}
+
+/**
+ * Create automated trigger - runs daily at 2am
+ */
+function createZoomSyncTrigger() {
+  // Delete existing triggers
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'syncZoomAttendance') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+  
+  // Create new trigger: daily at 2am
+  ScriptApp.newTrigger('syncZoomAttendance')
+    .timeBased()
+    .atHour(2)
+    .everyDays(1)
+    .create();
+  
+  Logger.log('Trigger created: syncZoomAttendance runs daily at 2am');
+}
+
+/**
+ * Fetch webinar list from Zoom and populate Webinars tab
+ * Handles both single and recurring webinars (past AND future)
+ * Fetches actual registration counts
+ */
+function syncWebinarsFromZoom() {
+  const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+  const webinarsSheet = ss.getSheetByName('Webinars');
+  const token = getZoomAccessToken();
+  
+  if (!token) throw new Error('Failed to get Zoom token');
+  
+  const surveyUrl = 'https://forms.gle/DwWYrfFPanKxCFB2A';
+  
+  // Get existing webinars - use ID + date + time as unique key
+  const existingData = webinarsSheet.getDataRange().getValues();
+  const existingWebinars = new Set();
+  for (let i = 1; i < existingData.length; i++) {
+    const webinarId = existingData[i][0];
+    const date = existingData[i][2];
+    const time = existingData[i][3];
+    existingWebinars.add(`${webinarId}|${date}|${time}`);
+  }
+  
+  const url = 'https://api.zoom.us/v2/users/me/webinars?page_size=100';
+  const options = {
+    headers: { Authorization: 'Bearer ' + token },
+    muteHttpExceptions: true
+  };
+  
+  const response = UrlFetchApp.fetch(url, options);
+  const data = JSON.parse(response.getContentText());
+  const webinars = data.webinars || [];
+  
+  Logger.log(`=== WEBINAR SYNC ===`);
+  Logger.log(`Time: ${new Date()}`);
+  Logger.log(`Found ${webinars.length} webinars from Zoom`);
+  Logger.log(`Already have ${existingWebinars.size} occurrences in sheet`);
+  
+  let addedCount = 0;
+  let skippedCount = 0;
+  
+  webinars.forEach(w => {
+    const webinarId = String(w.id).replace(/-/g, '');
+    
+    if (w.type === 9 || w.type === 6) {
+      Logger.log(`Processing recurring webinar: ${webinarId} - ${w.topic}`);
+      
+      // PAST occurrences
+      try {
+        const pastUrl = `https://api.zoom.us/v2/past_webinars/${webinarId}/instances`;
+        const pastResponse = UrlFetchApp.fetch(pastUrl, options);
+        const pastData = JSON.parse(pastResponse.getContentText());
+        const pastOccurrences = pastData.webinars || [];
+        
+        Logger.log(`  Found ${pastOccurrences.length} past occurrences`);
+        
+        pastOccurrences.forEach(occ => {
+          const startDate = new Date(occ.start_time);
+          const dateStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+          const timeStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'h:mm a z');
+          const uniqueKey = `${webinarId}|${dateStr}|${timeStr}`;
+          
+          if (existingWebinars.has(uniqueKey)) {
+            Logger.log(`  Skipping duplicate: ${dateStr} ${timeStr}`);
+            skippedCount++;
+            return;
+          }
+          
+          const occurrenceId = occ.uuid;
+          let registrationCount = 0;
+          try {
+            const regUrl = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?occurrence_id=${encodeURIComponent(occurrenceId)}&page_size=300`;
+            const regResponse = UrlFetchApp.fetch(regUrl, options);
+            const regData = JSON.parse(regResponse.getContentText());
+            registrationCount = regData.total_records || 0;
+          } catch (e) {
+            Logger.log(`    Could not fetch registrations: ${e.message}`);
+          }
+          
+          webinarsSheet.appendRow([
+            webinarId,
+            w.topic || '',
+            dateStr,
+            timeStr,
+            w.join_url || '',
+            'Zoom Registration',
+            'Completed',
+            '500',
+            registrationCount,
+            0,
+            surveyUrl,
+            Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+          ]);
+          addedCount++;
+          Utilities.sleep(100);
+        });
+      } catch (e) {
+        Logger.log(`  Error fetching past occurrences: ${e.message}`);
+      }
+      
+      // FUTURE occurrences
+      try {
+        const futureUrl = `https://api.zoom.us/v2/webinars/${webinarId}`;
+        const futureResponse = UrlFetchApp.fetch(futureUrl, options);
+        const futureData = JSON.parse(futureResponse.getContentText());
+        const futureOccurrences = futureData.occurrences || [];
+        
+        Logger.log(`  Found ${futureOccurrences.length} future occurrences`);
+        
+        futureOccurrences.forEach(occ => {
+          const startDate = new Date(occ.start_time);
+          const dateStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+          const timeStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'h:mm a z');
+          const uniqueKey = `${webinarId}|${dateStr}|${timeStr}`;
+          
+          if (existingWebinars.has(uniqueKey)) {
+            Logger.log(`  Skipping duplicate: ${dateStr} ${timeStr}`);
+            skippedCount++;
+            return;
+          }
+          
+          const occurrenceId = occ.occurrence_id;
+          let registrationCount = 0;
+          try {
+            const regUrl = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?occurrence_id=${occurrenceId}&page_size=300`;
+            const regResponse = UrlFetchApp.fetch(regUrl, options);
+            const regData = JSON.parse(regResponse.getContentText());
+            registrationCount = regData.total_records || 0;
+          } catch (e) {
+            Logger.log(`    Could not fetch registrations: ${e.message}`);
+          }
+          
+          webinarsSheet.appendRow([
+            webinarId,
+            w.topic || '',
+            dateStr,
+            timeStr,
+            w.join_url || '',
+            'Zoom Registration',
+            'Upcoming',
+            '500',
+            registrationCount,
+            0,
+            surveyUrl,
+            Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+          ]);
+          addedCount++;
+          Utilities.sleep(100);
+        });
+      } catch (e) {
+        Logger.log(`  Error fetching future occurrences: ${e.message}`);
+      }
+      
+    } else {
+      // Single webinar
+      const startDate = new Date(w.start_time);
+      const dateStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const timeStr = Utilities.formatDate(startDate, Session.getScriptTimeZone(), 'h:mm a z');
+      const uniqueKey = `${webinarId}|${dateStr}|${timeStr}`;
+      
+      if (existingWebinars.has(uniqueKey)) {
+        Logger.log(`Skipping duplicate: ${dateStr} ${timeStr}`);
+        skippedCount++;
+        return;
+      }
+      
+      let registrationCount = 0;
+      try {
+        const regUrl = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?page_size=300`;
+        const regResponse = UrlFetchApp.fetch(regUrl, options);
+        const regData = JSON.parse(regResponse.getContentText());
+        registrationCount = regData.total_records || 0;
+      } catch (e) {
+        Logger.log(`  Could not fetch registrations: ${e.message}`);
+      }
+      
+      webinarsSheet.appendRow([
+        webinarId,
+        w.topic || '',
+        dateStr,
+        timeStr,
+        w.join_url || '',
+        'Zoom Registration',
+        startDate < new Date() ? 'Completed' : 'Upcoming',
+        '500',
+        registrationCount,
+        0,
+        surveyUrl,
+        Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd')
+      ]);
+      addedCount++;
+    }
+  });
+  
+  Logger.log(`=== SYNC COMPLETE ===`);
+  Logger.log(`Added: ${addedCount} new occurrences`);
+  Logger.log(`Skipped: ${skippedCount} duplicates`);
+}
+/**
+ * Sync registration counts from Zoom to Webinars tab
+ * With duplicate prevention using: Timestamp + Webinar ID + Email
+ */
+/**
+ * Sync registration counts from Zoom to Webinars tab
+ * With duplicate prevention and occurrence-specific handling for recurring webinars
+ */
+/**
+ * Sync registration counts from Zoom to Webinars tab
+ * With duplicate prevention and occurrence-specific handling for recurring webinars
+ */
+function syncZoomRegistrations() {
+  const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+  const webinarsSheet = ss.getSheetByName('Webinars');
+  const registrationsSheet = ss.getSheetByName('Registrations');
+  const token = getZoomAccessToken();
+  
+  if (!token) throw new Error('Failed to get Zoom token');
+  
+  // Get existing registrations to avoid duplicates
+  const existingRegData = registrationsSheet.getDataRange().getValues();
+  const existingRegistrations = new Set();
+  
+  for (let i = 1; i < existingRegData.length; i++) {
+    const timestamp = existingRegData[i][0];
+    const webinarId = existingRegData[i][1];
+    const email = existingRegData[i][3];
+    existingRegistrations.add(`${timestamp}|${webinarId}|${email}`);
+  }
+  
+  const data = webinarsSheet.getDataRange().getValues();
+  const headers = data[0];
+  const webinarIdIdx = headers.indexOf('Webinar ID');
+  const dateIdx = headers.indexOf('Date');
+  const regCountIdx = headers.indexOf('Registration Count');
+  
+  let totalAdded = 0;
+  let totalSkipped = 0;
+  
+  Logger.log(`Processing ${data.length - 1} webinars for registration sync`);
+  
+  for (let i = 1; i < data.length; i++) {
+    const webinarId = data[i][webinarIdIdx];
+    const webinarDate = new Date(data[i][dateIdx]);
+    
+    // Get occurrence ID for this specific date (checks both past and future)
+    const occurrenceId = getOccurrenceIdForDate(token, webinarId, webinarDate);
+    
+    // Build registration URL with occurrence ID if found
+    let regUrl = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?page_size=300`;
+    if (occurrenceId) {
+      regUrl += `&occurrence_id=${encodeURIComponent(occurrenceId)}`;
+      Logger.log(`Row ${i}: Using occurrence ID for ${webinarDate.toDateString()}`);
+    } else {
+      Logger.log(`Row ${i}: No occurrence ID found for ${webinarDate.toDateString()}, fetching all registrants`);
+    }
+    
+    const response = UrlFetchApp.fetch(regUrl, {
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    
+    const regData = JSON.parse(response.getContentText());
+    const registrants = regData.registrants || [];
+    
+    // Update count in Webinars tab
+    webinarsSheet.getRange(i + 1, regCountIdx + 1).setValue(registrants.length);
+    
+    let addedForWebinar = 0;
+    let skippedForWebinar = 0;
+    
+    // Write to Registrations tab with duplicate checking
+    registrants.forEach(r => {
+      const timestamp = r.create_time || '';
+      const email = (r.email || '').toLowerCase().trim();
+      const uniqueKey = `${timestamp}|${webinarId}|${email}`;
+      
+      if (existingRegistrations.has(uniqueKey)) {
+        skippedForWebinar++;
+        return;
+      }
+      
+      registrationsSheet.appendRow([
+        timestamp,
+        webinarId,
+        `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+        email,
+        r.org || '',
+        r.phone || ''
+      ]);
+      addedForWebinar++;
+      existingRegistrations.add(uniqueKey);
+    });
+    
+    totalAdded += addedForWebinar;
+    totalSkipped += skippedForWebinar;
+    
+    if (addedForWebinar > 0 || skippedForWebinar > 0) {
+      Logger.log(`  ${webinarDate.toDateString()} - added ${addedForWebinar}, skipped ${skippedForWebinar}`);
+    }
+    
+    Utilities.sleep(300);
+  }
+  
+  Logger.log(`Registration sync complete: added ${totalAdded}, skipped ${totalSkipped} duplicates`);
+}
+
+/**
+ * Write attendance data to Attendance sheet with duplicate prevention
+ * Uses: Webinar ID + Email + Join Time + Leave Time as unique key
+ */
+function writeAttendanceData(sheet, webinarId, participants) {
+  // Get existing attendance records
+  const existingData = sheet.getDataRange().getValues();
+  const existingAttendance = new Set();
+  
+  // Build set of existing records (skip header row)
+  for (let i = 1; i < existingData.length; i++) {
+    const wId = existingData[i][0];
+    const email = existingData[i][2];
+    const joinTime = existingData[i][3];
+    const leaveTime = existingData[i][4];
+    existingAttendance.add(`${wId}|${email}|${joinTime}|${leaveTime}`);
+  }
+  
+  let addedCount = 0;
+  let skippedCount = 0;
+  
+  participants.forEach(p => {
+    const email = (p.user_email || '').toLowerCase().trim();
+    const joinTime = p.join_time || '';
+    const leaveTime = p.leave_time || '';
+    const uniqueKey = `${webinarId}|${email}|${joinTime}|${leaveTime}`;
+    
+    // Skip if this exact attendance record already exists
+    if (existingAttendance.has(uniqueKey)) {
+      skippedCount++;
+      return;
+    }
+    
+    const attendedMinutes = p.duration ? Math.round(p.duration / 60) : 0;
+    const attended = attendedMinutes >= 10 ? 'Yes' : 'No';
+    
+    sheet.appendRow([
+      webinarId,
+      p.name || '',
+      email,
+      joinTime,
+      leaveTime,
+      attendedMinutes,
+      attended
+    ]);
+    addedCount++;
+  });
+  
+  if (skippedCount > 0) {
+    Logger.log(`  Attendance: added ${addedCount}, skipped ${skippedCount} duplicates`);
+  }
+}

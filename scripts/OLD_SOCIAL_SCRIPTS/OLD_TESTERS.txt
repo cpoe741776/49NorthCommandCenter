@@ -1,0 +1,54 @@
+function checkRuntime() {
+  const logLines = [
+    `Apps Script Runtime Version: ${typeof URL !== 'undefined' ? '✅ V8' : '❌ Rhino'}`,
+    `typeof URL: ${typeof URL}`,
+    `Date.toISOString exists: ${typeof Date.prototype.toISOString !== 'undefined'}`,
+    `Arrow function supported: ${(() => true) ? '✅ Yes' : '❌ No'}`
+  ];
+  
+  console.log(logLines.join('\n'));
+}
+
+function testDriveUrlFetchReliability() {
+  const problematicDriveUrl = "https://drive.google.com/uc?id=1rTQexcVi-AnbhfPlNkNl5lj871Ew7jTU"; // <<< Use the exact URL from your log
+  Logger.log(`[Test] Attempting to fetch from: ${problematicDriveUrl}`);
+  try {
+    const response = UrlFetchApp.fetch(problematicDriveUrl, { muteHttpExceptions: true });
+    
+    Logger.log("--- UrlFetchApp Response Details ---");
+    Logger.log("Response Code: " + response.getResponseCode());
+    Logger.log("Content Type Header: " + response.getHeaders()['Content-Type']);
+    Logger.log("Content Length (bytes): " + response.getContentText().length); // Check if this is 0 or very small for images
+    Logger.log("Is Blob empty? " + response.getBlob().getBytes().length === 0);
+
+    if (response.getResponseCode() >= 200 && response.getResponseCode() < 300) {
+      if (response.getHeaders()['Content-Type'] && response.getHeaders()['Content-Type'].includes('image')) {
+        Logger.log("✅ [Test] Fetched a valid image content type.");
+        // Optional: Try to create a file in your Apps Script Drive to confirm blob validity
+        // DriveApp.createFile(response.getBlob().setName("test_downloaded_image.jpg"));
+        // Logger.log("Blob saved to Apps Script's Drive for verification.");
+      } else {
+        Logger.log("❌ [Test] Fetched successfully, but content type is NOT an image. Type: " + response.getHeaders()['Content-Type']);
+        Logger.log("Partial Content (first 500 chars): " + response.getContentText().substring(0, 500)); // Log part of content (might be HTML)
+      }
+    } else {
+      Logger.log("❌ [Test] HTTP Fetch failed with code: " + response.getResponseCode());
+      Logger.log("Response Body (on failure): " + response.getContentText());
+    }
+  } catch (e) {
+    Logger.log("❗ [Test] Exception during UrlFetchApp.fetch: " + e.message);
+  }
+  Logger.log("--- End UrlFetchApp Response Details ---");
+}
+
+function testImagesService() {
+  try {
+    const testBlob = UrlFetchApp.fetch("https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png").getBlob();
+    const testImage = Images.fromBlob(testBlob);
+    Logger.log("Images service is accessible. Image blob converted successfully!");
+    Logger.log("Test image width: " + testImage.getWidth());
+    Logger.log("Test image height: " + testImage.getHeight());
+  } catch (e) {
+    Logger.log("FAILED: Images service test failed with error: " + e.toString());
+  }
+}

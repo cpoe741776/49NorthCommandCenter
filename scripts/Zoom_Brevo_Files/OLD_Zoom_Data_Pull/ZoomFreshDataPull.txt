@@ -1,0 +1,203 @@
+/Zoom_Fresh_Data_Pull.gs//
+/**
+ * Step 1 – Pull ALL Zoom Webinar Registration + Participation Data (Past & Upcoming)
+ * without per‑registrant debug loops
+ */
+function syncZoomParticipationToZoomDataSheet() {
+  const SPREADSHEET_ID = '1698XI7xCoQtHfjymFUyJyGR9pBfYrhi296bw7Qb4inQ';
+  let ss;
+
+  try {
+    ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // Ensure the Zoom data sheet exists and has headers
+    const outputHeaders = [
+      'Email','First_Name','Last_Name','City','State_Province','Country_Region','Job_Title',
+      'Registration Time','Join_Time','Leave_Time','Duration_Minutes',
+      'Importance_of_Mental_Strength','Implemented_Mental_Strength_Initiative',
+      'Webinar_Gain_Expectation','Webinar_UUID','Webinar_Topic','Webinar_Start_Time',
+      'Registrant_ID','Zoom_Event_Timestamp','Organization','academic credentials (if any)'
+    ];
+    const zoomSheet = _ensureSheet(ss, 'ZOOM_Registration_and_Participation_Data', outputHeaders);
+    const emailMap = _buildEmailMap(zoomSheet, 'Email');
+
+    // Fetch Zoom data
+    const token = getZoomAccessToken_49North();
+    const webinars = _fetchWebinars(token);
+
+    webinars.forEach(webinar => {
+      const { id: webinarId, topic, start_time: startTime, uuid } = webinar;
+      const registrants  = _fetchRegistrants(token, webinarId);
+      const participants  = _fetchParticipants(token, webinarId, startTime);
+      const participantMap = _mapParticipants(participants, uuid, topic, startTime);
+
+      registrants.forEach(r => {
+        const email = (r.email || '').toLowerCase().trim();
+        if (!email) return;
+
+        const pData = participantMap[email] || {
+          Webinar_UUID:         uuid,
+          Webinar_Topic:        topic,
+          Webinar_Start_Time:   startTime,
+          Registrant_ID:        r.id || '',
+          Zoom_Event_Timestamp: new Date().toISOString()
+        };
+
+        // Map custom questions
+        let orgName     = r.org ? toTitleCase(r.org) : '';
+        let importance  = '';
+        let implemented = '';
+        let gain        = '';
+        let credentials = '';
+        if (Array.isArray(r.custom_questions)) {
+          r.custom_questions.forEach(q => {
+            const title = (q.title || '').trim().toLowerCase();
+            const value = (q.value || '').trim();
+            if (title.includes('important is mental strength')) {
+              importance = value;
+            } else if (title.includes('implemented')) {
+              implemented = value;
+            } else if (
+              title.includes('gain expectation') ||
+              title.includes('hope to gain')
+            ) {
+              gain = value;
+            } else if (title === 'organization') {
+              orgName = value;
+            } else if (title.includes('academic credentials')) {
+              credentials = value;
+            }
+          });
+        }
+
+        // Build and upsert row
+        const rowData = [
+          email,
+          toTitleCase(r.first_name || ''),
+          toTitleCase(r.last_name || ''),
+          toTitleCase(r.city || ''),
+          r.state || '',
+          r.country || '',
+          toTitleCase(r.job_title || ''),
+          r.create_time || '',
+          pData.Join_Time || '',
+          pData.Leave_Time || '',
+          pData.Duration_Minutes || '',
+          importance,
+          implemented,
+          gain,
+          pData.Webinar_UUID,
+          pData.Webinar_Topic,
+          pData.Webinar_Start_Time,
+          pData.Registrant_ID,
+          pData.Zoom_Event_Timestamp,
+          orgName,
+          credentials
+        ];
+
+        if (emailMap[email]) {
+          zoomSheet.getRange(emailMap[email], 1, 1, rowData.length).setValues([rowData]);
+        } else {
+          zoomSheet.appendRow(rowData);
+        }
+      });
+    });
+
+    Logger.log('✅ Zoom Registration + Participation merged successfully.');
+  } catch (e) {
+    Logger.log('🚨 FATAL ERROR: %s', e.message);
+    _logErrorToProof(ss, SPREADSHEET_ID, e);
+  }
+}
+
+// ------------------------------------------------------------------------
+// Helper: Ensure a sheet exists with given headers (clearing if mismatch)
+function _ensureSheet(ss, name, headers) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+    sheet.appendRow(headers);
+  } else {
+    const existing = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (headers.length !== existing.length || headers.some((h,i) => h !== existing[i])) {
+      sheet.clearContents();
+      sheet.appendRow(headers);
+    }
+  }
+  return sheet;
+}
+
+// ------------------------------------------------------------------------
+// Helper: Build email→rowIndex map from header
+function _buildEmailMap(sheet, headerName) {
+  const data    = sheet.getDataRange().getValues();
+  const headers = data.shift();
+  const idx     = headers.indexOf(headerName);
+  const map     = {};
+  data.forEach((row, i) => {
+    const email = (row[idx] || '').toLowerCase().trim();
+    if (email) map[email] = i + 2;
+  });
+  return map;
+}
+
+// ------------------------------------------------------------------------
+// Helper: Fetch webinars list
+function _fetchWebinars(token) {
+  const url = 'https://api.zoom.us/v2/users/me/webinars?page_size=100';
+  const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  return JSON.parse(res.getContentText()).webinars || [];
+}
+
+// ------------------------------------------------------------------------
+// Helper: Fetch registrants for a webinar
+function _fetchRegistrants(token, webinarId) {
+  const url = `https://api.zoom.us/v2/webinars/${webinarId}/registrants?page_size=300`;
+  const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  return JSON.parse(res.getContentText()).registrants || [];
+}
+
+// ------------------------------------------------------------------------
+// Helper: Fetch participants for a webinar (if past)
+function _fetchParticipants(token, webinarId, startTime) {
+  if (new Date(startTime) >= new Date()) return [];
+  const url = `https://api.zoom.us/v2/report/webinars/${webinarId}/participants?page_size=300`;
+  const res = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  return JSON.parse(res.getContentText()).participants || [];
+}
+
+// ------------------------------------------------------------------------
+// Helper: Map participants array to email-based lookup
+function _mapParticipants(participants, uuid, topic, startTime) {
+  const map = {};
+  participants.forEach(p => {
+    const email = (p.user_email || '').toLowerCase().trim();
+    if (!email) return;
+    map[email] = {
+      Join_Time:            p.join_time || '',
+      Leave_Time:           p.leave_time || '',
+      Duration_Minutes:     p.duration ? Math.round(p.duration/60) : '',
+      Webinar_UUID:         uuid,
+      Webinar_Topic:        topic,
+      Webinar_Start_Time:   startTime,
+      Registrant_ID:        p.id || '',
+      Zoom_Event_Timestamp: new Date().toISOString()
+    };
+  });
+  return map;
+}
+
+// ------------------------------------------------------------------------
+// Helper: Log errors to DEBUG_PROOF sheet
+function _logErrorToProof(ss, sheetId, error) {
+  try {
+    let proof = ss.getSheetByName('DEBUG_PROOF');
+    if (!proof) proof = ss.insertSheet('DEBUG_PROOF', 0);
+    proof.clearContents();
+    proof.appendRow(['Timestamp', 'Error Message', 'Stack']);
+    proof.appendRow([new Date(), error.message, error.stack]);
+  } catch (e) {
+    Logger.log('❌ Failed writing debug proof: %s', e.message);
+  }
+}
+

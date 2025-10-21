@@ -1,0 +1,161 @@
+//Link_Surveys.gs//
+
+/**
+ * Link survey responses to specific webinar occurrences
+ * Matches based on timestamp proximity to webinar date/time
+ */
+function linkSurveyResponses() {
+  const ss = SpreadsheetApp.openById(WEBINAR_SHEET_ID);
+  const surveySheet = ss.getSheetByName('Survey_Responses');
+  const webinarsSheet = ss.getSheetByName('Webinars');
+  const logSheet = ss.getSheetByName('Processing_Log');
+  
+  if (!surveySheet || !webinarsSheet) {
+    throw new Error('Required sheets not found');
+  }
+  
+  Logger.log('=== LINKING SURVEY RESPONSES ===');
+  const startTime = new Date();
+  
+  // Get survey data
+  const surveyData = surveySheet.getDataRange().getValues();
+  const surveyHeaders = surveyData[0];
+  const timestampIdx = surveyHeaders.indexOf('Timestamp');
+  const webinarIdIdx = surveyHeaders.indexOf('Webinar ID');
+  
+  if (timestampIdx === -1 || webinarIdIdx === -1) {
+    throw new Error('Required columns not found in Survey_Responses');
+  }
+  
+  // Get webinar data (completed webinars only)
+  const webinarData = webinarsSheet.getDataRange().getValues();
+  const webinarHeaders = webinarData[0];
+  const wIdIdx = webinarHeaders.indexOf('Webinar ID');
+  const wDateIdx = webinarHeaders.indexOf('Date');
+  const wTimeIdx = webinarHeaders.indexOf('Time');
+  const wStatusIdx = webinarHeaders.indexOf('Status');
+  
+  // Build lookup of completed webinars with their date/times
+  const webinars = [];
+  for (let i = 1; i < webinarData.length; i++) {
+    const row = webinarData[i];
+    if (row[wStatusIdx] !== 'Completed') continue;
+    
+    const dateStr = row[wDateIdx];
+    const timeStr = row[wTimeIdx];
+    
+    // Parse the date and time into a single DateTime
+    const webinarDateTime = parseWebinarDateTime(dateStr, timeStr);
+    
+    if (webinarDateTime) {
+      webinars.push({
+        id: row[wIdIdx],
+        dateTime: webinarDateTime,
+        rowIndex: i
+      });
+    }
+  }
+  
+  Logger.log(`Found ${webinars.length} completed webinars`);
+  
+  let linkedCount = 0;
+  let unlinkedCount = 0;
+  
+  // Process each survey response
+  for (let i = 1; i < surveyData.length; i++) {
+    const row = surveyData[i];
+    const surveyTimestamp = new Date(row[timestampIdx]);
+    const existingWebinarId = row[webinarIdIdx];
+    
+    // Skip if already linked
+    if (existingWebinarId) {
+      Logger.log(`Row ${i + 1}: Already linked to ${existingWebinarId}`);
+      continue;
+    }
+    
+    // Find the webinar that occurred closest before this survey (within 10 days)
+    let bestMatch = null;
+    let shortestGap = Infinity;
+    const MAX_DAYS = 10;
+    
+    for (const webinar of webinars) {
+      const timeDiff = surveyTimestamp - webinar.dateTime; // milliseconds
+      const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
+      
+      // Survey should be after webinar, within 10 days
+      if (daysDiff >= 0 && daysDiff <= MAX_DAYS) {
+        if (timeDiff < shortestGap) {
+          shortestGap = timeDiff;
+          bestMatch = webinar;
+        }
+      }
+    }
+    
+    if (bestMatch) {
+      surveySheet.getRange(i + 1, webinarIdIdx + 1).setValue(bestMatch.id);
+      const daysAfter = (shortestGap / (1000 * 60 * 60 * 24)).toFixed(1);
+      Logger.log(`Row ${i + 1}: Linked to ${bestMatch.id} (${daysAfter} days after webinar)`);
+      linkedCount++;
+    } else {
+      Logger.log(`Row ${i + 1}: No matching webinar found within ${MAX_DAYS} days`);
+      unlinkedCount++;
+    }
+    
+    Utilities.sleep(100);
+  }
+  
+  const endTime = new Date();
+  const duration = Math.round((endTime - startTime) / 1000);
+  
+  Logger.log(`\n=== LINKING COMPLETE ===`);
+  Logger.log(`Linked: ${linkedCount}`);
+  Logger.log(`Unlinked: ${unlinkedCount}`);
+  Logger.log(`Duration: ${duration}s`);
+  
+  // Log to sheet
+  if (logSheet) {
+    logSheet.appendRow([
+      startTime,
+      'Link Survey Responses',
+      linkedCount,
+      unlinkedCount,
+      `Linked ${linkedCount} surveys (${duration}s)`
+    ]);
+  }
+}
+
+/**
+ * Parse webinar date and time into a single DateTime object
+ */
+function parseWebinarDateTime(dateStr, timeStr) {
+  try {
+    let date;
+    if (dateStr instanceof Date) {
+      date = new Date(dateStr);
+    } else {
+      date = new Date(dateStr);
+    }
+    
+    // Parse time string (e.g., "3:56 PM BST")
+    const timeMatch = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (!timeMatch) {
+      Logger.log(`Could not parse time: ${timeStr}`);
+      return null;
+    }
+    
+    let hours = parseInt(timeMatch[1]);
+    const minutes = parseInt(timeMatch[2]);
+    const isPM = timeMatch[3].toUpperCase() === 'PM';
+    
+    // Convert to 24-hour format
+    if (isPM && hours !== 12) hours += 12;
+    if (!isPM && hours === 12) hours = 0;
+    
+    date.setHours(hours, minutes, 0, 0);
+    
+    return date;
+  } catch (e) {
+    Logger.log(`Error parsing date/time: ${e.message}`);
+    return null;
+  }
+}

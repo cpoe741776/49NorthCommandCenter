@@ -54,7 +54,7 @@ exports.handler = async (event) => {
 
     const row = [
       timestamp,                          // A timestamp (also acts as an ID in your flows)
-      'Draft',                            // B status
+      formData.status || 'Draft',         // B status
       formData.contentType || 'custom',   // C contentType
       formData.title || '',               // D title
       formData.body || '',                // E body
