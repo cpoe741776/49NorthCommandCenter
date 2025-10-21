@@ -153,16 +153,131 @@ async function findRowIndexById(sheets, sheetId, tab, postId) {
   return idx >= 0 ? idx + 2 : null;
 }
 
+/**
+ * Convert Google Drive share links to direct download URLs
+ * Handles various Drive link formats
+ */
+function convertGoogleDriveUrl(url) {
+  if (!url || !url.includes('drive.google.com')) return url;
+  
+  // Extract file ID from various Google Drive URL formats
+  let fileId = null;
+  
+  // Format: https://drive.google.com/file/d/FILE_ID/view
+  const viewMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (viewMatch) fileId = viewMatch[1];
+  
+  // Format: https://drive.google.com/open?id=FILE_ID
+  const openMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (openMatch) fileId = openMatch[1];
+  
+  // Format: https://drive.google.com/uc?id=FILE_ID (already direct)
+  const ucMatch = url.match(/\/uc\?.*?id=([a-zA-Z0-9_-]+)/);
+  if (ucMatch) return url; // Already in direct format
+  
+  if (fileId) {
+    console.log('[GoogleDrive] Converting share link to direct URL. File ID:', fileId);
+    // Return direct download URL
+    return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  }
+  
+  console.warn('[GoogleDrive] Could not extract file ID from:', url);
+  return url; // Return original if we can't parse it
+}
+
+/**
+ * Download image from URL and return as buffer
+ * Handles Google Drive links automatically
+ */
+async function downloadImage(imageUrl) {
+  if (!imageUrl) return null;
+  
+  try {
+    // Convert Google Drive links to direct download URLs
+    const directUrl = convertGoogleDriveUrl(imageUrl);
+    
+    console.log('[Image] Downloading from:', directUrl);
+    const response = await fetch(directUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; 49NorthBot/1.0)'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error('[Image] Download failed:', response.status, response.statusText);
+      return null;
+    }
+    
+    const contentType = response.headers.get('content-type');
+    console.log('[Image] Content-Type:', contentType);
+    
+    // Check if it's actually an image
+    if (!contentType || !contentType.startsWith('image/')) {
+      console.warn('[Image] Not an image content-type:', contentType);
+      // Still try to download, might be a Google Drive quirk
+    }
+    
+    const buffer = await response.arrayBuffer();
+    console.log('[Image] Downloaded:', buffer.byteLength, 'bytes');
+    
+    return {
+      buffer,
+      contentType: contentType || 'image/jpeg'
+    };
+  } catch (error) {
+    console.error('[Image] Download error:', error.message);
+    return null;
+  }
+}
+
 async function publishToFacebook(postData) {
   const FB_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
   const FB_PAGE_ID = process.env.FACEBOOK_PAGE_ID;
   if (!FB_TOKEN || !FB_PAGE_ID) throw new Error('Facebook credentials not configured');
 
+  const message = `${postData.title || ''}\n\n${postData.body || ''}`.trim();
+
+  // If we have an image, upload it natively with the post
+  if (postData.imageUrl) {
+    try {
+      const imageData = await downloadImage(postData.imageUrl);
+      
+      if (imageData && imageData.buffer) {
+        // Upload image as photo post
+        const formData = new URLSearchParams();
+        formData.append('message', message);
+        formData.append('access_token', FB_TOKEN);
+        formData.append('url', convertGoogleDriveUrl(postData.imageUrl));
+
+        const res = await fetch(`https://graph.facebook.com/v19.0/${FB_PAGE_ID}/photos`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (res.ok) {
+          const out = await res.json();
+          console.log('[Facebook] Photo post successful:', out.id);
+          return { postId: out.id, type: 'photo' };
+        } else {
+          console.error('[Facebook] Photo upload failed:', await res.text());
+          // Fall back to link post
+        }
+      }
+    } catch (err) {
+      console.error('[Facebook] Image upload error:', err.message);
+      // Fall back to link post
+    }
+  }
+
+  // Text-only or fallback link post
   const payload = {
-    message: `${postData.title || ''}\n\n${postData.body || ''}`.trim(),
+    message,
     access_token: FB_TOKEN
   };
-  if (postData.imageUrl) payload.link = postData.imageUrl;
+  if (postData.imageUrl) {
+    // Use direct Google Drive URL if it's a Drive link
+    payload.link = convertGoogleDriveUrl(postData.imageUrl);
+  }
 
   const res = await fetch(`https://graph.facebook.com/v19.0/${FB_PAGE_ID}/feed`, {
     method: 'POST',
@@ -210,10 +325,10 @@ async function publishToLinkedIn(postData) {
         assetUrn = registerData.value?.asset;
 
         if (uploadUrl && assetUrn) {
-          // Step 2: Fetch and upload the image
-          const imageRes = await fetch(postData.imageUrl);
-          if (imageRes.ok) {
-            const imageBuffer = await imageRes.arrayBuffer();
+          // Step 2: Download and upload the image (handles Google Drive links)
+          const imageData = await downloadImage(postData.imageUrl);
+          if (imageData && imageData.buffer) {
+            const imageBuffer = imageData.buffer;
             
             const uploadRes = await fetch(uploadUrl, {
               method: 'POST',
@@ -300,15 +415,26 @@ async function publishToWordPress(postData) {
   // If image URL provided, upload to WordPress Media Library first
   if (postData.imageUrl) {
     try {
-      // Fetch the image from the URL
-      const imageRes = await fetch(postData.imageUrl);
-      if (imageRes.ok) {
-        const imageBuffer = await imageRes.arrayBuffer();
-        const contentType = imageRes.headers.get('content-type') || 'image/jpeg';
+      // Download image (handles Google Drive links)
+      const imageData = await downloadImage(postData.imageUrl);
+      
+      if (imageData && imageData.buffer) {
+        const imageBuffer = imageData.buffer;
+        const contentType = imageData.contentType || 'image/jpeg';
         
         // Get filename from URL or use default
-        const urlPath = new URL(postData.imageUrl).pathname;
-        const filename = urlPath.split('/').pop() || 'featured-image.jpg';
+        let filename = 'featured-image.jpg';
+        try {
+          const urlPath = new URL(postData.imageUrl).pathname;
+          filename = urlPath.split('/').pop() || filename;
+          // For Google Drive links, create a meaningful filename
+          if (postData.imageUrl.includes('drive.google.com')) {
+            const fileId = postData.imageUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+            if (fileId) filename = `drive-${fileId.substring(0, 8)}.jpg`;
+          }
+        } catch (e) {
+          // Use default filename if URL parsing fails
+        }
         
         // Upload to WordPress Media Library
         const mediaRes = await fetch(`${WP_BASE}/wp-json/wp/v2/media`, {
@@ -324,10 +450,13 @@ async function publishToWordPress(postData) {
         if (mediaRes.ok) {
           const mediaData = await mediaRes.json();
           featuredMediaId = mediaData.id;
+          console.log('[WordPress] Featured image uploaded:', featuredMediaId);
+        } else {
+          console.error('[WordPress] Media upload failed:', await mediaRes.text());
         }
       }
     } catch (err) {
-      console.warn('Failed to upload featured image:', err.message);
+      console.warn('[WordPress] Failed to upload featured image:', err.message);
       // Continue without featured image rather than failing the whole post
     }
   }
