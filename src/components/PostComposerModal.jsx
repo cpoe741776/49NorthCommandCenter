@@ -281,6 +281,52 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
     }
   };
 
+  const handleSchedulePost = async () => {
+    if (!validation.isValid) {
+      setError(validation.errors.join('. '));
+      return;
+    }
+
+    if (!formData.scheduleDate) {
+      setError('Please select a schedule date/time');
+      return;
+    }
+
+    // Validate schedule date is in the future
+    const scheduleTime = new Date(formData.scheduleDate);
+    if (scheduleTime <= new Date()) {
+      setError('Schedule date must be in the future. Use "Publish Now" for immediate posting.');
+      return;
+    }
+
+    if (!window.confirm(`Schedule post for ${scheduleTime.toLocaleString()}?\n\nIt will auto-publish to ${selectedPlatforms.join(', ')} at that time.`)) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const payload = {
+        ...formData,
+        platforms: selectedPlatforms.join(','),
+        status: 'Scheduled'
+      };
+
+      const result = await createSocialPost(payload);
+      
+      if (result.success) {
+        onSuccess?.(`✅ Post scheduled for ${scheduleTime.toLocaleString()}\n\nIt will auto-publish to ${selectedPlatforms.join(', ')}`);
+        resetForm();
+        onClose();
+      } else {
+        setError(result.error || 'Failed to schedule post');
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to schedule post');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handlePublishNow = async () => {
     if (!validation.isValid) {
       setError(validation.errors.join('. '));
@@ -992,8 +1038,21 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
               className="flex items-center gap-2 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save size={18} />
-              {saving ? 'Saving...' : 'Save Draft'}
+              {saving && !formData.scheduleDate ? 'Saving...' : 'Save Draft'}
             </button>
+            
+            {/* Show Schedule button if schedule date is set */}
+            {formData.scheduleDate && (
+              <button
+                onClick={handleSchedulePost}
+                disabled={saving || publishing || !validation.isValid}
+                className="flex items-center gap-2 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Calendar size={18} />
+                {saving ? 'Scheduling...' : `Schedule for ${new Date(formData.scheduleDate).toLocaleDateString()}`}
+              </button>
+            )}
+            
             <button
               onClick={handlePublishNow}
               disabled={saving || publishing || !validation.isValid}
