@@ -1,7 +1,7 @@
 // SocialMediaOperations.jsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText, Copy, AlertCircle } from 'lucide-react';
-import { fetchSocialMediaContent } from '../services/socialMediaService';
+import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Clock, FileText, Copy, AlertCircle, Trash2, Edit, Send } from 'lucide-react';
+import { fetchSocialMediaContent, publishSocialPost } from '../services/socialMediaService';
 import { fetchReminders } from '../services/reminderService';
 import PostComposerModal from './PostComposerModal';
 
@@ -139,9 +139,12 @@ const SocialMediaOperations = () => {
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards - clickable to filter */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div 
+          onClick={() => setStatus('all')}
+          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Posts</p>
@@ -149,18 +152,49 @@ const SocialMediaOperations = () => {
             </div>
             <Share2 className="text-blue-600" size={40} />
           </div>
+          <p className="text-xs text-gray-500 mt-2">Click to show all</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Published</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{summary.published}</p>
+        
+        <div 
+          onClick={() => setStatus('Published')}
+          className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-green-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-green-700 font-semibold">Published</p>
+              <p className="text-3xl font-bold text-green-900 mt-1">{summary.published}</p>
+            </div>
+            <CheckCircle2 className="text-green-600" size={40} />
+          </div>
+          <p className="text-xs text-green-600 mt-2">Click to filter</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Scheduled</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{summary.scheduled}</p>
+        
+        <div 
+          onClick={() => setStatus('Scheduled')}
+          className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-blue-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-blue-700 font-semibold">Scheduled</p>
+              <p className="text-3xl font-bold text-blue-900 mt-1">{summary.scheduled}</p>
+            </div>
+            <Calendar className="text-blue-600" size={40} />
+          </div>
+          <p className="text-xs text-blue-600 mt-2">Click to filter</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Drafts</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{summary.drafts}</p>
+        
+        <div 
+          onClick={() => setStatus('Draft')}
+          className="bg-gradient-to-br from-yellow-50 to-amber-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-yellow-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-yellow-700 font-semibold">Drafts</p>
+              <p className="text-3xl font-bold text-yellow-900 mt-1">{summary.drafts}</p>
+            </div>
+            <Clock className="text-yellow-600" size={40} />
+          </div>
+          <p className="text-xs text-yellow-600 mt-2">Click to filter</p>
         </div>
       </div>
 
@@ -453,30 +487,87 @@ const SocialMediaOperations = () => {
                         </a>
                       ) : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <button
-                        onClick={() => {
-                          // Normalize post data to ensure all fields are primitives
-                          const normalizedPost = {
-                            title: String(p.title || ''),
-                            body: String(p.body || p.text || ''),
-                            contentType: typeof p.contentType === 'string' ? p.contentType : 'announcement',
-                            imageUrl: String(p.imageUrl || ''),
-                            videoUrl: String(p.videoUrl || ''),
-                            platforms: String(p.platforms || ''),
-                            tags: String(p.tags || ''),
-                            link: String(p.link || p.url || ''),
-                            status: String(p.status || '')
-                          };
-                          setPostToEdit(normalizedPost);
-                          setComposerOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
-                        title="Reuse this post content"
-                      >
-                        <Copy size={14} />
-                        Reuse
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Reuse button - always available */}
+                        <button
+                          onClick={() => {
+                            // Normalize post data to ensure all fields are primitives
+                            const normalizedPost = {
+                              title: String(p.title || ''),
+                              body: String(p.body || p.text || ''),
+                              contentType: typeof p.contentType === 'string' ? p.contentType : 'announcement',
+                              imageUrl: String(p.imageUrl || ''),
+                              videoUrl: String(p.videoUrl || ''),
+                              platforms: String(p.platforms || ''),
+                              tags: String(p.tags || ''),
+                              scheduleDate: String(p.scheduleDate || ''),
+                              purpose: String(p.purpose || ''),
+                              status: String(p.status || '')
+                            };
+                            setPostToEdit(normalizedPost);
+                            setComposerOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100 transition-colors"
+                          title="Reuse/Copy this post"
+                        >
+                          <Copy size={14} />
+                          Reuse
+                        </button>
+
+                        {/* Publish Now - only for Draft/Scheduled */}
+                        {(p.status === 'Draft' || p.status === 'Scheduled') && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Publish "${p.title}" now?`)) return;
+                              try {
+                                const result = await publishSocialPost({ postId: p.timestamp });
+                                if (result.success) {
+                                  alert('✅ Published successfully!');
+                                  load(); // Refresh list
+                                } else {
+                                  alert('❌ Publish failed: ' + JSON.stringify(result.results));
+                                }
+                              } catch (err) {
+                                alert('❌ Error: ' + err.message);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-green-50 text-green-700 rounded hover:bg-green-100 transition-colors"
+                            title="Publish immediately"
+                          >
+                            <Send size={14} />
+                            Publish
+                          </button>
+                        )}
+
+                        {/* Delete - only for Draft/Scheduled */}
+                        {(p.status === 'Draft' || p.status === 'Scheduled') && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Delete "${p.title}"?\n\nThis cannot be undone.`)) return;
+                              try {
+                                const response = await fetch(`/.netlify/functions/deleteSocialPost?postId=${encodeURIComponent(p.timestamp)}`, {
+                                  method: 'DELETE'
+                                });
+                                const result = await response.json();
+                                if (result.success) {
+                                  alert('✅ Post deleted');
+                                  load(); // Refresh list
+                                } else {
+                                  alert('❌ Delete failed: ' + result.error);
+                                }
+                              } catch (err) {
+                                alert('❌ Error: ' + err.message);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-xs bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors"
+                            title="Delete this post"
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
