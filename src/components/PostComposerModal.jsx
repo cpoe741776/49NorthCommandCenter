@@ -1,6 +1,6 @@
 // src/components/PostComposerModal.jsx
-import React, { useState, useMemo } from 'react';
-import { X, Send, Save, Eye, Image, Video, Calendar, Tag, AlertCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { X, Send, Save, Eye, Image as ImageIcon, Video, Calendar, Tag, AlertCircle, Info, ChevronDown, ChevronUp, Upload, Loader } from 'lucide-react';
 import { createSocialPost, publishSocialPost } from '../services/socialMediaService';
 
 // SEO Keywords for 49 North posts
@@ -46,6 +46,12 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
     tags: '',
     createdBy: 'user'
   });
+
+  const [uploading, setUploading] = useState(false);
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
+  const [mediaLibrary, setMediaLibrary] = useState([]);
+  const [loadingMedia, setLoadingMedia] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Load initial post data when provided (for reusing posts)
   React.useEffect(() => {
@@ -133,6 +139,98 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
       platforms: { ...prev.platforms, [platform]: !prev.platforms[platform] }
     }));
   };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be less than 10MB');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      
+      await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+      });
+
+      const base64Data = reader.result;
+
+      // Upload to WordPress
+      const response = await fetch('/.netlify/functions/uploadImageToWordPress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData: base64Data,
+          filename: file.name,
+          mimeType: file.type
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Set the WordPress-hosted URL
+        setFormData(prev => ({ ...prev, imageUrl: result.url }));
+        alert(`✅ Image uploaded! (${(result.filesize / 1024).toFixed(1)}KB)`);
+      } else {
+        throw new Error(result.error || 'Upload failed');
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError(`Image upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const loadMediaLibrary = async () => {
+    setLoadingMedia(true);
+    try {
+      const response = await fetch('/.netlify/functions/getWordPressMedia?per_page=24');
+      const result = await response.json();
+      
+      if (result.success) {
+        setMediaLibrary(result.media || []);
+      } else {
+        console.error('Failed to load media:', result.error);
+      }
+    } catch (err) {
+      console.error('Media library error:', err);
+    } finally {
+      setLoadingMedia(false);
+    }
+  };
+
+  const handleSelectFromLibrary = (imageUrl) => {
+    setFormData(prev => ({ ...prev, imageUrl }));
+    setShowMediaLibrary(false);
+  };
+
+  // Load media library when shown
+  React.useEffect(() => {
+    if (showMediaLibrary && mediaLibrary.length === 0) {
+      loadMediaLibrary();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showMediaLibrary]);
 
   const handleSaveDraft = async () => {
     if (!validation.isValid) {
@@ -537,16 +635,124 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    <Image size={16} className="inline mr-1" />
-                    Image URL
+                    <ImageIcon size={16} className="inline mr-1" />
+                    Image
                   </label>
+                  
+                  {/* Image Upload Buttons */}
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader size={16} className="animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={16} />
+                          Upload Image
+                        </>
+                      )}
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setShowMediaLibrary(!showMediaLibrary)}
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                    >
+                      <ImageIcon size={16} />
+                      Media Library
+                    </button>
+                  </div>
+                  
+                  {/* Hidden file input */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                  
+                  {/* Image URL Input (manual entry) */}
                   <input
                     type="url"
                     value={formData.imageUrl}
                     onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                    placeholder="https://example.com/image.jpg"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Or paste image URL (Google Drive links auto-convert)"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                   />
+                  
+                  {/* Image Preview */}
+                  {formData.imageUrl && (
+                    <div className="mt-2 relative">
+                      <img 
+                        src={formData.imageUrl} 
+                        alt="Preview" 
+                        className="w-full max-w-sm rounded border border-gray-300"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                        className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1 hover:bg-red-700"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Media Library Modal */}
+                  {showMediaLibrary && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-300 max-h-96 overflow-y-auto">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900">WordPress Media Library</h4>
+                        <button
+                          type="button"
+                          onClick={() => setShowMediaLibrary(false)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+                      
+                      {loadingMedia ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader className="animate-spin text-blue-600" size={32} />
+                        </div>
+                      ) : mediaLibrary.length === 0 ? (
+                        <p className="text-gray-500 text-center py-8">No images in library. Upload one first!</p>
+                      ) : (
+                        <div className="grid grid-cols-3 gap-2">
+                          {mediaLibrary.map(media => (
+                            <div
+                              key={media.id}
+                              onClick={() => handleSelectFromLibrary(media.url)}
+                              className="relative cursor-pointer group hover:opacity-75 transition-opacity"
+                            >
+                              <img
+                                src={media.thumbnail}
+                                alt={media.title}
+                                className="w-full h-24 object-cover rounded border border-gray-300"
+                              />
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded flex items-center justify-center">
+                                <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-semibold">
+                                  Select
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
