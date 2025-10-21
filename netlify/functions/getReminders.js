@@ -194,15 +194,19 @@ exports.handler = async (event) => {
     const weekDates = getWeekDates(currentWeek, currentYear);
 
     // Check if posts exist for Mon/Wed/Fri this week by PURPOSE
+    // Allow posts created within the same week (not just exact day)
     const hasPost = (targetDate, purpose) => {
-      const dateStr = targetDate.toISOString().split('T')[0];
+      const targetWeek = getWeekNumber(targetDate);
+      const targetYear = targetDate.getFullYear();
+      
       return socialPosts.some(post => {
         const postDate = new Date(post[0] || post[9] || 0); // timestamp or publishedDate
-        const postDateStr = postDate.toISOString().split('T')[0];
         const postPurpose = post[18] || ''; // Column S (index 18)
+        const postWeek = getWeekNumber(postDate);
+        const postYear = postDate.getFullYear();
         
-        // Match date AND purpose
-        return postDateStr === dateStr && postPurpose === purpose;
+        // Match purpose AND same week (allows posting Monday content on Tuesday, etc.)
+        return postPurpose === purpose && postWeek === targetWeek && postYear === targetYear;
       });
     };
 
