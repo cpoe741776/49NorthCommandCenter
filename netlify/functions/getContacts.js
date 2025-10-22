@@ -184,9 +184,15 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
   }
 
   try {
-    // Increase limit for searching (we'll filter client-side)
-    // Brevo doesn't support field-specific search, so we fetch more and filter
-    const fetchLimit = (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry) ? 500 : limit;
+    // For field-specific search, we need to fetch MORE contacts to find matches
+    // Brevo doesn't support field search, so we fetch larger batches and filter client-side
+    let fetchLimit = limit;
+    
+    if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry) {
+      // Fetch up to 5000 contacts when searching to find matches across the database
+      fetchLimit = Math.min(5000, limit * 50); // 50x the requested limit, capped at 5000
+      console.log('[Contacts] Search mode: Fetching', fetchLimit, 'contacts to filter');
+    }
     
     // Build Brevo API URL with optional filtering
     let url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}`;

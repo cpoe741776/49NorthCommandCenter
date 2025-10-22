@@ -10,11 +10,11 @@ const RadioPlayer = () => {
   const audioRef = useRef(null);
 
   const stations = [
-    { name: 'Classic Hits 70s-80s', url: 'http://streaming.radionomy.com/ClassicHits109', genre: 'Classic Rock' },
-    { name: 'Lite Favorites', url: 'http://listen.181fm.com/181-lite_128k.mp3', genre: 'Soft Rock & Ballads' },
-    { name: '70s AM Gold', url: 'http://listen.181fm.com/181-70s_128k.mp3', genre: '70s Hits' },
-    { name: '80s Hairband', url: 'http://listen.181fm.com/181-hairband_128k.mp3', genre: '80s Rock' },
-    { name: 'Smooth Jazz', url: 'http://listen.181fm.com/181-smoothjazz_128k.mp3', genre: 'Smooth Jazz' },
+    { name: '70s AM Gold', url: 'https://listen.181fm.com/181-70s_128k.mp3', genre: '70s Hits' },
+    { name: '80s Hairband', url: 'https://listen.181fm.com/181-hairband_128k.mp3', genre: '80s Rock' },
+    { name: '90s Alternative', url: 'https://listen.181fm.com/181-90salt_128k.mp3', genre: '90s Hits' },
+    { name: 'Classic Country', url: 'https://listen.181fm.com/181-oldcountry_128k.mp3', genre: 'Classic Country' },
+    { name: 'The Mix', url: 'https://listen.181fm.com/181-themix_128k.mp3', genre: 'Adult Contemporary' },
   ];
 
   useEffect(() => {
