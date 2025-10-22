@@ -13,7 +13,7 @@ const RadioPlayer = () => {
     { name: '70s AM Gold', url: 'https://listen.181fm.com/181-70s_128k.mp3', genre: '70s Hits' },
     { name: '80s Hairband', url: 'https://listen.181fm.com/181-hairband_128k.mp3', genre: '80s Rock' },
     { name: '90s Alternative', url: 'https://listen.181fm.com/181-90salt_128k.mp3', genre: '90s Hits' },
-    { name: 'Classic Country', url: 'https://listen.181fm.com/181-oldcountry_128k.mp3', genre: 'Classic Country' },
+    { name: 'Classic Country', url: 'https://listen.181fm.com/181-90scountry_128k.mp3', genre: 'Classic Country' },
     { name: 'The Mix', url: 'https://listen.181fm.com/181-themix_128k.mp3', genre: 'Adult Contemporary' },
   ];
 
