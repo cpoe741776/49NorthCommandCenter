@@ -39,6 +39,17 @@ const ContactCRM = () => {
   const [sortField, setSortField] = useState('name'); // name, email, organization, leadScore, lastChanged
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
   const [showBrevoPassword, setShowBrevoPassword] = useState(false);
+  
+  // Segment/Bulk Edit features
+  const [segments, setSegments] = useState([]);
+  const [selectedSegment, setSelectedSegment] = useState('');
+  const [loadingSegments, setLoadingSegments] = useState(false);
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkEditForm, setBulkEditForm] = useState({});
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+  
   const topRef = useRef(null);
 
   // Load summary stats only (no contacts)
@@ -109,6 +120,125 @@ const ContactCRM = () => {
     setHasSearched(false);
     setError(null);
     setPage(0);
+    setSelectedSegment('');
+  };
+
+  // Load Brevo segments
+  const loadSegments = useCallback(async () => {
+    try {
+      setLoadingSegments(true);
+      const res = await fetch('/.netlify/functions/getBrevoSegments');
+      const data = await res.json();
+      if (data.success) {
+        setSegments(data.segments || []);
+      }
+    } catch (err) {
+      console.error('Failed to load segments:', err);
+    } finally {
+      setLoadingSegments(false);
+    }
+  }, []);
+
+  // Load contacts from selected segment
+  const handleLoadSegment = async () => {
+    if (!selectedSegment) {
+      alert('Please select a segment first');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setHasSearched(true);
+      
+      const params = new URLSearchParams();
+      params.append('limit', '500'); // Segments are usually under 1000
+      params.append('segmentId', selectedSegment);
+      
+      const res = await fetch(`/.netlify/functions/getContacts?${params}`);
+      const data = await res.json();
+      
+      if (data.success) {
+        setContacts(data.contacts || []);
+        if (data.contacts.length === 0) {
+          setError('No contacts found in this segment');
+        }
+      } else {
+        setError(data.error || 'Failed to load segment');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Toggle bulk select mode
+  const toggleBulkSelectMode = () => {
+    setBulkSelectMode(!bulkSelectMode);
+    setSelectedContacts(new Set());
+  };
+
+  // Toggle individual contact selection
+  const toggleContactSelection = (email) => {
+    const newSelected = new Set(selectedContacts);
+    if (newSelected.has(email)) {
+      newSelected.delete(email);
+    } else {
+      newSelected.add(email);
+    }
+    setSelectedContacts(newSelected);
+  };
+
+  // Select all contacts
+  const selectAllContacts = () => {
+    const allEmails = new Set(contacts.map(c => c.email));
+    setSelectedContacts(allEmails);
+  };
+
+  // Bulk edit selected contacts
+  const handleBulkEdit = async () => {
+    if (selectedContacts.size === 0) {
+      alert('No contacts selected');
+      return;
+    }
+
+    if (!window.confirm(`Update ${selectedContacts.size} contact(s) with the selected changes?`)) {
+      return;
+    }
+
+    try {
+      setBulkUpdating(true);
+      const res = await fetch('/.netlify/functions/bulkUpdateContacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emails: Array.from(selectedContacts),
+          updates: bulkEditForm
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ Bulk update complete!\n\nUpdated: ${data.successCount}\nFailed: ${data.failCount}`);
+        setShowBulkEditModal(false);
+        setBulkEditForm({});
+        setSelectedContacts(new Set());
+        setBulkSelectMode(false);
+        // Refresh the search or segment
+        if (selectedSegment) {
+          handleLoadSegment();
+        } else {
+          handleSearch();
+        }
+      } else {
+        alert(`❌ Error: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`❌ Failed: ${err.message}`);
+    } finally {
+      setBulkUpdating(false);
+    }
   };
 
   const handleCreateContact = async () => {
@@ -139,10 +269,11 @@ const ContactCRM = () => {
     }
   };
 
-  // Load summary stats on mount
+  // Load summary stats and segments on mount
   useEffect(() => {
     loadSummary();
-  }, [loadSummary]);
+    loadSegments();
+  }, [loadSummary, loadSegments]);
 
   // Scroll to top when page changes
   useEffect(() => {
@@ -480,6 +611,83 @@ const ContactCRM = () => {
             <ExternalLink size={20} />
             Open Brevo
           </a>
+        </div>
+      </div>
+
+      {/* Segment Loader & Bulk Edit */}
+      <div className="bg-gradient-to-r from-green-50 to-teal-50 p-5 rounded-lg shadow border-2 border-green-200">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Users size={20} className="text-green-600" />
+            Load Segment or Bulk Edit
+          </h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Segment Loader */}
+          <div className="bg-white p-4 rounded border border-green-300">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Load Brevo Segment</label>
+            <div className="flex gap-2">
+              <select
+                value={selectedSegment}
+                onChange={(e) => setSelectedSegment(e.target.value)}
+                disabled={loadingSegments}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="">Select a segment...</option>
+                {segments.map(seg => (
+                  <option key={seg.id} value={seg.id}>
+                    {seg.name} ({seg.totalContacts} contacts)
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleLoadSegment}
+                disabled={!selectedSegment || loading}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                Load
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mt-2">Load all contacts from a Brevo segment/list</p>
+          </div>
+
+          {/* Bulk Edit Controls */}
+          <div className="bg-white p-4 rounded border border-green-300">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Bulk Edit Mode</label>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={toggleBulkSelectMode}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  bulkSelectMode 
+                    ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {bulkSelectMode ? '✓ Bulk Select ON' : 'Enable Bulk Select'}
+              </button>
+              {bulkSelectMode && contacts.length > 0 && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={selectAllContacts}
+                    className="flex-1 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                  >
+                    Select All ({contacts.length})
+                  </button>
+                  <button
+                    onClick={() => setShowBulkEditModal(true)}
+                    disabled={selectedContacts.size === 0}
+                    className="flex-1 px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Edit Selected ({selectedContacts.size})
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 mt-2">
+              {bulkSelectMode ? 'Click checkboxes to select contacts' : 'Enable to bulk edit multiple contacts'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -897,7 +1105,7 @@ const ContactCRM = () => {
             </table>
           </div>
         </div>
-      }
+      )}
 
       {/* Contact Detail Modal */}
       {selectedContact && (
