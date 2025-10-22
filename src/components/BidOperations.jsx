@@ -239,6 +239,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
       .filter((b) => {
         // Exclude if pending status change to something else
         const pendingStatus = pendingStatusChanges.get(b.id);
+        // Hide if moved to submitted, disregard, or system-admin
+        if (pendingStatus && ['submitted', 'disregard', 'system-admin'].includes(pendingStatus)) {
+          return false;
+        }
         if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'respond') {
           return false;
         }
@@ -252,6 +256,10 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
       .filter((b) => {
         // Exclude if pending status change to something else
         const pendingStatus = pendingStatusChanges.get(b.id);
+        // Hide if moved to submitted, disregard, or system-admin
+        if (pendingStatus && ['submitted', 'disregard', 'system-admin'].includes(pendingStatus)) {
+          return false;
+        }
         if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'gather more information') {
           return false;
         }
