@@ -64,6 +64,10 @@ const ContactCRM = () => {
   const [bulkEditForm, setBulkEditForm] = useState({});
   const [bulkUpdating, setBulkUpdating] = useState(false);
   
+  // Custom Tags
+  const [customTags, setCustomTags] = useState([]);
+  const [selectedCustomTag, setSelectedCustomTag] = useState('');
+  
   const topRef = useRef(null);
 
   // Load summary stats only (no contacts)
@@ -84,8 +88,8 @@ const ContactCRM = () => {
   const handleSearch = useCallback(async () => {
     // At least one field must be filled
     if (!searchFirstName.trim() && !searchLastName.trim() && !searchEmail.trim() && 
-        !searchOrganization.trim() && !searchState.trim() && !searchCountry.trim()) {
-      alert('Please enter at least one search criteria (Name, Email, Organization, State, or Country)');
+        !searchOrganization.trim() && !searchState.trim() && !searchCountry.trim() && !selectedCustomTag) {
+      alert('Please enter at least one search criteria (Name, Email, Organization, State, Country, or Custom Tag)');
       return;
     }
 
@@ -104,6 +108,7 @@ const ContactCRM = () => {
       if (searchOrganization.trim()) params.append('organization', searchOrganization.trim());
       if (searchState.trim()) params.append('state', searchState.trim());
       if (searchCountry.trim()) params.append('country', searchCountry.trim());
+      if (selectedCustomTag) params.append('customTag', selectedCustomTag);
       
       const res = await fetch(`/.netlify/functions/getContacts?${params}`);
       const data = await res.json();
@@ -121,7 +126,7 @@ const ContactCRM = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, page]);
+  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, selectedCustomTag, page]);
 
   const clearSearch = () => {
     setSearchFirstName('');
@@ -130,6 +135,7 @@ const ContactCRM = () => {
     setSearchOrganization('');
     setSearchState('');
     setSearchCountry('');
+    setSelectedCustomTag('');
     setContacts([]);
     setHasSearched(false);
     setError(null);
@@ -159,6 +165,20 @@ const ContactCRM = () => {
       console.error('Failed to load segments:', err);
     } finally {
       setLoadingSegments(false);
+    }
+  }, []);
+
+  // Load custom tags from Brevo
+  const loadCustomTags = useCallback(async () => {
+    try {
+      const res = await fetch('/.netlify/functions/getCustomTags');
+      const data = await res.json();
+      if (data.success) {
+        setCustomTags(data.tags || []);
+        console.log('[CRM] Loaded', data.tags?.length || 0, 'custom tags');
+      }
+    } catch (err) {
+      console.error('Failed to load custom tags:', err);
     }
   }, []);
 
@@ -298,11 +318,12 @@ const ContactCRM = () => {
     }
   };
 
-  // Load summary stats and segments on mount
+  // Load summary stats, segments, and custom tags on mount
   useEffect(() => {
     loadSummary();
     loadSegments();
-  }, [loadSummary, loadSegments]);
+    loadCustomTags();
+  }, [loadSummary, loadSegments, loadCustomTags]);
 
   // Scroll to top when page changes
   useEffect(() => {
@@ -824,6 +845,25 @@ const ContactCRM = () => {
               placeholder="e.g., United States, Canada"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
+          </div>
+
+          {/* Row 3: Custom Tag */}
+          <div className="col-span-full bg-blue-50 p-3 rounded border border-blue-200">
+            <label className="block text-sm font-semibold text-blue-900 mb-2">🏷️ Search by Custom Tag (Campaign/Segment Identifier)</label>
+            <select
+              value={selectedCustomTag}
+              onChange={(e) => setSelectedCustomTag(e.target.value)}
+              className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              <option value="">Select a custom tag...</option>
+              {customTags.map(tag => (
+                <option key={tag} value={tag}>{tag}</option>
+              ))}
+            </select>
+            <p className="text-xs text-blue-700 mt-2">
+              💡 Custom tags are used for campaigns and segmentation. Select a tag to find all contacts with that tag.
+              {customTags.length > 0 && ` (${customTags.length} tags found in database)`}
+            </p>
           </div>
         </div>
 

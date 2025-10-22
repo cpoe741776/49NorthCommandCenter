@@ -35,6 +35,7 @@ exports.handler = async (event) => {
     const searchOrganization = url.searchParams.get('organization') || '';
     const searchState = url.searchParams.get('state') || '';
     const searchCountry = url.searchParams.get('country') || '';
+    const searchCustomTag = url.searchParams.get('customTag') || '';
     
     // Segment/List loading
     const segmentId = url.searchParams.get('segmentId') || '';
@@ -62,7 +63,7 @@ exports.handler = async (event) => {
     // Check cache (only for unfiltered requests)
     const nowMs = Date.now();
     if (!filter && !search && !searchFirstName && !searchLastName && !searchEmail && 
-        !searchOrganization && !searchState && !searchCountry && !segmentId && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
+        !searchOrganization && !searchState && !searchCountry && !searchCustomTag && !segmentId && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
       console.log('[Contacts] Returning cached data');
       return ok(headers, { ...cache, cached: true });
     }
@@ -70,12 +71,12 @@ exports.handler = async (event) => {
     console.log('[Contacts] Fetching fresh data with params:', {
       limit, offset, filter, 
       searchFirstName, searchLastName, searchEmail, 
-      searchOrganization, searchState, searchCountry,
+      searchOrganization, searchState, searchCountry, searchCustomTag,
       segmentId
     });
 
     // Fetch contacts from Brevo (with optional filtering, search, and segment)
-    const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, segmentId);
+    const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, searchCustomTag, segmentId);
     const brevoContacts = brevoData.contacts;
     const brevoTotal = brevoData.count; // Total count from Brevo API
     const filteredTotal = brevoData.filteredCount || brevoTotal; // Count after Brevo-level filtering
@@ -164,7 +165,7 @@ exports.handler = async (event) => {
 
     // Cache if no filters or search or segment
     if (!filter && !search && !searchFirstName && !searchLastName && !searchEmail && 
-        !searchOrganization && !searchState && !searchCountry && !segmentId) {
+        !searchOrganization && !searchState && !searchCountry && !searchCustomTag && !segmentId) {
       cache = response;
       cacheTimestamp = nowMs;
       console.log('[Contacts] Data cached for 5 minutes');
@@ -182,7 +183,7 @@ exports.handler = async (event) => {
   }
 };
 
-async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = '', searchLastName = '', searchEmail = '', searchOrganization = '', searchState = '', searchCountry = '', segmentId = '') {
+async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = '', searchLastName = '', searchEmail = '', searchOrganization = '', searchState = '', searchCountry = '', searchCustomTag = '', segmentId = '') {
   if (!BREVO_API_KEY) {
     console.warn('[Contacts] BREVO_API_KEY not set');
     return { contacts: [], count: 0, filteredCount: 0 };
@@ -193,7 +194,7 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     let fetchLimit = limit;
     let multiPageSearch = false;
     
-    if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry) {
+    if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry || searchCustomTag) {
       fetchLimit = 1000; // Brevo's hard limit per request
       multiPageSearch = true;
       console.log('[Contacts] Search mode: Will fetch multiple pages of 1000 to find matches');
@@ -313,10 +314,10 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     }));
     
     // Apply field-specific search filtering
-    if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry) {
+    if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry || searchCustomTag) {
       const beforeFilterCount = contacts.length;
       console.log('[Contacts] Before filtering:', beforeFilterCount, 'contacts');
-      console.log('[Contacts] Search criteria:', { searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry });
+      console.log('[Contacts] Search criteria:', { searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, searchCustomTag });
       
       contacts = contacts.filter(c => {
         let matches = true;
@@ -355,6 +356,13 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
           const countryLower = (c.country || '').toLowerCase();
           const searchLower = searchCountry.toLowerCase();
           matches = matches && countryLower.includes(searchLower);
+        }
+        
+        if (searchCustomTag) {
+          const customTag = (c.customTag || '').toLowerCase();
+          const searchLower = searchCustomTag.toLowerCase();
+          // Support both exact match and comma-separated tags
+          matches = matches && (customTag === searchLower || customTag.includes(searchLower));
         }
         
         return matches;
