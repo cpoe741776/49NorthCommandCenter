@@ -126,6 +126,7 @@ async function fetchBrevoContactDetail(email) {
       sourcedFrom: data.attributes?.SOURCED_FROM || '',
       customTag: data.attributes?.CUSTOM_TAG || '',
       areasOfInterest: data.attributes?.AREAS_OF_INTEREST || '',
+      notes: data.attributes?.NOTES || '', // Brevo NOTES field
       tags: data.attributes?.TAGS || [],
       lists: data.listIds || [],
       emailBlacklisted: data.emailBlacklisted || false,

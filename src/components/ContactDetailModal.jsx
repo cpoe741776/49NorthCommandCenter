@@ -824,12 +824,30 @@ const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
               </div>
             )}
 
+            {/* Brevo NOTES Field (Centralized notes from Brevo) */}
+            {details?.contact?.notes && (
+              <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-300">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
+                  <FileText size={20} className="text-blue-600" />
+                  Contact Notes (Brevo)
+                </h3>
+                <div className="bg-white rounded p-4 border border-blue-200">
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap font-mono">
+                    {details.contact.notes}
+                  </div>
+                </div>
+                <p className="text-xs text-blue-700 mt-2">
+                  ℹ️ These notes are synced to Brevo and accessible across all systems. Add new notes using the "Add Note" button below.
+                </p>
+              </div>
+            )}
+
             {/* Notes */}
             <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                   <FileText size={20} className="text-yellow-600" />
-                  Notes & Interactions ({details?.notes?.length || 0})
+                  Add New Note
                 </h3>
                 <button
                   onClick={() => setAddingNote(!addingNote)}

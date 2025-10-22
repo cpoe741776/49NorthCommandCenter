@@ -50,13 +50,14 @@ exports.handler = async (event) => {
     if (updates.whatsapp !== undefined) attributes.WHATSAPP = updates.whatsapp;
     if (updates.linkedin !== undefined) attributes.LINKEDIN = updates.linkedin;
     
-    // Additional Info
-    if (updates.areasOfInterest !== undefined) attributes.AREAS_OF_INTEREST = updates.areasOfInterest;
-    if (updates.customTag !== undefined) attributes.CUSTOM_TAG = updates.customTag;
-    if (updates.sourcedFrom !== undefined) attributes.SOURCED_FROM = updates.sourcedFrom;
-    
-    // Always update last changed
-    attributes.LAST_CHANGED = new Date().toISOString();
+      // Additional Info
+      if (updates.areasOfInterest !== undefined) attributes.AREAS_OF_INTEREST = updates.areasOfInterest;
+      if (updates.customTag !== undefined) attributes.CUSTOM_TAG = updates.customTag;
+      if (updates.sourcedFrom !== undefined) attributes.SOURCED_FROM = updates.sourcedFrom;
+      if (updates.notes !== undefined) attributes.NOTES = updates.notes;
+      
+      // Always update last changed
+      attributes.LAST_CHANGED = new Date().toISOString();
 
     console.log('[UpdateContact] Updating:', email, 'Fields:', Object.keys(attributes));
 
