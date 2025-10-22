@@ -658,6 +658,14 @@ const ContactCRM = () => {
             <p className="text-xs text-gray-600 mt-2">
               {selectedSegment ? `Selected: ${segments.find(s => s.id === parseInt(selectedSegment))?.name || 'Unknown'}` : 'Load all contacts from a Brevo segment'}
             </p>
+            <div className="bg-blue-50 border border-blue-200 rounded p-3 mt-2">
+              <p className="text-xs text-blue-900">
+                <strong>💡 Brevo Segment Limitation:</strong> Segments are dynamic saved searches in Brevo and cannot be loaded via API. 
+                <strong>Workaround:</strong> Use the "Open Brevo" button above to view segment contacts in Brevo, 
+                or use the search fields below to manually filter using similar criteria (e.g., for "WEBFORM CONTACT REQUEST YES", 
+                search with Organization Type or Custom Tag).
+              </p>
+            </div>
           </div>
           
           {/* Bulk Edit Controls */}
