@@ -60,6 +60,7 @@ exports.handler = async (event) => {
     if (updates.areasOfInterest !== undefined) attributes.AREAS_OF_INTEREST = updates.areasOfInterest;
     if (updates.customTag !== undefined) attributes.CUSTOM_TAG = updates.customTag;
     if (updates.sourcedFrom !== undefined) attributes.SOURCED_FROM = updates.sourcedFrom;
+    if (updates.credentials !== undefined) attributes.CREDENTIALS = updates.credentials;
     
     // Always update last changed
     attributes.LAST_CHANGED = new Date().toISOString();

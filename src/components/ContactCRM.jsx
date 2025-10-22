@@ -1329,28 +1329,30 @@ const ContactCRM = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                {/* Personal Info */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Custom Tag</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Job Title</label>
                   <input
                     type="text"
-                    value={bulkEditForm.customTag || ''}
-                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, customTag: e.target.value })}
-                    placeholder="e.g., Q4 Campaign"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    value={bulkEditForm.jobTitle || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, jobTitle: e.target.value })}
+                    placeholder="e.g., Fire Chief, HR Director"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Sourced From</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Credentials</label>
                   <input
                     type="text"
-                    value={bulkEditForm.sourcedFrom || ''}
-                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, sourcedFrom: e.target.value })}
-                    placeholder="e.g., Webinar, Website, Event"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    value={bulkEditForm.credentials || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, credentials: e.target.value })}
+                    placeholder="e.g., PhD, MD, MBA"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
                   />
                 </div>
 
+                {/* Organization */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Organization Type</label>
                   <input
@@ -1358,7 +1360,7 @@ const ContactCRM = () => {
                     value={bulkEditForm.organizationType || ''}
                     onChange={(e) => setBulkEditForm({ ...bulkEditForm, organizationType: e.target.value })}
                     placeholder="e.g., Fire Department, Police, Hospital"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
                   />
                 </div>
 
@@ -1369,7 +1371,98 @@ const ContactCRM = () => {
                     value={bulkEditForm.organizationSize || ''}
                     onChange={(e) => setBulkEditForm({ ...bulkEditForm, organizationSize: e.target.value })}
                     placeholder="e.g., 50-200, 500+"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.city || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, city: e.target.value })}
+                    placeholder="e.g., Dover, Wilmington"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">State/Province</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.state || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, state: e.target.value })}
+                    placeholder="e.g., Delaware, CA"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">County</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.county || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, county: e.target.value })}
+                    placeholder="e.g., New Castle County"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Country/Region</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.country || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, country: e.target.value })}
+                    placeholder="e.g., United States, Canada"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                {/* Contact Methods */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Office</label>
+                  <input
+                    type="tel"
+                    value={bulkEditForm.phoneOffice || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, phoneOffice: e.target.value })}
+                    placeholder="e.g., (302) 555-1234"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Extension</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.phoneExtension || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, phoneExtension: e.target.value })}
+                    placeholder="e.g., x123"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                {/* Campaign & Tracking */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Custom Tag</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.customTag || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, customTag: e.target.value })}
+                    placeholder="e.g., Q4 Campaign"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Sourced From</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.sourcedFrom || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, sourcedFrom: e.target.value })}
+                    placeholder="e.g., Webinar, Website, Event"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
                   />
                 </div>
 
@@ -1380,7 +1473,18 @@ const ContactCRM = () => {
                     value={bulkEditForm.areasOfInterest || ''}
                     onChange={(e) => setBulkEditForm({ ...bulkEditForm, areasOfInterest: e.target.value })}
                     placeholder="e.g., Resilience Training, Leadership Development"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Organization Street Address</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.organizationAddress || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, organizationAddress: e.target.value })}
+                    placeholder="e.g., 123 Main Street"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-green-500"
                   />
                 </div>
               </div>
