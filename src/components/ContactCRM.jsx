@@ -664,90 +664,49 @@ const ContactCRM = () => {
         </div>
       </div>
 
-      {/* Segment Loader & Bulk Edit */}
+      {/* Bulk Edit Controls */}
       <div className="bg-gradient-to-r from-green-50 to-teal-50 p-5 rounded-lg shadow border-2 border-green-200">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
             <Users size={20} className="text-green-600" />
-            Load Segment or Bulk Edit
+            Bulk Edit Mode
           </h3>
         </div>
 
-        <div className="flex flex-col gap-4">
-          {/* Segment Loader */}
-          <div className="bg-white p-4 rounded border border-green-300">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Load Brevo Segment</label>
-            <div className="space-y-2">
-              <select
-                value={selectedSegment}
-                onChange={(e) => setSelectedSegment(e.target.value)}
-                disabled={loadingSegments}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
-              >
-                <option value="">Select a segment...</option>
-                {segments.map(seg => (
-                  <option key={seg.id} value={seg.id} title={seg.name}>
-                    {seg.name.length > 50 ? seg.name.substring(0, 50) + '...' : seg.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={handleLoadSegment}
-                disabled={!selectedSegment || loading}
-                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {loading ? 'Loading...' : 'Load Segment'}
-              </button>
-            </div>
-            <p className="text-xs text-gray-600 mt-2">
-              {selectedSegment ? `Selected: ${segments.find(s => s.id === parseInt(selectedSegment))?.name || 'Unknown'}` : 'Load all contacts from a Brevo segment'}
-            </p>
-            <div className="bg-blue-50 border border-blue-200 rounded p-3 mt-2">
-              <p className="text-xs text-blue-900">
-                <strong>💡 Brevo Segment Limitation:</strong> Segments are dynamic saved searches in Brevo and cannot be loaded via API. 
-                <strong>Workaround:</strong> Use the "Open Brevo" button above to view segment contacts in Brevo, 
-                or use the search fields below to manually filter using similar criteria (e.g., for "WEBFORM CONTACT REQUEST YES", 
-                search with Organization Type or Custom Tag).
-              </p>
-            </div>
+        <div className="bg-white p-4 rounded border border-green-300">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Select Multiple Contacts for Bulk Editing</label>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={toggleBulkSelectMode}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                bulkSelectMode 
+                  ? 'bg-orange-600 text-white hover:bg-orange-700' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {bulkSelectMode ? '✓ Bulk Select ON' : 'Enable Bulk Select'}
+            </button>
+            {bulkSelectMode && contacts.length > 0 && (
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllContacts}
+                  className="flex-1 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                >
+                  Select All ({contacts.length})
+                </button>
+                <button
+                  onClick={() => setShowBulkEditModal(true)}
+                  disabled={selectedContacts.size === 0}
+                  className="flex-1 px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                >
+                  Edit Selected ({selectedContacts.size})
+                </button>
+              </div>
+            )}
           </div>
-          
-          {/* Bulk Edit Controls */}
-          <div className="bg-white p-4 rounded border border-green-300">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Bulk Edit Mode</label>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={toggleBulkSelectMode}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  bulkSelectMode 
-                    ? 'bg-orange-600 text-white hover:bg-orange-700' 
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                {bulkSelectMode ? '✓ Bulk Select ON' : 'Enable Bulk Select'}
-              </button>
-              {bulkSelectMode && contacts.length > 0 && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={selectAllContacts}
-                    className="flex-1 px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-                  >
-                    Select All ({contacts.length})
-                  </button>
-                  <button
-                    onClick={() => setShowBulkEditModal(true)}
-                    disabled={selectedContacts.size === 0}
-                    className="flex-1 px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                  >
-                    Edit Selected ({selectedContacts.size})
-                  </button>
-                </div>
-              )}
-            </div>
-            <p className="text-xs text-gray-600 mt-2">
-              {bulkSelectMode ? 'Click checkboxes to select contacts' : 'Enable to bulk edit multiple contacts'}
-            </p>
-          </div>
+          <p className="text-xs text-gray-600 mt-2">
+            {bulkSelectMode ? 'Click checkboxes in the table below to select contacts for bulk editing' : 'Enable bulk select mode to edit multiple contacts at once. First search for contacts, then enable this mode.'}
+          </p>
         </div>
       </div>
 

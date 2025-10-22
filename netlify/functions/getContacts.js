@@ -392,23 +392,42 @@ async function calculateGlobalStats() {
   }
 
   try {
-    // Fetch a larger sample to get accurate stats (or use Brevo's statistics API if available)
-    // For now, we'll fetch up to 5000 contacts to calculate stats
+    // Fetch multiple pages to get accurate stats (Brevo max 1000 per request)
+    // Fetch up to 5 pages (5000 contacts) to calculate stats
     // This is cached, so it won't run on every request
-    const res = await fetch(`https://api.brevo.com/v3/contacts?limit=5000&offset=0`, {
-      headers: {
-        'accept': 'application/json',
-        'api-key': BREVO_API_KEY
-      }
-    });
+    let allContacts = [];
+    let totalInBrevo = 0;
+    const maxPages = 5;
+    
+    for (let page = 0; page < maxPages; page++) {
+      const res = await fetch(`https://api.brevo.com/v3/contacts?limit=1000&offset=${page * 1000}`, {
+        headers: {
+          'accept': 'application/json',
+          'api-key': BREVO_API_KEY
+        }
+      });
 
-    if (!res.ok) {
-      console.warn('[Contacts] Failed to fetch global stats');
-      return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0 };
+      if (!res.ok) {
+        console.warn('[Contacts] Failed to fetch global stats page', page + 1);
+        break;
+      }
+
+      const data = await res.json();
+      if (page === 0) {
+        totalInBrevo = data.count || 0; // Get total from first response
+      }
+      allContacts = allContacts.concat(data.contacts || []);
+      
+      // Stop if we got less than 1000 (reached end of contacts)
+      if ((data.contacts || []).length < 1000) break;
     }
 
-    const data = await res.json();
-    const contacts = data.contacts || [];
+    if (allContacts.length === 0) {
+      console.warn('[Contacts] No contacts fetched for global stats');
+      return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0, totalContacts: 0 };
+    }
+
+    const contacts = allContacts;
 
     let hotLeads = 0;
     let webinarAttendees = 0;
@@ -440,8 +459,8 @@ async function calculateGlobalStats() {
       warmLeads
     });
 
-    // If we have 28K contacts but only sampled 5K, extrapolate
-    const totalContacts = data.count || contacts.length;
+    // If we have 28K+ contacts but only sampled 5K, extrapolate
+    const totalContacts = totalInBrevo || contacts.length;
     if (totalContacts > contacts.length) {
       const ratio = totalContacts / contacts.length;
       return {
@@ -449,15 +468,24 @@ async function calculateGlobalStats() {
         webinarAttendees: Math.round(webinarAttendees * ratio),
         coldContacts: Math.round(coldContacts * ratio),
         warmLeads: Math.round(warmLeads * ratio),
+        totalContacts,
         estimated: true,
         sampleSize: contacts.length
       };
     }
 
-    return { hotLeads, webinarAttendees, coldContacts, warmLeads, estimated: false };
+    return { 
+      hotLeads, 
+      webinarAttendees, 
+      coldContacts, 
+      warmLeads, 
+      totalContacts,
+      estimated: false,
+      sampleSize: contacts.length
+    };
   } catch (err) {
     console.error('[Contacts] Global stats calculation failed:', err.message);
-    return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0 };
+    return { hotLeads: 0, webinarAttendees: 0, coldContacts: 0, warmLeads: 0, totalContacts: 0 };
   }
 }
 
