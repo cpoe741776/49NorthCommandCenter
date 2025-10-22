@@ -158,11 +158,21 @@ exports.handler = async (event) => {
 
   try {
     console.log('[GenerateWeeklyContent] Checking auth...');
-    const authResult = checkAuth(event);
+    let authResult;
+    try {
+      authResult = checkAuth(event);
+      console.log('[GenerateWeeklyContent] Auth result:', authResult);
+    } catch (authError) {
+      console.error('[GenerateWeeklyContent] Auth check threw error:', authError);
+      return bad(headers, 'Authentication error: ' + authError.message, 401);
+    }
+    
     if (!authResult.success) {
       console.log('[GenerateWeeklyContent] Auth failed:', authResult.error);
       return bad(headers, authResult.error, 401);
     }
+    
+    console.log('[GenerateWeeklyContent] Auth passed, continuing...');
 
     console.log('[GenerateWeeklyContent] Parsing body...');
     console.log('[GenerateWeeklyContent] Raw body:', event.body);
