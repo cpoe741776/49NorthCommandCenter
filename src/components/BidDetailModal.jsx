@@ -214,6 +214,13 @@ const BidDetailModal = ({ bid, isOpen, onClose, onStatusChange, onSystemClick })
               Mark as Submitted
             </button>
             <button
+              onClick={() => { onStatusChange?.(bid.id, 'system-admin'); onClose(); }}
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm font-medium transition-colors"
+              title="Move to System Administration (misclassified bid)"
+            >
+              → System Admin
+            </button>
+            <button
               onClick={() => { onStatusChange?.(bid.id, 'disregard'); onClose(); }}
               className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm font-medium transition-colors"
             >

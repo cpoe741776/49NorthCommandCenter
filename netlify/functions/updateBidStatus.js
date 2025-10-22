@@ -98,6 +98,30 @@ exports.handler = async (event) => {
           valueInputOption: 'USER_ENTERED',
           requestBody: { values: [targetRow] },
         });
+      } else if (singleStatus === 'system-admin') {
+        // Move to Active_Admin (System Correspondence)
+        // Active_Admin columns: A=Recommendation, B=EmailDateReceived, C=EmailFrom, D=EmailSubject, 
+        //                       E=EmailBody, F=BidSystem, G=EmailDomain, H=DateAdded, I=SourceEmailId, J=Status
+        // Map from Active_Bids (A:U) to Active_Admin (A:J)
+        const adminRow = [
+          'Systems Administration',  // A: Recommendation (override)
+          bidRow[4] || '',            // B: Email Date Received (from E)
+          bidRow[5] || '',            // C: Email From (from F)
+          bidRow[9] || '',            // D: Email Subject (from J)
+          bidRow[10] || '',           // E: Email Body (from K)
+          bidRow[15] || '',           // F: Bid System (from P)
+          bidRow[14] || '',           // G: Email Domain (from O)
+          bidRow[19] || today,        // H: Date Added (from T, or today)
+          bidRow[20] || '',           // I: Source Email ID (from U)
+          'New'                       // J: Status (set to New for admin review)
+        ];
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SHEET_ID,
+          range: 'Active_Admin!A:J',
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: [adminRow] },
+        });
       } else {
         return { ok: false, error: 'Invalid status' };
       }
@@ -119,7 +143,13 @@ exports.handler = async (event) => {
         },
       });
 
-      return { ok: true, message: `Bid moved to ${singleStatus === 'disregard' ? 'Disregarded' : 'Submitted'}` };
+      const statusMessage = 
+        singleStatus === 'disregard' ? 'Disregarded' :
+        singleStatus === 'submitted' ? 'Submitted' :
+        singleStatus === 'system-admin' ? 'System Administration' :
+        'updated';
+      
+      return { ok: true, message: `Bid moved to ${statusMessage}` };
     }
 
     // Batch mode
