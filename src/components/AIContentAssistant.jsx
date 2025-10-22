@@ -25,7 +25,7 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
     setSuggestions(null);
 
     try {
-      const appToken = localStorage.getItem('appToken');
+      const appToken = window.__APP_TOKEN;
       if (!appToken) {
         throw new Error('Please log in to use AI content generation');
       }
