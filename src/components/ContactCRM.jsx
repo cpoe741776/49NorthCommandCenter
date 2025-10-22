@@ -948,6 +948,22 @@ const ContactCRM = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
+                  {bulkSelectMode && (
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                      <input
+                        type="checkbox"
+                        checked={contacts.length > 0 && selectedContacts.size === contacts.length}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            selectAllContacts();
+                          } else {
+                            setSelectedContacts(new Set());
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                     <button
                       onClick={() => handleSort('name')}
@@ -1007,7 +1023,7 @@ const ContactCRM = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {sortedContacts.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                    <td colSpan={bulkSelectMode ? "7" : "6"} className="px-6 py-8 text-center text-gray-500">
                       No contacts found
                     </td>
                   </tr>
@@ -1015,10 +1031,26 @@ const ContactCRM = () => {
                   sortedContacts.map((contact) => (
                     <tr
                       key={contact.email}
-                      onClick={() => setSelectedContact(contact)}
-                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      className={`hover:bg-gray-50 transition-colors ${selectedContacts.has(contact.email) ? 'bg-blue-50' : ''} ${!bulkSelectMode ? 'cursor-pointer' : ''}`}
                     >
-                      <td className="px-6 py-4">
+                      {bulkSelectMode && (
+                        <td className="px-4 py-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedContacts.has(contact.email)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleContactSelection(contact.email);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4 text-blue-600 cursor-pointer"
+                          />
+                        </td>
+                      )}
+                      <td 
+                        onClick={() => !bulkSelectMode && setSelectedContact(contact)}
+                        className="px-6 py-4"
+                      >
                         <div>
                           <div className="font-semibold text-gray-900">{contact.name}</div>
                           <div className="text-sm text-gray-600">{contact.email}</div>
@@ -1028,14 +1060,20 @@ const ContactCRM = () => {
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4 text-sm text-gray-700">
+                      <td 
+                        onClick={() => !bulkSelectMode && setSelectedContact(contact)}
+                        className="px-6 py-4 text-sm text-gray-700"
+                      >
                         {contact.organization || '—'}
                         {contact.organizationType && (
                           <div className="text-xs text-gray-500 mt-1">{contact.organizationType}</div>
                         )}
                       </td>
                       
-                      <td className="px-6 py-4 text-sm text-gray-700">
+                      <td 
+                        onClick={() => !bulkSelectMode && setSelectedContact(contact)}
+                        className="px-6 py-4 text-sm text-gray-700"
+                      >
                         {contact.city && contact.state ? `${contact.city}, ${contact.state}` : 
                          contact.state || contact.city || '—'}
                         {contact.country && (
@@ -1043,7 +1081,10 @@ const ContactCRM = () => {
                         )}
                       </td>
                       
-                      <td className="px-6 py-4">
+                      <td 
+                        onClick={() => !bulkSelectMode && setSelectedContact(contact)}
+                        className="px-6 py-4"
+                      >
                         <div className="flex items-center gap-2">
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getLeadStatusBadge(contact.leadStatus)}`}>
                             {getLeadStatusIcon(contact.leadStatus)} {contact.leadStatus}
@@ -1059,7 +1100,10 @@ const ContactCRM = () => {
                         )}
                       </td>
                       
-                      <td className="px-6 py-4 text-sm">
+                      <td 
+                        onClick={() => !bulkSelectMode && setSelectedContact(contact)}
+                        className="px-6 py-4 text-sm"
+                      >
                         <div className="space-y-1">
                           {contact.webinarsAttendedCount > 0 && (
                             <div className="text-purple-700">
@@ -1082,7 +1126,10 @@ const ContactCRM = () => {
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4 text-sm text-gray-700">
+                      <td 
+                        onClick={() => !bulkSelectMode && setSelectedContact(contact)}
+                        className="px-6 py-4 text-sm text-gray-700"
+                      >
                         {contact.phoneMobile && (
                           <div>📱 {contact.phoneMobile}</div>
                         )}
@@ -1230,6 +1277,121 @@ const ContactCRM = () => {
                 className="px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 font-medium"
               >
                 Create Contact
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Edit Modal */}
+      {showBulkEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Bulk Edit Contacts</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Updating {selectedContacts.size} contact{selectedContacts.size > 1 ? 's' : ''}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowBulkEditModal(false);
+                  setBulkEditForm({});
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-900">
+                  <strong>⚠️ Bulk Update:</strong> Only fill in fields you want to UPDATE. Empty fields will be ignored (not cleared).
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Custom Tag</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.customTag || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, customTag: e.target.value })}
+                    placeholder="e.g., Q4 Campaign"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Sourced From</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.sourcedFrom || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, sourcedFrom: e.target.value })}
+                    placeholder="e.g., Webinar, Website, Event"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Organization Type</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.organizationType || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, organizationType: e.target.value })}
+                    placeholder="e.g., Fire Department, Police, Hospital"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Organization Size</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.organizationSize || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, organizationSize: e.target.value })}
+                    placeholder="e.g., 50-200, 500+"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Areas of Interest</label>
+                  <input
+                    type="text"
+                    value={bulkEditForm.areasOfInterest || ''}
+                    onChange={(e) => setBulkEditForm({ ...bulkEditForm, areasOfInterest: e.target.value })}
+                    placeholder="e.g., Resilience Training, Leadership Development"
+                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-900">
+                  💡 <strong>Common Use Cases:</strong> Tag contacts from a campaign, update organization type for a region, set sourced from for imports
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3 sticky bottom-0 bg-white">
+              <button
+                onClick={() => {
+                  setShowBulkEditModal(false);
+                  setBulkEditForm({});
+                }}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkEdit}
+                disabled={bulkUpdating || Object.keys(bulkEditForm).filter(k => bulkEditForm[k]).length === 0}
+                className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {bulkUpdating ? 'Updating...' : `Update ${selectedContacts.size} Contact${selectedContacts.size > 1 ? 's' : ''}`}
               </button>
             </div>
           </div>
