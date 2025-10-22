@@ -165,6 +165,7 @@ exports.handler = async (event) => {
     }
 
     console.log('[GenerateWeeklyContent] Parsing body...');
+    console.log('[GenerateWeeklyContent] Raw body:', event.body);
     const body = safeJson(event.body);
     if (!body) {
       console.log('[GenerateWeeklyContent] Invalid JSON body');
@@ -178,6 +179,8 @@ exports.handler = async (event) => {
       console.log('[GenerateWeeklyContent] Missing dayType');
       return bad(headers, 'dayType is required');
     }
+
+    console.log('[GenerateWeeklyContent] dayType:', dayType, 'customPrompt:', customPrompt);
 
     console.log('[GenerateWeeklyContent] Starting generation for:', dayType);
 
