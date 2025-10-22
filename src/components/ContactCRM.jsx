@@ -19,6 +19,8 @@ const ContactCRM = () => {
   const [searchLastName, setSearchLastName] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const [searchOrganization, setSearchOrganization] = useState('');
+  const [searchState, setSearchState] = useState('');
+  const [searchCountry, setSearchCountry] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   
   const [filterType, setFilterType] = useState('all'); // all, hot-leads, webinar-attendees, cold-leads
@@ -56,8 +58,9 @@ const ContactCRM = () => {
   // New: Search with dedicated fields
   const handleSearch = useCallback(async () => {
     // At least one field must be filled
-    if (!searchFirstName.trim() && !searchLastName.trim() && !searchEmail.trim() && !searchOrganization.trim()) {
-      alert('Please enter at least one search criteria (First Name, Last Name, Email, or Organization)');
+    if (!searchFirstName.trim() && !searchLastName.trim() && !searchEmail.trim() && 
+        !searchOrganization.trim() && !searchState.trim() && !searchCountry.trim()) {
+      alert('Please enter at least one search criteria (Name, Email, Organization, State, or Country)');
       return;
     }
 
@@ -74,6 +77,8 @@ const ContactCRM = () => {
       if (searchLastName.trim()) params.append('lastName', searchLastName.trim());
       if (searchEmail.trim()) params.append('email', searchEmail.trim());
       if (searchOrganization.trim()) params.append('organization', searchOrganization.trim());
+      if (searchState.trim()) params.append('state', searchState.trim());
+      if (searchCountry.trim()) params.append('country', searchCountry.trim());
       
       const res = await fetch(`/.netlify/functions/getContacts?${params}`);
       const data = await res.json();
@@ -91,13 +96,15 @@ const ContactCRM = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, page]);
+  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, page]);
 
   const clearSearch = () => {
     setSearchFirstName('');
     setSearchLastName('');
     setSearchEmail('');
     setSearchOrganization('');
+    setSearchState('');
+    setSearchCountry('');
     setContacts([]);
     setHasSearched(false);
     setError(null);
@@ -494,10 +501,11 @@ const ContactCRM = () => {
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Search the entire database by First Name, Last Name, Email, or Organization. Enter at least one field to search. <strong>Combine fields</strong> (e.g., First Name + Last Name) to narrow results.
+          Search the entire database by any combination of fields. <strong>Combine fields</strong> (e.g., State + Organization) to narrow results. Perfect for targeted outreach campaigns!
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+          {/* Row 1: Personal Info */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">First Name</label>
             <input
@@ -534,6 +542,7 @@ const ContactCRM = () => {
             />
           </div>
 
+          {/* Row 2: Organization & Location */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Organization</label>
             <input
@@ -542,6 +551,30 @@ const ContactCRM = () => {
               onChange={(e) => setSearchOrganization(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               placeholder="e.g., Acme Corp"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">State/Province</label>
+            <input
+              type="text"
+              value={searchState}
+              onChange={(e) => setSearchState(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g., Delaware, CA, TX"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Country/Region</label>
+            <input
+              type="text"
+              value={searchCountry}
+              onChange={(e) => setSearchCountry(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g., United States, Canada"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
