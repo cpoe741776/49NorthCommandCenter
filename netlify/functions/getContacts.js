@@ -35,6 +35,9 @@ exports.handler = async (event) => {
     const searchOrganization = url.searchParams.get('organization') || '';
     const searchState = url.searchParams.get('state') || '';
     const searchCountry = url.searchParams.get('country') || '';
+    
+    // Segment/List loading
+    const segmentId = url.searchParams.get('segmentId') || '';
 
     // If summaryOnly, just fetch and return summary stats
     if (summaryOnly || (limit === 0)) {
@@ -59,15 +62,15 @@ exports.handler = async (event) => {
     // Check cache (only for unfiltered requests)
     const nowMs = Date.now();
     if (!filter && !search && !searchFirstName && !searchLastName && !searchEmail && 
-        !searchOrganization && !searchState && !searchCountry && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
+        !searchOrganization && !searchState && !searchCountry && !segmentId && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
       console.log('[Contacts] Returning cached data');
       return ok(headers, { ...cache, cached: true });
     }
 
     console.log('[Contacts] Fetching fresh data...');
 
-    // Fetch contacts from Brevo (with optional filtering and dedicated search)
-    const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry);
+    // Fetch contacts from Brevo (with optional filtering, search, and segment)
+    const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, segmentId);
     const brevoContacts = brevoData.contacts;
     const brevoTotal = brevoData.count; // Total count from Brevo API
     const filteredTotal = brevoData.filteredCount || brevoTotal; // Count after Brevo-level filtering
@@ -154,9 +157,9 @@ exports.handler = async (event) => {
       timestamp: new Date().toISOString()
     };
 
-    // Cache if no filters or search
+    // Cache if no filters or search or segment
     if (!filter && !search && !searchFirstName && !searchLastName && !searchEmail && 
-        !searchOrganization && !searchState && !searchCountry) {
+        !searchOrganization && !searchState && !searchCountry && !segmentId) {
       cache = response;
       cacheTimestamp = nowMs;
       console.log('[Contacts] Data cached for 5 minutes');
@@ -174,7 +177,7 @@ exports.handler = async (event) => {
   }
 };
 
-async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = '', searchLastName = '', searchEmail = '', searchOrganization = '', searchState = '', searchCountry = '') {
+async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = '', searchLastName = '', searchEmail = '', searchOrganization = '', searchState = '', searchCountry = '', segmentId = '') {
   if (!BREVO_API_KEY) {
     console.warn('[Contacts] BREVO_API_KEY not set');
     return { contacts: [], count: 0, filteredCount: 0 };
@@ -187,6 +190,12 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     
     // Build Brevo API URL with optional filtering
     let url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}`;
+    
+    // If segment/list ID provided, filter by that list
+    if (segmentId) {
+      url += `&listIds=${segmentId}`;
+      console.log('[Contacts] Fetching contacts from segment/list:', segmentId);
+    }
     
     // Note: Brevo's contact filtering is limited. We'll handle most filtering client-side,
     // but we can use modifiedSince or listIds if needed for performance
