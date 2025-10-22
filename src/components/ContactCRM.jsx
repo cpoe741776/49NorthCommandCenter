@@ -54,10 +54,7 @@ const ContactCRM = () => {
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
   const [showBrevoPassword, setShowBrevoPassword] = useState(false);
   
-  // Segment/Bulk Edit features
-  const [segments, setSegments] = useState([]);
-  const [selectedSegment, setSelectedSegment] = useState('');
-  const [loadingSegments, setLoadingSegments] = useState(false);
+  // Bulk Edit features
   const [bulkSelectMode, setBulkSelectMode] = useState(false);
   const [selectedContacts, setSelectedContacts] = useState(new Set());
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
@@ -140,7 +137,6 @@ const ContactCRM = () => {
     setHasSearched(false);
     setError(null);
     setPage(0);
-    setSelectedSegment('');
   };
 
   const resetNewContactForm = () => {
@@ -151,22 +147,6 @@ const ContactCRM = () => {
       phoneOffice: '', phoneExtension: '', customTag: '', sourcedFrom: '', areasOfInterest: ''
     });
   };
-
-  // Load Brevo segments
-  const loadSegments = useCallback(async () => {
-    try {
-      setLoadingSegments(true);
-      const res = await fetch('/.netlify/functions/getBrevoSegments');
-      const data = await res.json();
-      if (data.success) {
-        setSegments(data.segments || []);
-      }
-    } catch (err) {
-      console.error('Failed to load segments:', err);
-    } finally {
-      setLoadingSegments(false);
-    }
-  }, []);
 
   // Load custom tags from Brevo
   const loadCustomTags = useCallback(async () => {
@@ -181,46 +161,6 @@ const ContactCRM = () => {
       console.error('Failed to load custom tags:', err);
     }
   }, []);
-
-  // Load contacts from selected segment
-  const handleLoadSegment = async () => {
-    if (!selectedSegment) {
-      alert('Please select a segment first');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setHasSearched(true);
-      
-      const params = new URLSearchParams();
-      params.append('limit', '1000'); // Fetch up to 1000 from segment
-      params.append('segmentId', selectedSegment);
-      
-      console.log('[CRM] Loading segment:', selectedSegment);
-      
-      const res = await fetch(`/.netlify/functions/getContacts?${params}`);
-      const data = await res.json();
-      
-      console.log('[CRM] Segment response:', data);
-      
-      if (data.success) {
-        setContacts(data.contacts || []);
-        if (data.contacts.length === 0) {
-          setError(`No contacts found in segment. The segment may be empty or using complex filters.`);
-        } else {
-          console.log('[CRM] Loaded', data.contacts.length, 'contacts from segment');
-        }
-      } else {
-        setError(data.error || 'Failed to load segment');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Toggle bulk select mode
   const toggleBulkSelectMode = () => {
@@ -274,12 +214,8 @@ const ContactCRM = () => {
         setBulkEditForm({});
         setSelectedContacts(new Set());
         setBulkSelectMode(false);
-        // Refresh the search or segment
-        if (selectedSegment) {
-          handleLoadSegment();
-        } else {
-          handleSearch();
-        }
+        // Refresh the search
+        handleSearch();
       } else {
         alert(`❌ Error: ${data.error}`);
       }
@@ -318,12 +254,11 @@ const ContactCRM = () => {
     }
   };
 
-  // Load summary stats, segments, and custom tags on mount
+  // Load summary stats and custom tags on mount
   useEffect(() => {
     loadSummary();
-    loadSegments();
     loadCustomTags();
-  }, [loadSummary, loadSegments, loadCustomTags]);
+  }, [loadSummary, loadCustomTags]);
 
   // Scroll to top when page changes
   useEffect(() => {
