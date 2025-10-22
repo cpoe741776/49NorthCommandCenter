@@ -167,9 +167,9 @@ exports.handler = async (event) => {
       return bad(headers, 'Authentication error: ' + authError.message, 401);
     }
     
-    if (!authResult.success) {
-      console.log('[GenerateWeeklyContent] Auth failed:', authResult.error);
-      return bad(headers, authResult.error, 401);
+    if (!authResult) {
+      console.log('[GenerateWeeklyContent] Auth failed - token mismatch');
+      return bad(headers, 'Unauthorized - invalid token', 401);
     }
     
     console.log('[GenerateWeeklyContent] Auth passed, continuing...');
