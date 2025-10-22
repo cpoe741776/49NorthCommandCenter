@@ -329,12 +329,12 @@ const ContactCRM = () => {
             New Contact
           </button>
           <button
-            onClick={loadContacts}
+            onClick={loadSummary}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-            Refresh
+            Refresh Stats
           </button>
           <button
             onClick={handleSync}
