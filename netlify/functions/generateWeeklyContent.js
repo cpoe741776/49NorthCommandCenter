@@ -290,13 +290,19 @@ REQUIREMENTS:
 4. Avoid repeating recent topics
 5. Include image/video suggestions for each post
 
-FORMAT: Return JSON with 3 suggestions, each containing:
-- title: Post title
-- linkedinPost: LinkedIn version (150-300 chars)
-- facebookPost: Facebook version (100-250 chars) 
-- blogPost: Blog version (500-800 words)
-- hashtags: Array of hashtags
-- imageSuggestion: Object with type, description, mood, searchTerms`;
+CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each object MUST have these EXACT field names:
+[
+  {
+    "title": "Engaging post title",
+    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
+    "facebookPost": "Conversational Facebook version (100-250 chars)",
+    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
+    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+  }
+]
+Provide 3 such objects in the array.`;
 
       break;
 
@@ -320,7 +326,19 @@ REQUIREMENTS:
 5. Optimize for LinkedIn, Facebook, and Blog formats
 6. Include relevant hashtags and image suggestions
 
-FORMAT: Return JSON with 3 suggestions (same structure as Monday)`;
+CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each object MUST have these EXACT field names:
+[
+  {
+    "title": "Engaging post title",
+    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
+    "facebookPost": "Conversational Facebook version (100-250 chars)",
+    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
+    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+  }
+]
+Provide 3 such objects in the array.`;
 
       break;
 
@@ -347,7 +365,19 @@ REQUIREMENTS:
 6. Optimize for LinkedIn, Facebook, and Blog formats
 7. Include relevant hashtags and image suggestions
 
-FORMAT: Return JSON with 3 suggestions (same structure as Monday)`;
+CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each object MUST have these EXACT field names:
+[
+  {
+    "title": "Engaging post title",
+    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
+    "facebookPost": "Conversational Facebook version (100-250 chars)",
+    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
+    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+  }
+]
+Provide 3 such objects in the array.`;
 
       break;
 
@@ -378,13 +408,19 @@ REQUIREMENTS:
 4. Avoid repeating recent topics
 5. Include image/video suggestions for each post
 
-FORMAT: Return JSON with 3 suggestions, each containing:
-- title: Post title
-- linkedinPost: LinkedIn version (150-300 chars)
-- facebookPost: Facebook version (100-250 chars) 
-- blogPost: Blog version (500-800 words)
-- hashtags: Array of hashtags
-- imageSuggestion: Object with type, description, mood, searchTerms`;
+CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each object MUST have these EXACT field names:
+[
+  {
+    "title": "Engaging post title",
+    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
+    "facebookPost": "Conversational Facebook version (100-250 chars)",
+    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
+    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+  }
+]
+Provide 3 such objects in the array.`;
 
   return await callOpenAI(systemPrompt, userPrompt);
 }
