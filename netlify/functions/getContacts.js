@@ -202,10 +202,11 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     // Build Brevo API URL with optional filtering
     let url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}`;
     
-    // If segment/list ID provided, filter by that list
+    // If segment/list ID provided, use it
+    // Note: Both lists and segments work with listIds parameter in Brevo API
     if (segmentId) {
       url += `&listIds=${segmentId}`;
-      console.log('[Contacts] Fetching contacts from segment/list:', segmentId);
+      console.log('[Contacts] Fetching contacts from list/segment ID:', segmentId);
     }
     
     // Note: Brevo's contact filtering is limited. We'll handle most filtering client-side,
@@ -232,7 +233,7 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     // If searching and we need more results, fetch additional pages
     if (multiPageSearch && allContacts.length >= 1000) {
       const totalInBrevo = data.count || 0;
-      const maxPages = Math.min(5, Math.ceil(totalInBrevo / 1000)); // Fetch up to 5 pages (5000 contacts)
+      const maxPages = Math.min(15, Math.ceil(totalInBrevo / 1000)); // Fetch up to 15 pages (15,000 contacts ~50% of database)
       
       console.log('[Contacts] Multi-page search: Fetching up to', maxPages, 'pages to search', totalInBrevo, 'total contacts');
       
@@ -253,6 +254,8 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
           console.log('[Contacts] Fetched page', page + 1, '- Total contacts:', allContacts.length);
         }
       }
+      
+      console.log('[Contacts] Multi-page fetch complete. Total fetched:', allContacts.length);
     }
     
     // Map Brevo contacts to our format (using existing Brevo fields)

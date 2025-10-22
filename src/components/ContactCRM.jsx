@@ -152,16 +152,22 @@ const ContactCRM = () => {
       setHasSearched(true);
       
       const params = new URLSearchParams();
-      params.append('limit', '500'); // Segments are usually under 1000
+      params.append('limit', '1000'); // Fetch up to 1000 from segment
       params.append('segmentId', selectedSegment);
+      
+      console.log('[CRM] Loading segment:', selectedSegment);
       
       const res = await fetch(`/.netlify/functions/getContacts?${params}`);
       const data = await res.json();
       
+      console.log('[CRM] Segment response:', data);
+      
       if (data.success) {
         setContacts(data.contacts || []);
         if (data.contacts.length === 0) {
-          setError('No contacts found in this segment');
+          setError(`No contacts found in segment. The segment may be empty or using complex filters.`);
+        } else {
+          console.log('[CRM] Loaded', data.contacts.length, 'contacts from segment');
         }
       } else {
         setError(data.error || 'Failed to load segment');
@@ -623,35 +629,37 @@ const ContactCRM = () => {
           </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col gap-4">
           {/* Segment Loader */}
           <div className="bg-white p-4 rounded border border-green-300">
             <label className="block text-sm font-semibold text-gray-700 mb-2">Load Brevo Segment</label>
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <select
                 value={selectedSegment}
                 onChange={(e) => setSelectedSegment(e.target.value)}
                 disabled={loadingSegments}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
               >
                 <option value="">Select a segment...</option>
                 {segments.map(seg => (
-                  <option key={seg.id} value={seg.id}>
-                    {seg.name} ({seg.totalContacts} contacts)
+                  <option key={seg.id} value={seg.id} title={seg.name}>
+                    {seg.name.length > 50 ? seg.name.substring(0, 50) + '...' : seg.name}
                   </option>
                 ))}
               </select>
               <button
                 onClick={handleLoadSegment}
                 disabled={!selectedSegment || loading}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
-                Load
+                {loading ? 'Loading...' : 'Load Segment'}
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-2">Load all contacts from a Brevo segment/list</p>
+            <p className="text-xs text-gray-600 mt-2">
+              {selectedSegment ? `Selected: ${segments.find(s => s.id === parseInt(selectedSegment))?.name || 'Unknown'}` : 'Load all contacts from a Brevo segment'}
+            </p>
           </div>
-
+          
           {/* Bulk Edit Controls */}
           <div className="bg-white p-4 rounded border border-green-300">
             <label className="block text-sm font-semibold text-gray-700 mb-2">Bulk Edit Mode</label>
