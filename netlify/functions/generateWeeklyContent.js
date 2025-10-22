@@ -147,7 +147,6 @@ const COMPANY_INFO = {
 
 exports.handler = async (event) => {
   console.log('[GenerateWeeklyContent] Handler called with method:', event.httpMethod);
-  console.log('[GenerateWeeklyContent] Headers:', JSON.stringify(event.headers, null, 2));
   
   const headers = corsHeaders(event.headers?.origin);
   const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
@@ -157,67 +156,33 @@ exports.handler = async (event) => {
   }
 
   try {
-    console.log('[GenerateWeeklyContent] Checking auth...');
+    console.log('[GenerateWeeklyContent] Starting minimal test...');
     
-    // Simplified auth check - just log the token
-    const providedToken = event.headers?.['x-app-token'] || event.headers?.['X-App-Token'];
-    console.log('[GenerateWeeklyContent] Provided token:', providedToken ? 'Present' : 'Missing');
-    console.log('[GenerateWeeklyContent] APP_TOKEN env var:', process.env.APP_TOKEN ? 'Set' : 'Not set');
+    // Minimal test - just return success
+    console.log('[GenerateWeeklyContent] Test successful, returning mock data...');
     
-    // Skip auth for now to test the rest of the function
-    console.log('[GenerateWeeklyContent] Skipping auth check for debugging...');
-    
-    console.log('[GenerateWeeklyContent] Auth passed, continuing...');
-
-    console.log('[GenerateWeeklyContent] Parsing body...');
-    console.log('[GenerateWeeklyContent] Raw body:', event.body);
-    const [body, parseError] = safeJson(event.body);
-    if (parseError) {
-      console.log('[GenerateWeeklyContent] JSON parse error:', parseError);
-      return bad(headers, 'Invalid JSON body: ' + parseError.message);
-    }
-    if (!body) {
-      console.log('[GenerateWeeklyContent] Empty body');
-      return bad(headers, 'Empty request body');
-    }
-
-    console.log('[GenerateWeeklyContent] Body parsed:', JSON.stringify(body, null, 2));
-    const { dayType, customPrompt } = body;
-
-    if (!dayType) {
-      console.log('[GenerateWeeklyContent] Missing dayType');
-      return bad(headers, 'dayType is required');
-    }
-
-    console.log('[GenerateWeeklyContent] dayType:', dayType, 'customPrompt:', customPrompt);
-
-    console.log('[GenerateWeeklyContent] Starting generation for:', dayType);
-
-    // Get recent posts for context
-    console.log('[GenerateWeeklyContent] Getting recent posts...');
-    const recentPosts = await getRecentPosts();
-    console.log('[GenerateWeeklyContent] Retrieved', recentPosts.length, 'recent posts');
-
-    // Generate content based on day type
-    console.log('[GenerateWeeklyContent] Generating content...');
-    let suggestions;
-    if (dayType === 'custom' && customPrompt && customPrompt.trim()) {
-      console.log('[GenerateWeeklyContent] Using custom content generation');
-      suggestions = await generateCustomContent(customPrompt, recentPosts);
-    } else {
-      console.log('[GenerateWeeklyContent] Using day-specific content generation');
-      suggestions = await generateDaySpecificContent(dayType, recentPosts);
-    }
-
-    console.log('[GenerateWeeklyContent] Generated', suggestions.length, 'suggestions');
-
     return ok(headers, {
       success: true,
-      suggestions,
+      suggestions: [
+        {
+          id: 1,
+          title: "Test Suggestion 1",
+          linkedinPost: "This is a test LinkedIn post for resilience training.",
+          facebookPost: "This is a test Facebook post for resilience training.",
+          blogPost: "This is a test blog post about resilience training and mental strength development.",
+          hashtags: ["#Resilience", "#Test"],
+          imageSuggestion: {
+            type: "Photo",
+            description: "Test image suggestion",
+            mood: "Professional",
+            searchTerms: "resilience training"
+          }
+        }
+      ],
       context: {
-        dayType,
-        customPrompt: customPrompt || null,
-        recentPostsReviewed: recentPosts.length,
+        dayType: 'monday',
+        customPrompt: null,
+        recentPostsReviewed: 0,
         timestamp: new Date().toISOString()
       }
     });
