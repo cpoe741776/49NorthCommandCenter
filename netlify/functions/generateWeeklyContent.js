@@ -181,27 +181,22 @@ exports.handler = async (event) => {
     const recentPosts = await getRecentPosts();
     console.log('[GenerateWeeklyContent] Step 5: Retrieved', recentPosts.length, 'recent posts');
 
-    // For now, return test data with real parameters
-    console.log('[GenerateWeeklyContent] Step 6: Returning test data with real parameters...');
-    
+    // Generate content based on day type
+    console.log('[GenerateWeeklyContent] Step 6: Generating AI content...');
+    let suggestions;
+    if (dayType === 'custom' && customPrompt && customPrompt.trim()) {
+      console.log('[GenerateWeeklyContent] Using custom content generation');
+      suggestions = await generateCustomContent(customPrompt, recentPosts);
+    } else {
+      console.log('[GenerateWeeklyContent] Using day-specific content generation');
+      suggestions = await generateDaySpecificContent(dayType, recentPosts);
+    }
+
+    console.log('[GenerateWeeklyContent] Step 7: Generated', suggestions.length, 'suggestions');
+
     return ok(headers, {
       success: true,
-      suggestions: [
-        {
-          id: 1,
-          title: `Test Suggestion for ${dayType}`,
-          linkedinPost: `This is a test LinkedIn post for ${dayType}.`,
-          facebookPost: `This is a test Facebook post for ${dayType}.`,
-          blogPost: `This is a test blog post for ${dayType} about resilience training.`,
-          hashtags: ["#Resilience", "#Test"],
-          imageSuggestion: {
-            type: "Photo",
-            description: `Test image for ${dayType}`,
-            mood: "Professional",
-            searchTerms: "resilience training"
-          }
-        }
-      ],
+      suggestions,
       context: {
         dayType,
         customPrompt: customPrompt || null,
@@ -233,7 +228,7 @@ async function getRecentPosts() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: CFG.SHEET_ID,
-      range: 'MainPostData!A:Z',
+      range: 'MainPostData!A:AA', // Extended to include column S (purpose)
     });
 
     const rows = response.data.values || [];
