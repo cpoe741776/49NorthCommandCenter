@@ -228,22 +228,28 @@ async function getRecentPosts() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: CFG.SHEET_ID,
-      range: 'MainPostData!A:AA', // Extended to include column S (purpose)
+      range: 'MainPostData!A:U', // A-U covers all columns including Webinar Title
     });
 
     const rows = response.data.values || [];
     if (rows.length <= 1) return []; // No data or just header
 
     // Get last 10 posts (excluding header)
+    // Columns: A=timestamp, B=status, C=contentType, D=title, E=body, F=imageUrl, G=videoUrl, 
+    //          H=platforms, I=scheduleDate, J=publishedDate, K=postPermalink, L=facebookPostId,
+    //          M=linkedInPostId, N=wordPressPostId, O=brevoEmailId, P=analytics, Q=createdBy,
+    //          R=tags, S=Purpose, T=Webinar ID, U=Webinar Title
     const recentPosts = rows.slice(1, 11).map(row => ({
-      title: row[0] || '',
-      content: row[1] || '',
-      platforms: row[2] || '',
-      status: row[3] || '',
-      purpose: row[18] || '', // Column S
-      dateCreated: row[19] || '',
-      datePublished: row[20] || ''
-    })).filter(post => post.title && post.content);
+      timestamp: row[0] || '',
+      status: row[1] || '',
+      contentType: row[2] || '',
+      title: row[3] || '',
+      body: row[4] || '',
+      platforms: row[7] || '',
+      purpose: row[18] || '', // Column S (index 18)
+      publishedDate: row[9] || '',
+      tags: row[17] || ''
+    })).filter(post => post.title && post.body);
 
     return recentPosts;
   } catch (error) {
@@ -275,7 +281,7 @@ COMPANY CONTEXT:
 - Description: ${COMPANY_INFO.description}
 
 RECENT POSTS CONTEXT:
-${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.content.substring(0, 100)}...`).join('\n')}
+${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0, 100)}...`).join('\n')}
 
 REQUIREMENTS:
 1. Each suggestion should introduce the resilience skill with an engaging question
@@ -300,7 +306,7 @@ FORMAT: Return JSON with 3 suggestions, each containing:
       userPrompt = `Create 3 different post suggestions for Wednesday's follow-up content. Build on Monday's resilience concept with deeper insights.
 
 MONDAY'S POST CONTEXT:
-${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.includes('weekly-monday'))?.content || 'No recent Monday post found'}
+${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.includes('weekly-monday'))?.body || 'No recent Monday post found'}
 
 COMPANY CONTEXT:
 - Company: ${COMPANY_INFO.name}
@@ -324,8 +330,8 @@ FORMAT: Return JSON with 3 suggestions (same structure as Monday)`;
       userPrompt = `Create 3 different post suggestions for Friday's call-to-action content. Synthesize the week's themes into compelling CTAs.
 
 WEEK'S POSTS CONTEXT:
-Monday: ${recentPosts.find(post => post.purpose?.includes('monday'))?.content || 'No Monday post found'}
-Wednesday: ${recentPosts.find(post => post.purpose?.includes('wednesday'))?.content || 'No Wednesday post found'}
+Monday: ${recentPosts.find(post => post.purpose?.includes('monday'))?.body || 'No Monday post found'}
+Wednesday: ${recentPosts.find(post => post.purpose?.includes('wednesday'))?.body || 'No Wednesday post found'}
 
 COMPANY CONTEXT:
 - Company: ${COMPANY_INFO.name}
@@ -363,7 +369,7 @@ COMPANY CONTEXT:
 - Description: ${COMPANY_INFO.description}
 
 RECENT POSTS CONTEXT:
-${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.content.substring(0, 100)}...`).join('\n')}
+${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0, 100)}...`).join('\n')}
 
 REQUIREMENTS:
 1. Follow the custom theme while maintaining 49 North's professional, empowering voice
