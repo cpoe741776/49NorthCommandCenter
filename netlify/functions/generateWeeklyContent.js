@@ -156,33 +156,56 @@ exports.handler = async (event) => {
   }
 
   try {
-    console.log('[GenerateWeeklyContent] Starting minimal test...');
-    
-    // Minimal test - just return success
-    console.log('[GenerateWeeklyContent] Test successful, returning mock data...');
+    console.log('[GenerateWeeklyContent] Step 1: Parsing body...');
+    const [body, parseError] = safeJson(event.body);
+    if (parseError) {
+      console.log('[GenerateWeeklyContent] JSON parse error:', parseError);
+      return bad(headers, 'Invalid JSON body: ' + parseError.message);
+    }
+    if (!body) {
+      console.log('[GenerateWeeklyContent] Empty body');
+      return bad(headers, 'Empty request body');
+    }
+
+    console.log('[GenerateWeeklyContent] Step 2: Extracting parameters...');
+    const { dayType, customPrompt } = body;
+
+    if (!dayType) {
+      console.log('[GenerateWeeklyContent] Missing dayType');
+      return bad(headers, 'dayType is required');
+    }
+
+    console.log('[GenerateWeeklyContent] Step 3: dayType =', dayType, 'customPrompt =', customPrompt ? 'provided' : 'null');
+
+    console.log('[GenerateWeeklyContent] Step 4: Getting recent posts from Google Sheets...');
+    const recentPosts = await getRecentPosts();
+    console.log('[GenerateWeeklyContent] Step 5: Retrieved', recentPosts.length, 'recent posts');
+
+    // For now, return test data with real parameters
+    console.log('[GenerateWeeklyContent] Step 6: Returning test data with real parameters...');
     
     return ok(headers, {
       success: true,
       suggestions: [
         {
           id: 1,
-          title: "Test Suggestion 1",
-          linkedinPost: "This is a test LinkedIn post for resilience training.",
-          facebookPost: "This is a test Facebook post for resilience training.",
-          blogPost: "This is a test blog post about resilience training and mental strength development.",
+          title: `Test Suggestion for ${dayType}`,
+          linkedinPost: `This is a test LinkedIn post for ${dayType}.`,
+          facebookPost: `This is a test Facebook post for ${dayType}.`,
+          blogPost: `This is a test blog post for ${dayType} about resilience training.`,
           hashtags: ["#Resilience", "#Test"],
           imageSuggestion: {
             type: "Photo",
-            description: "Test image suggestion",
+            description: `Test image for ${dayType}`,
             mood: "Professional",
             searchTerms: "resilience training"
           }
         }
       ],
       context: {
-        dayType: 'monday',
-        customPrompt: null,
-        recentPostsReviewed: 0,
+        dayType,
+        customPrompt: customPrompt || null,
+        recentPostsReviewed: recentPosts.length,
         timestamp: new Date().toISOString()
       }
     });
