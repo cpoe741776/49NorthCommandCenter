@@ -13,7 +13,7 @@ exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { email, firstName, lastName, organization, phone, jobTitle } = body;
+    const { email } = body;
 
     if (!email || !email.includes('@')) {
       return ok(headers, { success: false, error: 'Valid email required' });
@@ -23,14 +23,27 @@ exports.handler = async (event) => {
       return ok(headers, { success: false, error: 'BREVO_API_KEY not configured' });
     }
 
-    // Build attributes
+    // Build attributes from all provided fields
     const attributes = {
-      FIRSTNAME: firstName || '',
-      LASTNAME: lastName || '',
-      ORGANIZATION_NAME: organization || '',
-      JOB_TITLE: jobTitle || '',
-      PHONE_MOBILE: phone || '',
-      SOURCED_FROM: 'Manual Entry - CRM',
+      FIRSTNAME: body.firstName || '',
+      LASTNAME: body.lastName || '',
+      JOB_TITLE: body.jobTitle || '',
+      CREDENTIALS: body.credentials || '',
+      ORGANIZATION_NAME: body.organization || '',
+      ORGANIZATION_TYPE: body.organizationType || '',
+      ORGANIZATION_SIZE: body.organizationSize || '',
+      ORGANIZATION_STREET_ADDRESS: body.organizationAddress || '',
+      CITY: body.city || '',
+      STATE_PROVINCE: body.state || '',
+      COUNTY: body.county || '',
+      ZIP_OR_POSTAL_CODE: body.zipCode || '',
+      COUNTRY_REGION: body.country || '',
+      PHONE_MOBILE: body.phone || '',
+      PHONE_OFFICE: body.phoneOffice || '',
+      PHONE_EXTENSION: body.phoneExtension || '',
+      CUSTOM_TAG: body.customTag || '',
+      SOURCED_FROM: body.sourcedFrom || 'Manual Entry - CRM',
+      AREAS_OF_INTEREST: body.areasOfInterest || '',
       INITIAL_CONTACT_TIME: new Date().toISOString(),
       LAST_CHANGED: new Date().toISOString()
     };

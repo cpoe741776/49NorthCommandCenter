@@ -33,7 +33,21 @@ const ContactCRM = () => {
     lastName: '',
     organization: '',
     phone: '',
-    jobTitle: ''
+    jobTitle: '',
+    credentials: '',
+    organizationType: '',
+    organizationSize: '',
+    organizationAddress: '',
+    city: '',
+    state: '',
+    county: '',
+    zipCode: '',
+    country: '',
+    phoneOffice: '',
+    phoneExtension: '',
+    customTag: '',
+    sourcedFrom: '',
+    areasOfInterest: ''
   });
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [sortField, setSortField] = useState('name'); // name, email, organization, leadScore, lastChanged
@@ -121,6 +135,15 @@ const ContactCRM = () => {
     setError(null);
     setPage(0);
     setSelectedSegment('');
+  };
+
+  const resetNewContactForm = () => {
+    setNewContact({
+      email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '',
+      credentials: '', organizationType: '', organizationSize: '', organizationAddress: '',
+      city: '', state: '', county: '', zipCode: '', country: '',
+      phoneOffice: '', phoneExtension: '', customTag: '', sourcedFrom: '', areasOfInterest: ''
+    });
   };
 
   // Load Brevo segments
@@ -265,7 +288,7 @@ const ContactCRM = () => {
       if (data.success) {
         alert(`✅ Contact created: ${newContact.email}`);
         setShowNewContactModal(false);
-        setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
+        resetNewContactForm();
         loadSummary(); // Refresh summary
       } else {
         alert(data.error || 'Failed to create contact');
@@ -1192,7 +1215,7 @@ const ContactCRM = () => {
               <button
                 onClick={() => {
                   setShowNewContactModal(false);
-                  setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
+                  resetNewContactForm();
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -1200,73 +1223,235 @@ const ContactCRM = () => {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Email <span className="text-red-600">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={newContact.email}
-                    onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
-                    placeholder="email@example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
+                {/* Required Fields */}
+                <div className="col-span-2 bg-purple-50 p-3 rounded border border-purple-200">
+                  <p className="text-sm font-semibold text-purple-900 mb-2">Required Information</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Email <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        value={newContact.email}
+                        onChange={(e) => setNewContact({ ...newContact, email: e.target.value })}
+                        placeholder="email@example.com"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">First Name</label>
+                      <input
+                        type="text"
+                        value={newContact.firstName}
+                        onChange={(e) => setNewContact({ ...newContact, firstName: e.target.value })}
+                        placeholder="First name"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Last Name</label>
+                      <input
+                        type="text"
+                        value={newContact.lastName}
+                        onChange={(e) => setNewContact({ ...newContact, lastName: e.target.value })}
+                        placeholder="Last name"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Mobile</label>
+                      <input
+                        type="tel"
+                        value={newContact.phone}
+                        onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
+                        placeholder="(555) 123-4567"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
+                {/* Personal Info */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Job Title</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Job Title</label>
                   <input
                     type="text"
                     value={newContact.jobTitle}
                     onChange={(e) => setNewContact({ ...newContact, jobTitle: e.target.value })}
-                    placeholder="e.g., HR Director"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    placeholder="e.g., Fire Chief"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">First Name</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Credentials</label>
                   <input
                     type="text"
-                    value={newContact.firstName}
-                    onChange={(e) => setNewContact({ ...newContact, firstName: e.target.value })}
-                    placeholder="First name"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    value={newContact.credentials}
+                    onChange={(e) => setNewContact({ ...newContact, credentials: e.target.value })}
+                    placeholder="e.g., PhD, MD"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
+                {/* Organization */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    value={newContact.lastName}
-                    onChange={(e) => setNewContact({ ...newContact, lastName: e.target.value })}
-                    placeholder="Last name"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Organization</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Organization</label>
                   <input
                     type="text"
                     value={newContact.organization}
                     onChange={(e) => setNewContact({ ...newContact, organization: e.target.value })}
                     placeholder="Organization name"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Phone</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Organization Type</label>
+                  <input
+                    type="text"
+                    value={newContact.organizationType}
+                    onChange={(e) => setNewContact({ ...newContact, organizationType: e.target.value })}
+                    placeholder="e.g., Fire Dept"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Organization Size</label>
+                  <input
+                    type="text"
+                    value={newContact.organizationSize}
+                    onChange={(e) => setNewContact({ ...newContact, organizationSize: e.target.value })}
+                    placeholder="e.g., 100-500"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Organization Address</label>
+                  <input
+                    type="text"
+                    value={newContact.organizationAddress}
+                    onChange={(e) => setNewContact({ ...newContact, organizationAddress: e.target.value })}
+                    placeholder="123 Main Street"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                {/* Location */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">City</label>
+                  <input
+                    type="text"
+                    value={newContact.city}
+                    onChange={(e) => setNewContact({ ...newContact, city: e.target.value })}
+                    placeholder="e.g., Dover"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">State/Province</label>
+                  <input
+                    type="text"
+                    value={newContact.state}
+                    onChange={(e) => setNewContact({ ...newContact, state: e.target.value })}
+                    placeholder="e.g., Delaware"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">County</label>
+                  <input
+                    type="text"
+                    value={newContact.county}
+                    onChange={(e) => setNewContact({ ...newContact, county: e.target.value })}
+                    placeholder="e.g., New Castle"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Zip/Postal Code</label>
+                  <input
+                    type="text"
+                    value={newContact.zipCode}
+                    onChange={(e) => setNewContact({ ...newContact, zipCode: e.target.value })}
+                    placeholder="e.g., 19901"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Country/Region</label>
+                  <input
+                    type="text"
+                    value={newContact.country}
+                    onChange={(e) => setNewContact({ ...newContact, country: e.target.value })}
+                    placeholder="e.g., United States"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                {/* Additional Contact Methods */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Office</label>
                   <input
                     type="tel"
-                    value={newContact.phone}
-                    onChange={(e) => setNewContact({ ...newContact, phone: e.target.value })}
-                    placeholder="Phone number"
-                    className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                    value={newContact.phoneOffice}
+                    onChange={(e) => setNewContact({ ...newContact, phoneOffice: e.target.value })}
+                    placeholder="(555) 123-4567"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Extension</label>
+                  <input
+                    type="text"
+                    value={newContact.phoneExtension}
+                    onChange={(e) => setNewContact({ ...newContact, phoneExtension: e.target.value })}
+                    placeholder="x123"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                {/* Tracking */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Custom Tag</label>
+                  <input
+                    type="text"
+                    value={newContact.customTag}
+                    onChange={(e) => setNewContact({ ...newContact, customTag: e.target.value })}
+                    placeholder="e.g., Import Oct 2025"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Sourced From</label>
+                  <input
+                    type="text"
+                    value={newContact.sourcedFrom}
+                    onChange={(e) => setNewContact({ ...newContact, sourcedFrom: e.target.value })}
+                    placeholder="e.g., Manual Entry"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Areas of Interest</label>
+                  <input
+                    type="text"
+                    value={newContact.areasOfInterest}
+                    onChange={(e) => setNewContact({ ...newContact, areasOfInterest: e.target.value })}
+                    placeholder="e.g., Resilience Training"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
               </div>
@@ -1282,7 +1467,7 @@ const ContactCRM = () => {
               <button
                 onClick={() => {
                   setShowNewContactModal(false);
-                  setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
+                  resetNewContactForm();
                 }}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
               >
