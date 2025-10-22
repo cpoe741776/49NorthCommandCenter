@@ -171,7 +171,7 @@ exports.handler = async (event) => {
 
     // Generate content based on day type
     let suggestions;
-    if (dayType === 'custom' && customPrompt) {
+    if (dayType === 'custom' && customPrompt && customPrompt.trim()) {
       suggestions = await generateCustomContent(customPrompt, recentPosts);
     } else {
       suggestions = await generateDaySpecificContent(dayType, recentPosts);

@@ -33,9 +33,14 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
         },
         body: JSON.stringify({
           dayType,
-          customPrompt: dayType === 'custom' ? customPrompt : undefined
+          customPrompt: dayType === 'custom' ? customPrompt : null
         })
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(`Server error (${response.status}): ${errorData.error || response.statusText}`);
+      }
 
       const data = await response.json();
 
