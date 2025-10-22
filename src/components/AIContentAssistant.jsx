@@ -68,11 +68,6 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
     }
   };
 
-  const getDayTypeIcon = (value) => {
-    const option = dayTypeOptions.find(opt => opt.value === value);
-    return option ? option.icon : Calendar;
-  };
-
   const getDayTypeLabel = (value) => {
     const option = dayTypeOptions.find(opt => opt.value === value);
     return option ? option.label : value;
