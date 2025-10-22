@@ -442,7 +442,7 @@ const SocialMediaOperations = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filtered.map((p, i) => {
                 const statusBadge = badgeForStatus(p.status);
-                const scheduled = p.scheduledDate ? new Date(p.scheduledDate).toLocaleString() : '';
+                const scheduled = p.scheduleDate ? new Date(p.scheduleDate).toLocaleString() : '';
                 const published = p.publishedDate ? new Date(p.publishedDate).toLocaleString() : '';
                 const created = p.timestamp || p.createdAt ? new Date(p.timestamp || p.createdAt).toLocaleString() : '';
                 
@@ -476,9 +476,17 @@ const SocialMediaOperations = () => {
                         ))}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
-                      {scheduled && <div><span className="font-medium text-gray-700">Scheduled:</span> {scheduled}</div>}
-                      {published && <div><span className="font-medium text-gray-700">Published:</span> {published}</div>}
-                      {created && <div><span className="font-medium text-gray-700">Created:</span> {created}</div>}
+                      {scheduled && (
+                        <div className="mb-1">
+                          <span className="inline-flex items-center gap-1 text-blue-700 font-semibold">
+                            <Calendar size={12} />
+                            Scheduled:
+                          </span>
+                          <div className="text-gray-900 font-medium">{scheduled}</div>
+                        </div>
+                      )}
+                      {published && <div className="mb-1"><span className="font-medium text-green-700">Published:</span> <span className="text-gray-900">{published}</span></div>}
+                      {!scheduled && !published && created && <div className="text-gray-500"><span className="font-medium">Created:</span> {created}</div>}
                     </td>
                     <td className="px-4 py-3 text-sm">
                       {safeLink ? (
