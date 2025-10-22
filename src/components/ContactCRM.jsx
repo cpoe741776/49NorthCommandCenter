@@ -15,6 +15,7 @@ const ContactCRM = () => {
   const [summary, setSummary] = useState(null);
   
   // New: Dedicated search fields
+  const [searchFirstName, setSearchFirstName] = useState('');
   const [searchLastName, setSearchLastName] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const [searchOrganization, setSearchOrganization] = useState('');
@@ -55,8 +56,8 @@ const ContactCRM = () => {
   // New: Search with dedicated fields
   const handleSearch = useCallback(async () => {
     // At least one field must be filled
-    if (!searchLastName.trim() && !searchEmail.trim() && !searchOrganization.trim()) {
-      alert('Please enter at least one search criteria (Last Name, Email, or Organization)');
+    if (!searchFirstName.trim() && !searchLastName.trim() && !searchEmail.trim() && !searchOrganization.trim()) {
+      alert('Please enter at least one search criteria (First Name, Last Name, Email, or Organization)');
       return;
     }
 
@@ -69,6 +70,7 @@ const ContactCRM = () => {
       params.append('limit', '100'); // Limit search results
       params.append('offset', page * 100);
       if (filterType !== 'all') params.append('filter', filterType);
+      if (searchFirstName.trim()) params.append('firstName', searchFirstName.trim());
       if (searchLastName.trim()) params.append('lastName', searchLastName.trim());
       if (searchEmail.trim()) params.append('email', searchEmail.trim());
       if (searchOrganization.trim()) params.append('organization', searchOrganization.trim());
@@ -89,9 +91,10 @@ const ContactCRM = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, searchLastName, searchEmail, searchOrganization, page]);
+  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, page]);
 
   const clearSearch = () => {
+    setSearchFirstName('');
     setSearchLastName('');
     setSearchEmail('');
     setSearchOrganization('');
@@ -491,10 +494,22 @@ const ContactCRM = () => {
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Search the entire database by Last Name, Email, or Organization. Enter at least one field to search.
+          Search the entire database by First Name, Last Name, Email, or Organization. Enter at least one field to search. <strong>Combine fields</strong> (e.g., First Name + Last Name) to narrow results.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">First Name</label>
+            <input
+              type="text"
+              value={searchFirstName}
+              onChange={(e) => setSearchFirstName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g., John"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Last Name</label>
             <input

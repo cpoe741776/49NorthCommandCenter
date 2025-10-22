@@ -29,6 +29,7 @@ exports.handler = async (event) => {
     const summaryOnly = url.searchParams.get('summaryOnly') === 'true';
     
     // New: Dedicated search fields
+    const searchFirstName = url.searchParams.get('firstName') || '';
     const searchLastName = url.searchParams.get('lastName') || '';
     const searchEmail = url.searchParams.get('email') || '';
     const searchOrganization = url.searchParams.get('organization') || '';
@@ -55,7 +56,7 @@ exports.handler = async (event) => {
 
     // Check cache (only for unfiltered requests)
     const nowMs = Date.now();
-    if (!filter && !search && !searchLastName && !searchEmail && !searchOrganization && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
+    if (!filter && !search && !searchFirstName && !searchLastName && !searchEmail && !searchOrganization && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
       console.log('[Contacts] Returning cached data');
       return ok(headers, { ...cache, cached: true });
     }
@@ -63,7 +64,7 @@ exports.handler = async (event) => {
     console.log('[Contacts] Fetching fresh data...');
 
     // Fetch contacts from Brevo (with optional filtering and dedicated search)
-    const brevoData = await fetchBrevoContacts(limit, offset, filter, searchLastName, searchEmail, searchOrganization);
+    const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization);
     const brevoContacts = brevoData.contacts;
     const brevoTotal = brevoData.count; // Total count from Brevo API
     const filteredTotal = brevoData.filteredCount || brevoTotal; // Count after Brevo-level filtering
@@ -151,7 +152,7 @@ exports.handler = async (event) => {
     };
 
     // Cache if no filters or search
-    if (!filter && !search && !searchLastName && !searchEmail && !searchOrganization) {
+    if (!filter && !search && !searchFirstName && !searchLastName && !searchEmail && !searchOrganization) {
       cache = response;
       cacheTimestamp = nowMs;
       console.log('[Contacts] Data cached for 5 minutes');
@@ -169,16 +170,16 @@ exports.handler = async (event) => {
   }
 };
 
-async function fetchBrevoContacts(limit, offset, filter = '', searchLastName = '', searchEmail = '', searchOrganization = '') {
+async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = '', searchLastName = '', searchEmail = '', searchOrganization = '') {
   if (!BREVO_API_KEY) {
     console.warn('[Contacts] BREVO_API_KEY not set');
     return { contacts: [], count: 0, filteredCount: 0 };
   }
 
-  try {
+  try:
     // Increase limit for searching (we'll filter client-side)
     // Brevo doesn't support field-specific search, so we fetch more and filter
-    const fetchLimit = (searchLastName || searchEmail || searchOrganization) ? 500 : limit;
+    const fetchLimit = (searchFirstName || searchLastName || searchEmail || searchOrganization) ? 500 : limit;
     
     // Build Brevo API URL with optional filtering
     let url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}`;
@@ -236,9 +237,15 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchLastName = '
     }));
     
     // Apply field-specific search filtering
-    if (searchLastName || searchEmail || searchOrganization) {
+    if (searchFirstName || searchLastName || searchEmail || searchOrganization) {
       contacts = contacts.filter(c => {
         let matches = true;
+        
+        if (searchFirstName) {
+          const firstNameLower = (c.firstName || '').toLowerCase();
+          const searchLower = searchFirstName.toLowerCase();
+          matches = matches && firstNameLower.includes(searchLower);
+        }
         
         if (searchLastName) {
           const lastNameLower = (c.lastName || '').toLowerCase();
