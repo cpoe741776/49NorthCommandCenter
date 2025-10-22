@@ -146,20 +146,36 @@ const COMPANY_INFO = {
 };
 
 exports.handler = async (event) => {
+  console.log('[GenerateWeeklyContent] Handler called with method:', event.httpMethod);
+  console.log('[GenerateWeeklyContent] Headers:', JSON.stringify(event.headers, null, 2));
+  
   const headers = corsHeaders(event.headers?.origin);
   const guard = methodGuard(event, headers, 'POST', 'OPTIONS');
-  if (guard) return guard;
+  if (guard) {
+    console.log('[GenerateWeeklyContent] Method guard failed:', guard);
+    return guard;
+  }
 
   try {
+    console.log('[GenerateWeeklyContent] Checking auth...');
     const authResult = checkAuth(event);
-    if (!authResult.success) return bad(headers, authResult.error, 401);
+    if (!authResult.success) {
+      console.log('[GenerateWeeklyContent] Auth failed:', authResult.error);
+      return bad(headers, authResult.error, 401);
+    }
 
+    console.log('[GenerateWeeklyContent] Parsing body...');
     const body = safeJson(event.body);
-    if (!body) return bad(headers, 'Invalid JSON body');
+    if (!body) {
+      console.log('[GenerateWeeklyContent] Invalid JSON body');
+      return bad(headers, 'Invalid JSON body');
+    }
 
+    console.log('[GenerateWeeklyContent] Body parsed:', JSON.stringify(body, null, 2));
     const { dayType, customPrompt } = body;
 
     if (!dayType) {
+      console.log('[GenerateWeeklyContent] Missing dayType');
       return bad(headers, 'dayType is required');
     }
 
@@ -192,13 +208,15 @@ exports.handler = async (event) => {
 
   } catch (error) {
     console.error('[GenerateWeeklyContent] Error:', error);
+    console.error('[GenerateWeeklyContent] Error stack:', error.stack);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         success: false,
         error: 'Failed to generate content',
-        details: error.message
+        details: error.message,
+        stack: error.stack
       })
     };
   }
