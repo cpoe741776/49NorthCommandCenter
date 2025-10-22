@@ -62,9 +62,11 @@ exports.handler = async (event) => {
       })),
       ...(segmentsData.segments || []).map(seg => ({
         id: seg.id,
-        name: seg.segment_name || seg.name || `Segment ${seg.id}`,
-        // Segments are dynamic, count calculated on query
-        totalContacts: seg.count_total || seg.categoryCount || seg.count || 0,
+        name: seg.segmentName || seg.segment_name || seg.name || `Segment ${seg.id}`,
+        // Segments are dynamic queries - count not available from API
+        // We'll show count after loading the segment
+        totalContacts: '?', // Dynamic segments don't have pre-calculated counts
+        categoryName: seg.categoryName || '',
         type: 'segment'
       }))
     ];

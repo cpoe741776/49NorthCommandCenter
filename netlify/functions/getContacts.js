@@ -189,14 +189,14 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
   }
 
   try {
-    // For field-specific search, we need to fetch MORE contacts to find matches
-    // Brevo doesn't support field search, so we fetch larger batches and filter client-side
+    // For field-specific search, fetch multiple batches of 1000 (Brevo's max per request)
     let fetchLimit = limit;
+    let multiPageSearch = false;
     
     if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry) {
-      // Brevo API max is 1000 per request, so fetch max allowed
-      fetchLimit = 1000; // Brevo's hard limit
-      console.log('[Contacts] Search mode: Fetching', fetchLimit, 'contacts (Brevo max) to filter');
+      fetchLimit = 1000; // Brevo's hard limit per request
+      multiPageSearch = true;
+      console.log('[Contacts] Search mode: Will fetch multiple pages of 1000 to find matches');
     }
     
     // Build Brevo API URL with optional filtering
@@ -223,12 +223,40 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
       return { contacts: [], count: 0, filteredCount: 0 };
     }
 
-    const data = await res.json();
+    let data = await res.json();
     
     console.log('[Contacts] Brevo returned:', data.contacts?.length || 0, 'contacts. Total in Brevo:', data.count || 0);
     
+    let allContacts = data.contacts || [];
+    
+    // If searching and we need more results, fetch additional pages
+    if (multiPageSearch && allContacts.length >= 1000) {
+      const totalInBrevo = data.count || 0;
+      const maxPages = Math.min(5, Math.ceil(totalInBrevo / 1000)); // Fetch up to 5 pages (5000 contacts)
+      
+      console.log('[Contacts] Multi-page search: Fetching up to', maxPages, 'pages to search', totalInBrevo, 'total contacts');
+      
+      for (let page = 1; page < maxPages; page++) {
+        const pageOffset = page * 1000;
+        const pageUrl = `https://api.brevo.com/v3/contacts?limit=1000&offset=${pageOffset}`;
+        
+        const pageRes = await fetch(pageUrl, {
+          headers: {
+            'accept': 'application/json',
+            'api-key': BREVO_API_KEY
+          }
+        });
+        
+        if (pageRes.ok) {
+          const pageData = await pageRes.json();
+          allContacts = allContacts.concat(pageData.contacts || []);
+          console.log('[Contacts] Fetched page', page + 1, '- Total contacts:', allContacts.length);
+        }
+      }
+    }
+    
     // Map Brevo contacts to our format (using existing Brevo fields)
-    let contacts = (data.contacts || []).map(c => ({
+    let contacts = allContacts.map(c => ({
       email: c.email,
       name: `${c.attributes?.FIRSTNAME || ''} ${c.attributes?.LASTNAME || ''}`.trim() || c.email,
       firstName: c.attributes?.FIRSTNAME || '',
