@@ -3,22 +3,26 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { 
   Users, RefreshCw, Search, Filter, Download,
   TrendingUp, Star, Calendar, AlertCircle, UserPlus, X, ChevronUp,
-  ArrowUpDown, ArrowUp, ArrowDown
+  ArrowUpDown, ArrowUp, ArrowDown, ExternalLink, Eye, EyeOff
 } from 'lucide-react';
 import ContactDetailModal from './ContactDetailModal';
 
 const ContactCRM = () => {
   const [contacts, setContacts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed: Don't load on mount
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
   const [summary, setSummary] = useState(null);
   
-  const [searchQuery, setSearchQuery] = useState('');
+  // New: Dedicated search fields
+  const [searchLastName, setSearchLastName] = useState('');
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchOrganization, setSearchOrganization] = useState('');
+  const [hasSearched, setHasSearched] = useState(false);
+  
   const [filterType, setFilterType] = useState('all'); // all, hot-leads, webinar-attendees, cold-leads
   const [selectedContact, setSelectedContact] = useState(null);
   const [page, setPage] = useState(0);
-  const [emailLookup, setEmailLookup] = useState('');
   const [showNewContactModal, setShowNewContactModal] = useState(false);
   const [newContact, setNewContact] = useState({
     email: '',
@@ -31,54 +35,70 @@ const ContactCRM = () => {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [sortField, setSortField] = useState('name'); // name, email, organization, leadScore, lastChanged
   const [sortDirection, setSortDirection] = useState('asc'); // asc, desc
+  const [showBrevoPassword, setShowBrevoPassword] = useState(false);
   const topRef = useRef(null);
 
-  const loadContacts = useCallback(async () => {
+  // Load summary stats only (no contacts)
+  const loadSummary = useCallback(async () => {
+    try {
+      const res = await fetch('/.netlify/functions/getContacts?limit=0&summaryOnly=true');
+      const data = await res.json();
+      
+      if (data.success) {
+        setSummary(data.summary);
+      }
+    } catch (err) {
+      console.error('Failed to load summary:', err);
+    }
+  }, []);
+
+  // New: Search with dedicated fields
+  const handleSearch = useCallback(async () => {
+    // At least one field must be filled
+    if (!searchLastName.trim() && !searchEmail.trim() && !searchOrganization.trim()) {
+      alert('Please enter at least one search criteria (Last Name, Email, or Organization)');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
+      setHasSearched(true);
       
       const params = new URLSearchParams();
-      params.append('limit', '1000');
-      params.append('offset', page * 1000);
+      params.append('limit', '100'); // Limit search results
+      params.append('offset', page * 100);
       if (filterType !== 'all') params.append('filter', filterType);
-      if (searchQuery) params.append('search', searchQuery);
+      if (searchLastName.trim()) params.append('lastName', searchLastName.trim());
+      if (searchEmail.trim()) params.append('email', searchEmail.trim());
+      if (searchOrganization.trim()) params.append('organization', searchOrganization.trim());
       
       const res = await fetch(`/.netlify/functions/getContacts?${params}`);
       const data = await res.json();
       
       if (data.success) {
         setContacts(data.contacts || []);
-        setSummary(data.summary);
+        if (data.contacts.length === 0) {
+          setError('No contacts found matching your search criteria');
+        }
       } else {
-        setError(data.error || 'Failed to load contacts');
+        setError(data.error || 'Failed to search contacts');
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [filterType, searchQuery, page]);
+  }, [filterType, searchLastName, searchEmail, searchOrganization, page]);
 
-  const handleEmailLookup = async () => {
-    if (!emailLookup.trim() || !emailLookup.includes('@')) {
-      alert('Please enter a valid email address');
-      return;
-    }
-
-    try {
-      const res = await fetch(`/.netlify/functions/getContactDetail?email=${encodeURIComponent(emailLookup.trim())}`);
-      const data = await res.json();
-      
-      if (data.success && data.contact?.exists) {
-        setSelectedContact(data.contact);
-        setEmailLookup('');
-      } else {
-        alert(`Contact not found: ${emailLookup}`);
-      }
-    } catch (err) {
-      alert(`Error looking up contact: ${err.message}`);
-    }
+  const clearSearch = () => {
+    setSearchLastName('');
+    setSearchEmail('');
+    setSearchOrganization('');
+    setContacts([]);
+    setHasSearched(false);
+    setError(null);
+    setPage(0);
   };
 
   const handleCreateContact = async () => {
@@ -100,7 +120,7 @@ const ContactCRM = () => {
         alert(`✅ Contact created: ${newContact.email}`);
         setShowNewContactModal(false);
         setNewContact({ email: '', firstName: '', lastName: '', organization: '', phone: '', jobTitle: '' });
-        loadContacts(); // Refresh list
+        loadSummary(); // Refresh summary
       } else {
         alert(data.error || 'Failed to create contact');
       }
@@ -109,9 +129,10 @@ const ContactCRM = () => {
     }
   };
 
+  // Load summary stats on mount
   useEffect(() => {
-    loadContacts();
-  }, [loadContacts]);
+    loadSummary();
+  }, [loadSummary]);
 
   // Scroll to top when page changes
   useEffect(() => {
@@ -211,7 +232,7 @@ const ContactCRM = () => {
       
       if (data.success) {
         alert(`✅ Sync complete!\n\nCreated: ${data.created}\nUpdated: ${data.updated}\nErrors: ${data.errors}`);
-        loadContacts();
+        loadSummary(); // Refresh summary
       } else {
         alert(`❌ Sync failed: ${data.error}`);
       }
@@ -408,47 +429,119 @@ const ContactCRM = () => {
         </div>
       )}
 
-      {/* Direct Email Lookup */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg shadow border border-blue-200">
-        <div className="flex gap-2 items-center">
-          <div className="flex-1">
-            <label className="block text-xs font-semibold text-blue-900 mb-1">
-              📧 Direct Contact Lookup (for contacts beyond first 1,000)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                value={emailLookup}
-                onChange={(e) => setEmailLookup(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleEmailLookup()}
-                placeholder="Enter email address to find any contact..."
-                className="flex-1 px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <button
-                onClick={handleEmailLookup}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              >
-                Find Contact
-              </button>
+      {/* Brevo Login Section */}
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-5 rounded-lg shadow border-2 border-purple-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-purple-900 flex items-center gap-2 mb-2">
+              <ExternalLink size={20} />
+              Brevo Login
+            </h3>
+            <p className="text-sm text-purple-700 mb-3">
+              For comprehensive contact management, log in to Brevo directly
+            </p>
+            <div className="bg-white p-3 rounded border border-purple-200 space-y-1">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-gray-700 min-w-[80px]">Username:</span>
+                <code className="bg-gray-100 px-2 py-1 rounded text-gray-900">chris@mymentalarmor.com</code>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-gray-700 min-w-[80px]">Password:</span>
+                <div className="flex items-center gap-2">
+                  <code className="bg-gray-100 px-2 py-1 rounded text-gray-900">
+                    {showBrevoPassword ? 'TechWerks1!!' : '••••••••••••'}
+                  </code>
+                  <button
+                    onClick={() => setShowBrevoPassword(!showBrevoPassword)}
+                    className="text-purple-600 hover:text-purple-800"
+                  >
+                    {showBrevoPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+          <a
+            href="https://app.brevo.com/contacts/list"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+          >
+            <ExternalLink size={20} />
+            Open Brevo
+          </a>
         </div>
       </div>
 
-      {/* Search and Filters */}
-      <div className="bg-white p-4 rounded-lg shadow">
-        <div className="flex flex-wrap gap-3 items-center">
-          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-            <Search size={18} className="text-gray-600" />
+      {/* Dedicated Search Fields */}
+      <div className="bg-white p-5 rounded-lg shadow">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Search size={20} className="text-blue-600" />
+            Contact Search
+          </h3>
+          {hasSearched && (
+            <button
+              onClick={clearSearch}
+              className="text-sm text-gray-600 hover:text-gray-900 underline"
+            >
+              Clear Search
+            </button>
+          )}
+        </div>
+
+        <p className="text-sm text-gray-600 mb-4">
+          Search the entire database by Last Name, Email, or Organization. Enter at least one field to search.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Last Name</label>
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, email, or organization..."
-              className="flex-1 px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={searchLastName}
+              onChange={(e) => setSearchLastName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g., Smith"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+            <input
+              type="email"
+              value={searchEmail}
+              onChange={(e) => setSearchEmail(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g., john@example.com"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Organization</label>
+            <input
+              type="text"
+              value={searchOrganization}
+              onChange={(e) => setSearchOrganization(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              placeholder="e.g., Acme Corp"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-semibold"
+          >
+            <Search size={18} />
+            {loading ? 'Searching...' : 'Search Contacts'}
+          </button>
+
           <div className="flex items-center gap-2">
             <Filter size={18} className="text-gray-600" />
             <select
@@ -463,22 +556,45 @@ const ContactCRM = () => {
             </select>
           </div>
 
-          <span className="text-sm text-gray-600">
-            Showing {contacts.length} of {summary?.totalContacts || 0}
-          </span>
-
-          {/* Sort Indicator */}
-          <div className="flex items-center gap-2 text-sm text-gray-600 bg-blue-50 px-3 py-1 rounded">
-            <ArrowUpDown size={16} className="text-blue-600" />
-            <span>
-              Sorted by: <strong className="text-blue-800">{sortField.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</strong>
-              {sortDirection === 'asc' ? ' ↑' : ' ↓'}
+          {hasSearched && (
+            <span className="text-sm text-gray-600">
+              Found {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
             </span>
-          </div>
+          )}
         </div>
+      </div>
 
-        {/* Pagination */}
-        {summary && summary.totalContacts > 1000 && (() => {
+      {/* Results Info */}
+      {hasSearched && !loading && !error && contacts.length > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <p className="text-sm text-green-900">
+            ✅ Search complete. Showing {contacts.length} matching contact{contacts.length !== 1 ? 's' : ''}. Click any row to view details, add notes, or update information.
+          </p>
+        </div>
+      )}
+
+      {/* No Search Yet */}
+      {!hasSearched && !loading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+          <p className="text-blue-900 font-medium">
+            👆 Enter search criteria above to find contacts
+          </p>
+          <p className="text-sm text-blue-700 mt-1">
+            Search by Last Name, Email, or Organization to view and manage contact details
+          </p>
+        </div>
+      )}
+
+      {/* Contact List */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
+
+      {hasSearched && contacts.length > 0 && (() => {
+        const hideUnused = true; // Remove pagination for now
+        if (hideUnused) return null;
           const totalPages = Math.ceil(summary.totalContacts / 1000);
           const currentPage = page + 1;
           
@@ -569,14 +685,8 @@ const ContactCRM = () => {
             </div>
           );
         })()}
-      </div>
 
-      {/* Contact List */}
-      {error ? (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      ) : (
+        {/* Table display */}
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -739,7 +849,7 @@ const ContactCRM = () => {
             </table>
           </div>
         </div>
-      )}
+      }
 
       {/* Contact Detail Modal */}
       {selectedContact && (
@@ -747,7 +857,7 @@ const ContactCRM = () => {
           contact={selectedContact}
           isOpen={!!selectedContact}
           onClose={() => setSelectedContact(null)}
-          onUpdate={loadContacts}
+          onUpdate={loadSummary}
         />
       )}
 
