@@ -200,24 +200,45 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     }
     
     // Build Brevo API URL with optional filtering
-    let url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}`;
+    let url;
     
-    // If segment/list ID provided, use it
-    // Note: Both lists and segments work with listIds parameter in Brevo API
+    // Segments use a different API endpoint than lists
     if (segmentId) {
-      url += `&listIds=${segmentId}`;
-      console.log('[Contacts] Fetching contacts from list/segment ID:', segmentId);
+      // Try segment-specific endpoint first
+      url = `https://api.brevo.com/v3/contacts/segments/${segmentId}/contacts?limit=${fetchLimit}&offset=${offset}`;
+      console.log('[Contacts] Fetching contacts from segment ID:', segmentId, 'using segment-specific endpoint');
+    } else {
+      url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}`;
     }
     
     // Note: Brevo's contact filtering is limited. We'll handle most filtering client-side,
     // but we can use modifiedSince or listIds if needed for performance
     
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       headers: {
         'accept': 'application/json',
         'api-key': BREVO_API_KEY
       }
     });
+    
+    // If segment endpoint fails, fall back to listIds filter
+    if (!res.ok && segmentId) {
+      console.log('[Contacts] Segment endpoint failed with', res.status, '- trying listIds fallback');
+      url = `https://api.brevo.com/v3/contacts?limit=${fetchLimit}&offset=${offset}&listIds=${segmentId}`;
+      res = await fetch(url, {
+        headers: {
+          'accept': 'application/json',
+          'api-key': BREVO_API_KEY
+        }
+      });
+      
+      if (!res.ok) {
+        console.error('[Contacts] Both segment endpoints failed:', res.status);
+        return { contacts: [], count: 0, filteredCount: 0 };
+      }
+      
+      console.log('[Contacts] Fallback (listIds) succeeded');
+    }
 
     if (!res.ok) {
       console.error('[Contacts] Brevo API error:', res.status);
