@@ -4,6 +4,7 @@ import { Share2, RefreshCw, Download, Filter, Plus, Calendar, CheckCircle2, Cloc
 import { fetchSocialMediaContent, publishSocialPost } from '../services/socialMediaService';
 import { fetchReminders } from '../services/reminderService';
 import PostComposerModal from './PostComposerModal';
+import AIContentAssistant from './AIContentAssistant';
 
 const badgeForStatus = (s) => {
   const v = String(s || '').toLowerCase();
@@ -110,6 +111,18 @@ const SocialMediaOperations = () => {
     a.click(); URL.revokeObjectURL(url);
   }, [filtered]);
 
+  const handleUseAISuggestion = useCallback((suggestion) => {
+    // Pre-fill the post composer with AI suggestion
+    setPostToEdit({
+      title: suggestion.title,
+      content: suggestion.linkedinPost, // Default to LinkedIn version
+      platforms: 'LinkedIn,Facebook,Blog', // Default platforms
+      contentType: 'ai-generated',
+      aiSuggestion: suggestion // Store full suggestion for reference
+    });
+    setComposerOpen(true);
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -138,6 +151,9 @@ const SocialMediaOperations = () => {
           </button>
         </div>
       </div>
+
+      {/* AI Content Assistant */}
+      <AIContentAssistant onUseSuggestion={handleUseAISuggestion} />
 
       {/* KPI cards - clickable to filter */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">

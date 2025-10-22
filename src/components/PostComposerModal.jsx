@@ -72,6 +72,7 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
       if (initialPost.contentType === 'webinar-1week') autoPurpose = 'webinar-1week';
       if (initialPost.contentType === 'webinar-1day') autoPurpose = 'webinar-1day';
       if (initialPost.contentType === 'webinar-1hour') autoPurpose = 'webinar-1hour';
+      if (initialPost.contentType === 'ai-generated') autoPurpose = 'general';
       
       setFormData({
         title: initialPost.title || '',
@@ -408,7 +409,11 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
             </h2>
             {initialPost && (
               <p className="text-sm text-blue-600 mt-1">
-                ✨ Content loaded from past post - customize and republish
+                {initialPost.contentType === 'ai-generated' ? (
+                  <>🤖 AI-generated content - review and customize before posting</>
+                ) : (
+                  <>✨ Content loaded from past post - customize and republish</>
+                )}
               </p>
             )}
           </div>
@@ -541,6 +546,74 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
 
                   <div className="mt-3 text-xs text-purple-700 bg-purple-100 p-2 rounded">
                     <strong>💡 Pro Tips:</strong> Include registration link, use eye-catching images, tag relevant Mental Armor skills, schedule posts for optimal engagement times
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI-Generated Content Helper */}
+          {initialPost?.contentType === 'ai-generated' && initialPost?.aiSuggestion && (
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">🤖</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-purple-900 mb-2">
+                    AI Content Suggestions
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {/* Platform-specific versions */}
+                    <div className="bg-white p-3 rounded border border-purple-200">
+                      <div className="font-medium text-purple-900 mb-2">📱 Platform Versions</div>
+                      <div className="space-y-2 text-sm">
+                        <div>
+                          <strong className="text-blue-700">LinkedIn:</strong>
+                          <p className="text-gray-700 mt-1">{initialPost.aiSuggestion.linkedinPost}</p>
+                        </div>
+                        <div>
+                          <strong className="text-blue-700">Facebook:</strong>
+                          <p className="text-gray-700 mt-1">{initialPost.aiSuggestion.facebookPost}</p>
+                        </div>
+                        <div>
+                          <strong className="text-green-700">Blog:</strong>
+                          <p className="text-gray-700 mt-1 line-clamp-2">{initialPost.aiSuggestion.blogPost}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Hashtags */}
+                    {initialPost.aiSuggestion.hashtags && initialPost.aiSuggestion.hashtags.length > 0 && (
+                      <div className="bg-white p-3 rounded border border-purple-200">
+                        <div className="font-medium text-purple-900 mb-2">🏷️ Suggested Hashtags</div>
+                        <div className="flex flex-wrap gap-1">
+                          {initialPost.aiSuggestion.hashtags.map((tag, index) => (
+                            <span key={index} className="bg-purple-100 text-purple-800 px-2 py-1 rounded text-xs">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Image Suggestion */}
+                    {initialPost.aiSuggestion.imageSuggestion && (
+                      <div className="bg-white p-3 rounded border border-purple-200">
+                        <div className="font-medium text-purple-900 mb-2">🖼️ Image Suggestion</div>
+                        <div className="text-sm text-gray-700 space-y-1">
+                          <p><strong>Type:</strong> {initialPost.aiSuggestion.imageSuggestion.type}</p>
+                          <p><strong>Description:</strong> {initialPost.aiSuggestion.imageSuggestion.description}</p>
+                          <p><strong>Mood:</strong> {initialPost.aiSuggestion.imageSuggestion.mood}</p>
+                          {initialPost.aiSuggestion.imageSuggestion.searchTerms && (
+                            <p><strong>Search Terms:</strong> {initialPost.aiSuggestion.imageSuggestion.searchTerms}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-3 text-xs text-purple-700 bg-purple-100 p-2 rounded">
+                    <strong>💡 Pro Tips:</strong> Review all platform versions, customize hashtags for your audience, find matching images using suggested search terms, adjust tone as needed
                   </div>
                 </div>
               </div>
