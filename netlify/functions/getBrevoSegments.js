@@ -31,6 +31,8 @@ exports.handler = async (event) => {
 
     const listsData = await listsRes.json();
     
+    console.log('[GetSegments] Lists data sample:', listsData.lists?.[0]);
+    
     // Also fetch segments (different from lists in Brevo)
     const segmentsRes = await fetch('https://api.brevo.com/v3/contacts/segments?limit=50', {
       headers: {
@@ -42,6 +44,12 @@ exports.handler = async (event) => {
     let segmentsData = { segments: [] };
     if (segmentsRes.ok) {
       segmentsData = await segmentsRes.json();
+      console.log('[GetSegments] Segments raw response:', JSON.stringify(segmentsData, null, 2));
+      if (segmentsData.segments && segmentsData.segments.length > 0) {
+        console.log('[GetSegments] First segment keys:', Object.keys(segmentsData.segments[0]));
+      }
+    } else {
+      console.log('[GetSegments] Segments API returned:', segmentsRes.status);
     }
     
     // Combine lists and segments, exclude DATABASE MASTER (it's the full list)
@@ -54,8 +62,9 @@ exports.handler = async (event) => {
       })),
       ...(segmentsData.segments || []).map(seg => ({
         id: seg.id,
-        name: seg.name,
-        totalContacts: seg.categoryCount || 0,
+        name: seg.segment_name || seg.name || `Segment ${seg.id}`,
+        // Segments are dynamic, count calculated on query
+        totalContacts: seg.count_total || seg.categoryCount || seg.count || 0,
         type: 'segment'
       }))
     ];
