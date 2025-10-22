@@ -199,14 +199,18 @@ exports.handler = async (event) => {
     console.log('[GenerateWeeklyContent] Starting generation for:', dayType);
 
     // Get recent posts for context
+    console.log('[GenerateWeeklyContent] Getting recent posts...');
     const recentPosts = await getRecentPosts();
     console.log('[GenerateWeeklyContent] Retrieved', recentPosts.length, 'recent posts');
 
     // Generate content based on day type
+    console.log('[GenerateWeeklyContent] Generating content...');
     let suggestions;
     if (dayType === 'custom' && customPrompt && customPrompt.trim()) {
+      console.log('[GenerateWeeklyContent] Using custom content generation');
       suggestions = await generateCustomContent(customPrompt, recentPosts);
     } else {
+      console.log('[GenerateWeeklyContent] Using day-specific content generation');
       suggestions = await generateDaySpecificContent(dayType, recentPosts);
     }
 
