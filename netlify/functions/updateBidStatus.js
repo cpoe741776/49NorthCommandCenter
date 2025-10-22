@@ -149,6 +149,14 @@ exports.handler = async (event) => {
         singleStatus === 'system-admin' ? 'System Administration' :
         'updated';
       
+      // Clear the getBids cache so changes are reflected immediately
+      try {
+        const { clearBidsCache } = require('./getBids');
+        if (clearBidsCache) clearBidsCache();
+      } catch (e) {
+        console.warn('[UpdateBidStatus] Could not clear cache:', e.message);
+      }
+      
       return { ok: true, message: `Bid moved to ${statusMessage}` };
     }
 
@@ -164,6 +172,17 @@ exports.handler = async (event) => {
         }
       }
       const okCount = results.filter(r => r.ok).length;
+      
+      // Clear cache if any updates succeeded
+      if (okCount > 0) {
+        try {
+          const { clearBidsCache } = require('./getBids');
+          if (clearBidsCache) clearBidsCache();
+        } catch (e) {
+          console.warn('[UpdateBidStatus] Could not clear cache after batch:', e.message);
+        }
+      }
+      
       return { statusCode: 200, headers, body: JSON.stringify({ success: true, ok: okCount, total: results.length, results }) };
     }
 

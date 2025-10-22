@@ -19,6 +19,14 @@ function makeEtag(payload) {
   return `W/"${hash}"`;
 }
 
+// Export cache clearing function for use by other functions
+function clearBidsCache() {
+  cache = { ts: 0, etag: '', payload: null };
+  console.log('[getBids] Cache cleared');
+}
+
+exports.clearBidsCache = clearBidsCache;
+
 exports.handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
