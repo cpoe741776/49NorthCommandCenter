@@ -176,10 +176,14 @@ exports.handler = async (event) => {
 
     console.log('[GenerateWeeklyContent] Parsing body...');
     console.log('[GenerateWeeklyContent] Raw body:', event.body);
-    const body = safeJson(event.body);
+    const [body, parseError] = safeJson(event.body);
+    if (parseError) {
+      console.log('[GenerateWeeklyContent] JSON parse error:', parseError);
+      return bad(headers, 'Invalid JSON body: ' + parseError.message);
+    }
     if (!body) {
-      console.log('[GenerateWeeklyContent] Invalid JSON body');
-      return bad(headers, 'Invalid JSON body');
+      console.log('[GenerateWeeklyContent] Empty body');
+      return bad(headers, 'Empty request body');
     }
 
     console.log('[GenerateWeeklyContent] Body parsed:', JSON.stringify(body, null, 2));
