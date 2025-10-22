@@ -25,11 +25,16 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
     setSuggestions(null);
 
     try {
+      const appToken = localStorage.getItem('appToken');
+      if (!appToken) {
+        throw new Error('Please log in to use AI content generation');
+      }
+
       const response = await fetch('/.netlify/functions/generateWeeklyContent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-App-Token': localStorage.getItem('appToken')
+          'X-App-Token': appToken
         },
         body: JSON.stringify({
           dayType,
