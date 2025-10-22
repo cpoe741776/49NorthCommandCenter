@@ -67,7 +67,12 @@ exports.handler = async (event) => {
       return ok(headers, { ...cache, cached: true });
     }
 
-    console.log('[Contacts] Fetching fresh data...');
+    console.log('[Contacts] Fetching fresh data with params:', {
+      limit, offset, filter, 
+      searchFirstName, searchLastName, searchEmail, 
+      searchOrganization, searchState, searchCountry,
+      segmentId
+    });
 
     // Fetch contacts from Brevo (with optional filtering, search, and segment)
     const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, segmentId);
@@ -257,6 +262,10 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     
     // Apply field-specific search filtering
     if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry) {
+      const beforeFilterCount = contacts.length;
+      console.log('[Contacts] Before filtering:', beforeFilterCount, 'contacts');
+      console.log('[Contacts] Search criteria:', { searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry });
+      
       contacts = contacts.filter(c => {
         let matches = true;
         
