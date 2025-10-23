@@ -182,49 +182,35 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
                   </button>
                 </div>
 
-                {/* Platform Versions */}
-                <div className="space-y-3">
-                  {/* LinkedIn */}
-                  <div className="bg-blue-50 rounded p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-blue-900">LinkedIn</span>
-                      <button
-                        onClick={() => handleCopyToClipboard(suggestion.linkedinPost, `linkedin-${suggestion.id}`)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        {copiedId === `linkedin-${suggestion.id}` ? <Check size={16} /> : <Copy size={16} />}
-                      </button>
-                    </div>
-                    <p className="text-sm text-blue-800">{suggestion.linkedinPost}</p>
+                {/* Suggested Post Content */}
+                <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg p-4 border-2 border-purple-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-semibold text-purple-900">
+                      📝 Suggested Post for: {getDayTypeLabel(dayType)}
+                    </span>
+                    <button
+                      onClick={() => handleCopyToClipboard(suggestion.content || suggestion.linkedinPost, `content-${suggestion.id}`)}
+                      className="text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                    >
+                      {copiedId === `content-${suggestion.id}` ? (
+                        <>
+                          <Check size={16} />
+                          <span className="text-xs">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={16} />
+                          <span className="text-xs">Copy</span>
+                        </>
+                      )}
+                    </button>
                   </div>
-
-                  {/* Facebook */}
-                  <div className="bg-blue-50 rounded p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-blue-900">Facebook</span>
-                      <button
-                        onClick={() => handleCopyToClipboard(suggestion.facebookPost, `facebook-${suggestion.id}`)}
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        {copiedId === `facebook-${suggestion.id}` ? <Check size={16} /> : <Copy size={16} />}
-                      </button>
-                    </div>
-                    <p className="text-sm text-blue-800">{suggestion.facebookPost}</p>
+                  <div className="bg-white rounded p-3 text-sm text-gray-800 whitespace-pre-wrap border border-purple-100">
+                    {suggestion.content || suggestion.linkedinPost}
                   </div>
-
-                  {/* Blog */}
-                  <div className="bg-green-50 rounded p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold text-green-900">Blog</span>
-                      <button
-                        onClick={() => handleCopyToClipboard(suggestion.blogPost, `blog-${suggestion.id}`)}
-                        className="text-green-600 hover:text-green-800"
-                      >
-                        {copiedId === `blog-${suggestion.id}` ? <Check size={16} /> : <Copy size={16} />}
-                      </button>
-                    </div>
-                    <p className="text-sm text-green-800 line-clamp-3">{suggestion.blogPost}</p>
-                  </div>
+                  <p className="text-xs text-purple-700 mt-2">
+                    💡 This content works for LinkedIn, Facebook, and Blog posts
+                  </p>
                 </div>
 
                 {/* Hashtags */}
