@@ -36,6 +36,28 @@ exports.handler = async (event) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // First, let's check what tabs are available
+    try {
+      const sheetInfo = await sheets.spreadsheets.get({
+        spreadsheetId: SHEET_ID,
+      });
+      
+      const sheetNames = sheetInfo.data.sheets?.map(sheet => sheet.properties?.title) || [];
+      console.log('[MentalArmorSkills] Available tabs:', sheetNames);
+      
+      if (!sheetNames.includes('MentalArmorSkills')) {
+        console.log('[MentalArmorSkills] MentalArmorSkills tab not found. Available tabs:', sheetNames);
+        return ok(headers, { 
+          success: false, 
+          error: 'MentalArmorSkills tab not found',
+          availableTabs: sheetNames,
+          message: `Please create a tab named "MentalArmorSkills" with headers: SkillTitle, Benefits, When, How, Researcher, ResearchBullet, Goal`
+        });
+      }
+    } catch (err) {
+      console.error('[MentalArmorSkills] Error checking sheet info:', err.message);
+    }
+
     // Fetch skills from MentalArmorSkills tab
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,

@@ -34,6 +34,9 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
           console.log('[AIContentAssistant] Loaded', data.skills.length, 'Mental Armor skills');
         } else {
           console.warn('[AIContentAssistant] Failed to load skills:', data.error);
+          if (data.availableTabs) {
+            console.log('[AIContentAssistant] Available tabs:', data.availableTabs);
+          }
           // Fallback to empty array
           setMentalArmorSkills([]);
         }
