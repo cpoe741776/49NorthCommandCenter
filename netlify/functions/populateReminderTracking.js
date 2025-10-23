@@ -47,6 +47,9 @@ exports.handler = async (event) => {
       }));
 
     console.log('[PopulateReminderTracking] Found', upcomingWebinars.length, 'upcoming webinars');
+    upcomingWebinars.forEach(w => {
+      console.log(`[PopulateReminderTracking] Webinar: "${w.title}" (ID: ${w.id}) on ${w.date}`);
+    });
 
     // Fetch existing reminder tracking entries
     const existingRes = await sheets.spreadsheets.values.get({
