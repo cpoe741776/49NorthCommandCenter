@@ -168,14 +168,14 @@ exports.handler = async (event) => {
     }
 
     console.log('[GenerateWeeklyContent] Step 2: Extracting parameters...');
-    const { dayType, customPrompt } = body;
+    const { dayType, selectedSkill, customPrompt } = body;
 
     if (!dayType) {
       console.log('[GenerateWeeklyContent] Missing dayType');
       return bad(headers, 'dayType is required');
     }
 
-    console.log('[GenerateWeeklyContent] Step 3: dayType =', dayType, 'customPrompt =', customPrompt ? 'provided' : 'null');
+    console.log('[GenerateWeeklyContent] Step 3: dayType =', dayType, 'selectedSkill =', selectedSkill || 'random', 'customPrompt =', customPrompt ? 'provided' : 'null');
 
     console.log('[GenerateWeeklyContent] Step 4: Getting recent posts from Google Sheets...');
     const recentPosts = await getRecentPosts();
@@ -189,7 +189,7 @@ exports.handler = async (event) => {
       suggestions = await generateCustomContent(customPrompt, recentPosts);
     } else {
       console.log('[GenerateWeeklyContent] Using day-specific content generation');
-      suggestions = await generateDaySpecificContent(dayType, recentPosts);
+      suggestions = await generateDaySpecificContent(dayType, recentPosts, selectedSkill);
     }
 
     console.log('[GenerateWeeklyContent] Step 7: Generated', suggestions.length, 'suggestion(s)');
@@ -258,10 +258,17 @@ async function getRecentPosts() {
   }
 }
 
-async function generateDaySpecificContent(dayType, recentPosts) {
+async function generateDaySpecificContent(dayType, recentPosts, selectedSkill = null) {
   const skillNames = Object.keys(MENTAL_ARMOR_SKILLS);
-  const randomSkill = skillNames[Math.floor(Math.random() * skillNames.length)];
-  const skill = MENTAL_ARMOR_SKILLS[randomSkill];
+  
+  // Use selected skill if provided, otherwise pick random
+  const skillToUse = selectedSkill && MENTAL_ARMOR_SKILLS[selectedSkill] 
+    ? selectedSkill 
+    : skillNames[Math.floor(Math.random() * skillNames.length)];
+  
+  const skill = MENTAL_ARMOR_SKILLS[skillToUse];
+  
+  console.log('[GenerateWeeklyContent] Using skill:', skillToUse, selectedSkill ? '(user selected)' : '(random)');
 
   let systemPrompt, userPrompt;
 
@@ -269,7 +276,7 @@ async function generateDaySpecificContent(dayType, recentPosts) {
     case 'monday':
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC, specializing in resilience training and mental strength development. Generate 1 social media post suggestion for Monday - Resilience Skill Spotlight day.`;
       
-      userPrompt = `Create 1 high-quality post suggestion for Monday's resilience skill spotlight. Focus on the skill: "${randomSkill}".
+      userPrompt = `Create 1 high-quality post suggestion for Monday's resilience skill spotlight. Focus on the skill: "${skillToUse}".
 
 SKILL DETAILS:
 - Goal: ${skill.goal}

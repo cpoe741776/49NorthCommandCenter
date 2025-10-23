@@ -6,6 +6,7 @@ import { Sparkles, Loader2, Copy, Check, Calendar, MessageSquare, Target, Lightb
 
 const AIContentAssistant = ({ onUseSuggestion }) => {
   const [dayType, setDayType] = useState('monday');
+  const [selectedSkill, setSelectedSkill] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [suggestions, setSuggestions] = useState(null);
@@ -17,6 +18,26 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
     { value: 'wednesday', label: 'Wednesday - Follow-Up & Deeper Dive', icon: MessageSquare },
     { value: 'friday', label: 'Friday - Call to Action', icon: Target },
     { value: 'custom', label: 'Custom Theme...', icon: Calendar }
+  ];
+
+  // Mental Armor Skills (matches backend)
+  const mentalArmorSkills = [
+    'Foundations of Resilience',
+    'Flex Your Strengths',
+    'Values Based Living',
+    'Growth Mindset',
+    'Optimism',
+    'Self-Efficacy',
+    'Problem Solving',
+    'Flexible Thinking',
+    'Cognitive Reframing',
+    'Realistic Outlook',
+    'Self-Awareness',
+    'Self-Regulation',
+    'Assertive Communication',
+    'Active-Constructive Responding',
+    'Empathic Listening',
+    'Conflict Resolution'
   ];
 
   const handleGenerate = async () => {
@@ -38,6 +59,7 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
         },
         body: JSON.stringify({
           dayType,
+          selectedSkill: dayType === 'monday' && selectedSkill ? selectedSkill : null,
           customPrompt: dayType === 'custom' ? customPrompt : null
         })
       });
@@ -118,6 +140,30 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
             })}
           </div>
         </div>
+
+        {/* Skill Selector for Monday */}
+        {dayType === 'monday' && (
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              💪 Skill to Focus On This Week
+            </label>
+            <select
+              value={selectedSkill}
+              onChange={(e) => setSelectedSkill(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+            >
+              <option value="">🎲 Random Skill (Let AI Choose)</option>
+              {mentalArmorSkills.map((skill) => (
+                <option key={skill} value={skill}>
+                  {skill}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-600 mt-1">
+              Choose a specific skill or leave blank for AI to pick randomly
+            </p>
+          </div>
+        )}
 
         {/* Custom Prompt Input */}
         {dayType === 'custom' && (
