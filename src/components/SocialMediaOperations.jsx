@@ -115,7 +115,7 @@ const SocialMediaOperations = () => {
     // Pre-fill the post composer with AI suggestion
     setPostToEdit({
       title: suggestion.title,
-      content: suggestion.linkedinPost, // Default to LinkedIn version
+      body: suggestion.content, // Use the unified content field
       platforms: 'LinkedIn,Facebook,Blog', // Default platforms
       contentType: 'ai-generated',
       aiSuggestion: suggestion // Store full suggestion for reference

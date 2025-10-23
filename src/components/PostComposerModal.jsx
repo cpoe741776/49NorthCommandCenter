@@ -563,25 +563,6 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
                   </h3>
                   
                   <div className="space-y-3">
-                    {/* Platform-specific versions */}
-                    <div className="bg-white p-3 rounded border border-purple-200">
-                      <div className="font-medium text-purple-900 mb-2">📱 Platform Versions</div>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <strong className="text-blue-700">LinkedIn:</strong>
-                          <p className="text-gray-700 mt-1">{initialPost.aiSuggestion.linkedinPost}</p>
-                        </div>
-                        <div>
-                          <strong className="text-blue-700">Facebook:</strong>
-                          <p className="text-gray-700 mt-1">{initialPost.aiSuggestion.facebookPost}</p>
-                        </div>
-                        <div>
-                          <strong className="text-green-700">Blog:</strong>
-                          <p className="text-gray-700 mt-1 line-clamp-2">{initialPost.aiSuggestion.blogPost}</p>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Hashtags */}
                     {initialPost.aiSuggestion.hashtags && initialPost.aiSuggestion.hashtags.length > 0 && (
                       <div className="bg-white p-3 rounded border border-purple-200">
@@ -613,7 +594,7 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
                   </div>
 
                   <div className="mt-3 text-xs text-purple-700 bg-purple-100 p-2 rounded">
-                    <strong>💡 Pro Tips:</strong> Review all platform versions, customize hashtags for your audience, find matching images using suggested search terms, adjust tone as needed
+                    <strong>💡 Pro Tips:</strong> Content is optimized for all platforms. Customize hashtags for your audience, find matching images using suggested search terms, adjust tone as needed
                   </div>
                 </div>
               </div>

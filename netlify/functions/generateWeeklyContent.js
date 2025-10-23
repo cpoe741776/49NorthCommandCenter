@@ -292,7 +292,7 @@ ${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0,
 
 REQUIREMENTS:
 1. START with an engaging QUESTION that targets organizational leaders
-2. Keep post SHORT (150-250 words max - LinkedIn ideal length)
+2. Keep post SHORT (200-280 characters max - LinkedIn optimal length)
 3. Provide 2-3 SPECIFIC, ACTIONABLE tips for teams/organizations
 4. Focus on workplace/team applications (not individual self-help)
 5. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
@@ -307,7 +307,7 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
     "imageSuggestion": {"type": "Photo", "description": "Brief description", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 object (150-250 words total).`;
+Provide 1 object (200-280 characters total).`;
 
       break;
 
@@ -322,7 +322,7 @@ ${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.inc
 REQUIREMENTS:
 1. START with a QUESTION related to Monday's post
 2. QUOTE or REFERENCE a specific phrase from Monday's post above
-3. Keep post SHORT (150-250 words max)
+3. Keep post SHORT (200-280 characters max)
 4. Provide 2-3 actionable tips for teams to apply Monday's concept
 5. Target organizational leaders/teams (not individuals)
 6. End with CTA to www.mymentalarmor.com
@@ -337,7 +337,7 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
     "imageSuggestion": {"type": "Photo", "description": "Brief", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 object (150-250 words).`;
+Provide 1 object (200-280 characters).`;
 
       break;
 
@@ -353,7 +353,7 @@ Wednesday: ${recentPosts.find(post => post.purpose?.includes('wednesday'))?.body
 REQUIREMENTS:
 1. START with a QUESTION for organizational leaders
 2. REFERENCE both Monday + Wednesday themes briefly
-3. Keep post SHORT (150-250 words max)
+3. Keep post SHORT (200-280 characters max)
 4. Position 49 North as the solution for teams
 5. Strong CTA to www.mymentalarmor.com
 6. Include hashtags: ${COMPANY_INFO.hashtags.join(', ')}
@@ -367,7 +367,7 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
     "imageSuggestion": {"type": "Photo", "description": "Brief", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 object (150-250 words).`;
+Provide 1 object (200-280 characters).`;
 
       break;
 
@@ -393,7 +393,7 @@ ${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0,
 
 REQUIREMENTS:
 1. START with an engaging QUESTION for organizational leaders
-2. Keep post SHORT (150-250 words max)
+2. Keep post SHORT (200-280 characters max)
 3. Provide 2-3 actionable tips for teams/organizations
 4. Follow custom theme while targeting workplace applications
 5. Include hashtags: ${COMPANY_INFO.hashtags.join(', ')}
@@ -408,7 +408,7 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
     "imageSuggestion": {"type": "Photo", "description": "Brief", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 object (150-250 words).`;
+Provide 1 object (200-280 characters).`;
 
   return await callOpenAI(systemPrompt, userPrompt);
 }
