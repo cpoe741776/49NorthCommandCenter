@@ -44,7 +44,11 @@ exports.handler = async (event) => {
         title: r[1],
         date: r[2],
         time: r[3]
-      }));
+      }))
+      // Deduplicate by ID and date combination
+      .filter((webinar, index, array) => {
+        return array.findIndex(w => w.id === webinar.id && w.date === webinar.date) === index;
+      });
 
     console.log('[PopulateReminderTracking] Found', upcomingWebinars.length, 'upcoming webinars');
     upcomingWebinars.forEach(w => {
