@@ -10,10 +10,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ---- Config ----
 const CFG = {
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o',
+  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Faster, cheaper model
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '4000', 10),
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '30000', 10),
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '2500', 10), // Reduced for speed
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10), // 20s timeout
   
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
   SHEET_ID: process.env.GOOGLE_SHEET_ID,
@@ -427,15 +427,22 @@ Provide 3 such objects in the array.`;
 
 async function callOpenAI(systemPrompt, userPrompt) {
   try {
-    const completion = await openai.chat.completions.create({
-      model: CFG.OPENAI_MODEL,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: CFG.OPENAI_TEMPERATURE,
-      max_tokens: CFG.OPENAI_MAX_TOKENS,
-    });
+    console.log('[GenerateWeeklyContent] Calling OpenAI with model:', CFG.OPENAI_MODEL, 'max_tokens:', CFG.OPENAI_MAX_TOKENS);
+    
+    const completion = await Promise.race([
+      openai.chat.completions.create({
+        model: CFG.OPENAI_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: CFG.OPENAI_TEMPERATURE,
+        max_tokens: CFG.OPENAI_MAX_TOKENS,
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('OpenAI request timed out after 20s')), CFG.OPENAI_TIMEOUT_MS)
+      )
+    ]);
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
