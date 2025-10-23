@@ -360,7 +360,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
         </div>
         
         {/* Pending Reminders Card */}
-        {reminderSummary && ((reminderSummary.totalPending || 0) > 0 || (reminderSummary.overdueWebinarEmails || 0) > 0 || (reminderSummary.missingSocialPosts || []).length > 0 || (reminderSummary.totalWebinarReminders || 0) > 0) && (
+        {reminderSummary && ((reminderSummary.totalPending || 0) > 0 || (reminderSummary.overdueWebinarEmails || 0) > 0 || (reminderSummary.missingSocialPosts || []).length > 0 || (reminderSummary.totalWebinarReminders || 0) > 0 || (reminderSummary.upcomingSocialPosts || []).length > 0) && (
           <div
             onClick={() => onNavigate('social')}
             className={`p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow ${
@@ -368,13 +368,13 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 ? 'bg-yellow-50 border-2 border-yellow-400'
                 : 'bg-white'
             }`}
-            aria-label="View Reminders"
+            aria-label="View Webinar Social Reminders"
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Social Reminders</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {(reminderSummary.totalWebinarReminders || 0) + (reminderSummary.missingSocialPosts || []).length}
+                  {(reminderSummary.totalWebinarReminders || 0) + (reminderSummary.missingSocialPosts || []).length + (reminderSummary.upcomingSocialPosts || []).length}
                 </p>
                 {(reminderSummary.overdueWebinarEmails || 0) > 0 && (
                   <p className="text-xs text-red-600 mt-1">
@@ -394,6 +394,11 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                 {(reminderSummary.totalWebinarReminders || 0) > 0 && (
                   <p className="text-xs text-blue-600 mt-1">
                     {(reminderSummary.totalWebinarReminders || 0)} webinar reminder{(reminderSummary.totalWebinarReminders || 0) > 1 ? 's' : ''} pending
+                  </p>
+                )}
+                {(reminderSummary.upcomingSocialPosts || []).length > 0 && (
+                  <p className="text-xs text-green-600 mt-1">
+                    {(reminderSummary.upcomingSocialPosts || []).join(', ')} weekly post{(reminderSummary.upcomingSocialPosts || []).length > 1 ? 's' : ''} upcoming
                   </p>
                 )}
               </div>

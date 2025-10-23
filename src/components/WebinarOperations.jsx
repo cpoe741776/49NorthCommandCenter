@@ -357,7 +357,10 @@ const WebinarOperations = () => {
 
           {/* Webinar Reminder Summary Card */}
           {reminders && reminders.summary && (reminders.summary.totalWebinarReminders > 0 || reminders.summary.overdueWebinarEmails > 0 || reminders.summary.overdueWebinarSocialPosts > 0) && (
-            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+            <div 
+              className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500 cursor-pointer hover:shadow-lg transition-shadow"
+              onClick={() => window.location.hash = '#social'}
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Reminders</h3>
@@ -378,6 +381,7 @@ const WebinarOperations = () => {
                       </p>
                     )}
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">Click to create posts in Social Media Operations</p>
                 </div>
                 <Bell className="text-blue-600" size={40} />
               </div>
