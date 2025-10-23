@@ -265,7 +265,7 @@ async function getMentalArmorSkills() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'MentalArmorSkills!A:F', // SkillTitle, Benefits, When, How, Researcher, ResearchBullet
+      range: 'MentalArmorSkills!A:G', // SkillTitle, Benefits, When, How, Researcher, ResearchBullet, Goal
     });
 
     const rows = response.data.values || [];
@@ -278,13 +278,14 @@ async function getMentalArmorSkills() {
     // Skip header row, map to skills objects
     const skills = {};
     rows.slice(1).forEach((row) => {
-      const [skillTitle, benefits, when, how, researcher, researchBullet] = row;
+      const [skillTitle, benefits, when, how, researcher, researchBullet, goal] = row;
       
       if (skillTitle) {
         skills[skillTitle] = {
-          goal: when || '', // Use "When" field as goal
+          goal: goal || '', // Use Goal column
           benefits: benefits ? benefits.split(',').map(b => b.trim()) : [],
           module: how || '', // Use "How" field as module
+          when: when || '', // Keep "When" field
           researcher: researcher || '',
           researchBullet: researchBullet || ''
         };
@@ -324,6 +325,7 @@ async function generateDaySpecificContent(dayType, recentPosts, selectedSkill = 
 SKILL DETAILS:
 - Goal: ${skill.goal}
 - Benefits: ${skill.benefits.join(', ')}
+- When to Use: ${skill.when}
 - How to Use: ${skill.module}
 ${skill.researcher ? `- Research by: ${skill.researcher}` : ''}
 ${skill.researchBullet ? `- Research Insight: ${skill.researchBullet}` : ''}

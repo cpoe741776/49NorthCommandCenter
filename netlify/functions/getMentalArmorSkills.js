@@ -39,7 +39,7 @@ exports.handler = async (event) => {
     // Fetch skills from MentalArmorSkills tab
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
-      range: 'MentalArmorSkills!A:F', // SkillTitle, Benefits, When, How, Researcher, ResearchBullet
+      range: 'MentalArmorSkills!A:G', // SkillTitle, Benefits, When, How, Researcher, ResearchBullet, Goal
     });
 
     const rows = response.data.values || [];
@@ -56,7 +56,7 @@ exports.handler = async (event) => {
 
     // Skip header row, map to skills objects
     const skills = rows.slice(1).map((row, index) => {
-      const [skillTitle, benefits, when, how, researcher, researchBullet] = row;
+      const [skillTitle, benefits, when, how, researcher, researchBullet, goal] = row;
       
       return {
         id: index + 1,
@@ -65,7 +65,8 @@ exports.handler = async (event) => {
         when: when || '',
         how: how || '',
         researcher: researcher || '',
-        researchBullet: researchBullet || ''
+        researchBullet: researchBullet || '',
+        goal: goal || ''
       };
     }).filter(skill => skill.skillTitle); // Only include skills with titles
 
