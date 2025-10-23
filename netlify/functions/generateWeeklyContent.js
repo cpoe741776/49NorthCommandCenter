@@ -264,7 +264,7 @@ async function getMentalArmorSkills() {
     const sheets = google.sheets({ version: 'v4', auth });
 
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID,
+      spreadsheetId: CFG.SHEET_ID,
       range: 'MentalArmorSkills!A:G', // SkillTitle, Benefits, When, How, Researcher, ResearchBullet, Goal
     });
 
