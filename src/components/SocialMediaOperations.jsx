@@ -19,8 +19,44 @@ const SocialMediaOperations = () => {
   const [err, setErr] = useState(null);
   const [posts, setPosts] = useState([]);
   const [summary, setSummary] = useState({ totalPosts: 0, published: 0, scheduled: 0, drafts: 0 });
+  const [populatingReminders, setPopulatingReminders] = useState(false);
+
+  const populateReminderTracking = async () => {
+    setPopulatingReminders(true);
+    try {
+      const appToken = window.__APP_TOKEN;
+      if (!appToken) {
+        alert('Authentication required');
+        return;
+      }
+
+      const response = await fetch('/.netlify/functions/populateReminderTracking', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Token': appToken
+        }
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`Success! Added ${data.newEntriesAdded} reminder entries for ${data.webinarsProcessed.length} webinars.`);
+        load(); // Refresh the data
+      } else {
+        alert('Error: ' + (data.error || 'Failed to populate reminders'));
+      }
+    } catch (err) {
+      console.error('Error populating reminders:', err);
+      alert('Error populating reminders: ' + err.message);
+    } finally {
+      setPopulatingReminders(false);
+    }
+  };
+
+  // For reusing/editing posts
   const [composerOpen, setComposerOpen] = useState(false);
-  const [postToEdit, setPostToEdit] = useState(null); // For reusing/editing posts
+  const [postToEdit, setPostToEdit] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [weeklyReminders, setWeeklyReminders] = useState(null);
   const [webinarReminders, setWebinarReminders] = useState(null);
@@ -148,6 +184,21 @@ const SocialMediaOperations = () => {
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"
           >
             <Download size={18} /> Export CSV
+          </button>
+          <button
+            onClick={populateReminderTracking}
+            disabled={populatingReminders}
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors disabled:opacity-50"
+          >
+            {populatingReminders ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" /> Populating...
+              </>
+            ) : (
+              <>
+                <Calendar size={18} /> Setup Reminders
+              </>
+            )}
           </button>
         </div>
       </div>
