@@ -357,43 +357,72 @@ const WebinarOperations = () => {
 
           {/* Webinar Reminder Summary Card */}
           {reminders && reminders.summary && (reminders.summary.totalWebinarReminders > 0 || reminders.summary.overdueWebinarEmails > 0 || reminders.summary.overdueWebinarSocialPosts > 0) && (
-            <div 
-              className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500 cursor-pointer hover:shadow-lg transition-shadow"
-              onClick={() => window.location.hash = '#social'}
-            >
+            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Reminders</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Social Post Reminders</h3>
                   <div className="space-y-2">
-                    {reminders.summary.totalWebinarReminders > 0 && (
+                    {reminders.webinarReminders && reminders.webinarReminders.some(w => 
+                      w.socialReminders?.oneWeek?.status === 'pending' || 
+                      w.socialReminders?.oneDay?.status === 'pending' || 
+                      w.socialReminders?.oneHour?.status === 'pending'
+                    ) && (
                       <div className="text-sm text-blue-600">
-                        <p>📧 {reminders.summary.totalWebinarReminders} reminder{reminders.summary.totalWebinarReminders > 1 ? 's' : ''} pending</p>
-                        {reminders.webinarReminders && reminders.webinarReminders.length > 0 && (
-                          <div className="mt-1 space-y-1 text-xs text-gray-600">
-                            {reminders.webinarReminders.slice(0, 2).map((webinar, idx) => (
-                              <div key={idx}>
-                                • {webinar.webinarTitle.substring(0, 35)}... ({webinar.webinarDate})
+                        <p>📧 {reminders.webinarReminders.reduce((count, w) => {
+                          return count + 
+                            (w.socialReminders?.oneWeek?.status === 'pending' ? 1 : 0) +
+                            (w.socialReminders?.oneDay?.status === 'pending' ? 1 : 0) +
+                            (w.socialReminders?.oneHour?.status === 'pending' ? 1 : 0);
+                        }, 0)} social post reminder{reminders.webinarReminders.reduce((count, w) => {
+                          return count + 
+                            (w.socialReminders?.oneWeek?.status === 'pending' ? 1 : 0) +
+                            (w.socialReminders?.oneDay?.status === 'pending' ? 1 : 0) +
+                            (w.socialReminders?.oneHour?.status === 'pending' ? 1 : 0);
+                        }, 0) > 1 ? 's' : ''} pending</p>
+                        <div className="mt-1 space-y-1 text-xs text-gray-600">
+                          {reminders.webinarReminders.filter(w => 
+                            w.socialReminders?.oneWeek?.status === 'pending' || 
+                            w.socialReminders?.oneDay?.status === 'pending' || 
+                            w.socialReminders?.oneHour?.status === 'pending'
+                          ).map((webinar, idx) => (
+                            <div key={idx}>
+                              • {webinar.webinarTitle.substring(0, 35)}... ({webinar.webinarDate})
+                              <div className="ml-2 text-xs text-gray-500">
+                                {webinar.socialReminders?.oneWeek?.status === 'pending' && '• 1-week post '}
+                                {webinar.socialReminders?.oneDay?.status === 'pending' && '• 1-day post '}
+                                {webinar.socialReminders?.oneHour?.status === 'pending' && '• 1-hour post '}
                               </div>
-                            ))}
-                            {reminders.webinarReminders.length > 2 && (
-                              <div className="text-gray-500">+ {reminders.webinarReminders.length - 2} more webinars...</div>
-                            )}
-                          </div>
-                        )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
-                    {reminders.summary.overdueWebinarEmails > 0 && (
+                    {reminders.webinarReminders && reminders.webinarReminders.some(w => 
+                      w.socialReminders?.oneWeek?.status === 'overdue' || 
+                      w.socialReminders?.oneDay?.status === 'overdue' || 
+                      w.socialReminders?.oneHour?.status === 'overdue'
+                    ) && (
                       <p className="text-sm text-red-600">
-                        ⚠️ {reminders.summary.overdueWebinarEmails} email reminder{reminders.summary.overdueWebinarEmails > 1 ? 's' : ''} overdue
-                      </p>
-                    )}
-                    {reminders.summary.overdueWebinarSocialPosts > 0 && (
-                      <p className="text-sm text-purple-600">
-                        🎥 {reminders.summary.overdueWebinarSocialPosts} social post{reminders.summary.overdueWebinarSocialPosts > 1 ? 's' : ''} overdue
+                        ⚠️ {reminders.webinarReminders.reduce((count, w) => {
+                          return count + 
+                            (w.socialReminders?.oneWeek?.status === 'overdue' ? 1 : 0) +
+                            (w.socialReminders?.oneDay?.status === 'overdue' ? 1 : 0) +
+                            (w.socialReminders?.oneHour?.status === 'overdue' ? 1 : 0);
+                        }, 0)} social post reminder{reminders.webinarReminders.reduce((count, w) => {
+                          return count + 
+                            (w.socialReminders?.oneWeek?.status === 'overdue' ? 1 : 0) +
+                            (w.socialReminders?.oneDay?.status === 'overdue' ? 1 : 0) +
+                            (w.socialReminders?.oneHour?.status === 'overdue' ? 1 : 0);
+                        }, 0) > 1 ? 's' : ''} overdue
                       </p>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">Click to create posts in Social Media Operations</p>
+                  <button
+                    onClick={() => window.location.hash = '#social'}
+                    className="mt-3 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Create Posts Now →
+                  </button>
                 </div>
                 <Bell className="text-blue-600" size={40} />
               </div>

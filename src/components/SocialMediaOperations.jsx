@@ -353,6 +353,12 @@ const SocialMediaOperations = () => {
                   </p>
                 )}
               </div>
+              <button
+                onClick={() => setComposerOpen(true)}
+                className="mt-3 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Create Posts Now →
+              </button>
             </div>
             <AlertCircle className="text-blue-600" size={40} />
           </div>
