@@ -1,7 +1,7 @@
 // src/components/AIContentAssistant.jsx
 // AI-powered weekly content generation assistant
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, Loader2, Copy, Check, Calendar, MessageSquare, Target, Lightbulb } from 'lucide-react';
 
 const AIContentAssistant = ({ onUseSuggestion }) => {
@@ -12,6 +12,8 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
   const [suggestions, setSuggestions] = useState(null);
   const [error, setError] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [mentalArmorSkills, setMentalArmorSkills] = useState([]);
+  const [loadingSkills, setLoadingSkills] = useState(true);
 
   const dayTypeOptions = [
     { value: 'monday', label: 'Monday - Resilience Skill Spotlight', icon: Lightbulb },
@@ -20,25 +22,31 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
     { value: 'custom', label: 'Custom Theme...', icon: Calendar }
   ];
 
-  // Mental Armor Skills (matches backend)
-  const mentalArmorSkills = [
-    'Foundations of Resilience',
-    'Flex Your Strengths',
-    'Values Based Living',
-    'Growth Mindset',
-    'Optimism',
-    'Self-Efficacy',
-    'Problem Solving',
-    'Flexible Thinking',
-    'Cognitive Reframing',
-    'Realistic Outlook',
-    'Self-Awareness',
-    'Self-Regulation',
-    'Assertive Communication',
-    'Active-Constructive Responding',
-    'Empathic Listening',
-    'Conflict Resolution'
-  ];
+  // Fetch Mental Armor Skills from backend
+  useEffect(() => {
+    const fetchSkills = async () => {
+      try {
+        const response = await fetch('/.netlify/functions/getMentalArmorSkills');
+        const data = await response.json();
+        
+        if (data.success && data.skills) {
+          setMentalArmorSkills(data.skills);
+          console.log('[AIContentAssistant] Loaded', data.skills.length, 'Mental Armor skills');
+        } else {
+          console.warn('[AIContentAssistant] Failed to load skills:', data.error);
+          // Fallback to empty array
+          setMentalArmorSkills([]);
+        }
+      } catch (err) {
+        console.error('[AIContentAssistant] Error fetching skills:', err);
+        setMentalArmorSkills([]);
+      } finally {
+        setLoadingSkills(false);
+      }
+    };
+
+    fetchSkills();
+  }, []);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -151,17 +159,26 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
               value={selectedSkill}
               onChange={(e) => setSelectedSkill(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+              disabled={loadingSkills}
             >
               <option value="">🎲 Random Skill (Let AI Choose)</option>
               {mentalArmorSkills.map((skill) => (
-                <option key={skill} value={skill}>
-                  {skill}
+                <option key={skill.skillTitle} value={skill.skillTitle}>
+                  {skill.skillTitle}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-600 mt-1">
-              Choose a specific skill or leave blank for AI to pick randomly
-            </p>
+            {loadingSkills && (
+              <p className="text-xs text-blue-600 mt-1">Loading skills from Google Sheet...</p>
+            )}
+            {!loadingSkills && mentalArmorSkills.length === 0 && (
+              <p className="text-xs text-orange-600 mt-1">No skills found. Please add skills to the MentalArmorSkills tab in your Google Sheet.</p>
+            )}
+            {!loadingSkills && mentalArmorSkills.length > 0 && (
+              <p className="text-xs text-gray-600 mt-1">
+                Choose a specific skill or leave blank for AI to pick randomly ({mentalArmorSkills.length} skills available)
+              </p>
+            )}
           </div>
         )}
 

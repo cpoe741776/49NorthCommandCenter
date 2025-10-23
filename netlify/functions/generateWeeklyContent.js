@@ -258,15 +258,58 @@ async function getRecentPosts() {
   }
 }
 
+async function getMentalArmorSkills() {
+  try {
+    const auth = await getGoogleAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'MentalArmorSkills!A:F', // SkillTitle, Benefits, When, How, Researcher, ResearchBullet
+    });
+
+    const rows = response.data.values || [];
+    
+    if (rows.length <= 1) {
+      console.log('[GenerateWeeklyContent] No skills data found, using fallback');
+      return MENTAL_ARMOR_SKILLS; // Fallback to hardcoded skills
+    }
+
+    // Skip header row, map to skills objects
+    const skills = {};
+    rows.slice(1).forEach((row) => {
+      const [skillTitle, benefits, when, how, researcher, researchBullet] = row;
+      
+      if (skillTitle) {
+        skills[skillTitle] = {
+          goal: when || '', // Use "When" field as goal
+          benefits: benefits ? benefits.split(',').map(b => b.trim()) : [],
+          module: how || '', // Use "How" field as module
+          researcher: researcher || '',
+          researchBullet: researchBullet || ''
+        };
+      }
+    });
+
+    console.log('[GenerateWeeklyContent] Loaded', Object.keys(skills).length, 'skills from Google Sheet');
+    return Object.keys(skills).length > 0 ? skills : MENTAL_ARMOR_SKILLS; // Fallback if no skills found
+
+  } catch (error) {
+    console.warn('[GenerateWeeklyContent] Could not fetch skills from sheet:', error.message);
+    return MENTAL_ARMOR_SKILLS; // Fallback to hardcoded skills
+  }
+}
+
 async function generateDaySpecificContent(dayType, recentPosts, selectedSkill = null) {
-  const skillNames = Object.keys(MENTAL_ARMOR_SKILLS);
+  const skillsData = await getMentalArmorSkills();
+  const skillNames = Object.keys(skillsData);
   
   // Use selected skill if provided, otherwise pick random
-  const skillToUse = selectedSkill && MENTAL_ARMOR_SKILLS[selectedSkill] 
+  const skillToUse = selectedSkill && skillsData[selectedSkill] 
     ? selectedSkill 
     : skillNames[Math.floor(Math.random() * skillNames.length)];
   
-  const skill = MENTAL_ARMOR_SKILLS[skillToUse];
+  const skill = skillsData[skillToUse];
   
   console.log('[GenerateWeeklyContent] Using skill:', skillToUse, selectedSkill ? '(user selected)' : '(random)');
 
@@ -281,6 +324,9 @@ async function generateDaySpecificContent(dayType, recentPosts, selectedSkill = 
 SKILL DETAILS:
 - Goal: ${skill.goal}
 - Benefits: ${skill.benefits.join(', ')}
+- How to Use: ${skill.module}
+${skill.researcher ? `- Research by: ${skill.researcher}` : ''}
+${skill.researchBullet ? `- Research Insight: ${skill.researchBullet}` : ''}
 
 COMPANY CONTEXT:
 - Company: ${COMPANY_INFO.name}
@@ -297,6 +343,7 @@ REQUIREMENTS:
 4. Focus on workplace/team applications (not individual self-help)
 5. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
 6. End with clear CTA to www.mymentalarmor.com
+${skill.researchBullet ? '7. Reference the research insight naturally in the content' : ''}
 
 FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 [
