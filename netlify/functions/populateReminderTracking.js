@@ -15,6 +15,8 @@ exports.handler = async (event) => {
 
   try {
     console.log('[PopulateReminderTracking] Starting automatic reminder population...');
+    console.log('[PopulateReminderTracking] WEBINAR_SHEET_ID:', WEBINAR_SHEET_ID ? 'configured' : 'missing');
+    console.log('[PopulateReminderTracking] SOCIAL_SHEET_ID:', SOCIAL_SHEET_ID ? 'configured' : 'missing');
 
     const credentials = loadServiceAccount();
     const auth = new google.auth.GoogleAuth({

@@ -203,69 +203,7 @@ const SocialMediaOperations = () => {
         </div>
       </div>
 
-      {/* AI Content Assistant */}
-      <AIContentAssistant onUseSuggestion={handleUseAISuggestion} />
-
-      {/* KPI cards - clickable to filter */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div 
-          onClick={() => setStatus('all')}
-          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Posts</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">{summary.totalPosts}</p>
-            </div>
-            <Share2 className="text-blue-600" size={40} />
-          </div>
-          <p className="text-xs text-gray-500 mt-2">Click to show all</p>
-        </div>
-        
-        <div 
-          onClick={() => setStatus('Published')}
-          className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-green-200"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-700 font-semibold">Published</p>
-              <p className="text-3xl font-bold text-green-900 mt-1">{summary.published}</p>
-            </div>
-            <CheckCircle2 className="text-green-600" size={40} />
-          </div>
-          <p className="text-xs text-green-600 mt-2">Click to filter</p>
-        </div>
-        
-        <div 
-          onClick={() => setStatus('Scheduled')}
-          className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-blue-200"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-blue-700 font-semibold">Scheduled</p>
-              <p className="text-3xl font-bold text-blue-900 mt-1">{summary.scheduled}</p>
-            </div>
-            <Calendar className="text-blue-600" size={40} />
-          </div>
-          <p className="text-xs text-blue-600 mt-2">Click to filter</p>
-        </div>
-        
-        <div 
-          onClick={() => setStatus('Draft')}
-          className="bg-gradient-to-br from-yellow-50 to-amber-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-yellow-200"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-yellow-700 font-semibold">Drafts</p>
-              <p className="text-3xl font-bold text-yellow-900 mt-1">{summary.drafts}</p>
-            </div>
-            <Clock className="text-yellow-600" size={40} />
-          </div>
-          <p className="text-xs text-yellow-600 mt-2">Click to filter</p>
-        </div>
-      </div>
-
-      {/* Weekly Post Reminders */}
+      {/* Weekly Post Reminders - MOVED TO TOP */}
       {weeklyReminders && weeklyReminders.monday && weeklyReminders.wednesday && weeklyReminders.friday && (weeklyReminders.monday.overdue || weeklyReminders.wednesday.overdue || weeklyReminders.friday.overdue) && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow">
           <div className="flex items-start gap-3">
@@ -330,7 +268,7 @@ const SocialMediaOperations = () => {
         </div>
       )}
 
-      {/* Upcoming Posts Info */}
+      {/* Upcoming Posts Info - MOVED TO TOP */}
       {weeklyReminders && weeklyReminders.monday && weeklyReminders.wednesday && weeklyReminders.friday && (weeklyReminders.monday.status === 'upcoming' || weeklyReminders.wednesday.status === 'upcoming' || weeklyReminders.friday.status === 'upcoming') && (
         <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-lg shadow">
           <div className="flex items-start gap-3">
@@ -352,6 +290,69 @@ const SocialMediaOperations = () => {
           </div>
         </div>
       )}
+
+      {/* AI Content Assistant */}
+      <AIContentAssistant onUseSuggestion={handleUseAISuggestion} />
+
+      {/* KPI cards - clickable to filter */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div 
+          onClick={() => setStatus('all')}
+          className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Posts</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{summary.totalPosts}</p>
+            </div>
+            <Share2 className="text-blue-600" size={40} />
+          </div>
+          <p className="text-xs text-gray-500 mt-2">Click to show all</p>
+        </div>
+        
+        <div 
+          onClick={() => setStatus('Published')}
+          className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-green-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-green-700 font-semibold">Published</p>
+              <p className="text-3xl font-bold text-green-900 mt-1">{summary.published}</p>
+            </div>
+            <CheckCircle2 className="text-green-600" size={40} />
+          </div>
+          <p className="text-xs text-green-600 mt-2">Click to filter</p>
+        </div>
+        
+        <div 
+          onClick={() => setStatus('Scheduled')}
+          className="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-blue-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-blue-700 font-semibold">Scheduled</p>
+              <p className="text-3xl font-bold text-blue-900 mt-1">{summary.scheduled}</p>
+            </div>
+            <Calendar className="text-blue-600" size={40} />
+          </div>
+          <p className="text-xs text-blue-600 mt-2">Click to filter</p>
+        </div>
+        
+        <div 
+          onClick={() => setStatus('Draft')}
+          className="bg-gradient-to-br from-yellow-50 to-amber-50 p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow border border-yellow-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-yellow-700 font-semibold">Drafts</p>
+              <p className="text-3xl font-bold text-yellow-900 mt-1">{summary.drafts}</p>
+            </div>
+            <Clock className="text-yellow-600" size={40} />
+          </div>
+          <p className="text-xs text-yellow-600 mt-2">Click to filter</p>
+        </div>
+      </div>
+
 
       {/* Webinar Social Post Reminders */}
       {webinarReminders && webinarReminders.some(w => 
