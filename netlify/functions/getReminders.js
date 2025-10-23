@@ -82,6 +82,13 @@ exports.handler = async (event) => {
         platformLink: r[4]
       }));
 
+    console.log('[Reminders] Found', upcomingWebinars.length, 'upcoming webinars');
+    upcomingWebinars.forEach(w => {
+      const webDate = new Date(w.date + ' ' + (w.time || '12:00'));
+      const oneWeekBefore = new Date(webDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      console.log(`[Reminders] Webinar "${w.title}" on ${w.date} - 1 week reminder due: ${oneWeekBefore.toISOString().split('T')[0]} (today: ${now.toISOString().split('T')[0]})`);
+    });
+
     // Fetch reminder tracking AND social posts (needed for purpose checking)
     let reminderRows = [];
     let socialPosts = [];
@@ -138,6 +145,12 @@ exports.handler = async (event) => {
       const oneWeekSocialReminder = findSocialReminder('1week');
       const oneDaySocialReminder = findSocialReminder('1day');
       const oneHourSocialReminder = findSocialReminder('1hour');
+
+      // Debug logging for this webinar
+      console.log(`[Reminders] Webinar "${webinar.title}" (${webinar.id}):`);
+      console.log(`  - 1 week reminder due: ${timings.oneWeek.toISOString().split('T')[0]}`);
+      console.log(`  - 1 week reminder status: ${oneWeekReminder ? oneWeekReminder[4] : (now > timings.oneWeek ? 'overdue' : 'pending')}`);
+      console.log(`  - 1 week social status: ${hasWebinarPost('webinar-1week') ? 'posted' : (now > timings.oneWeek ? 'overdue' : 'pending')}`);
 
       return {
         webinarId: webinar.id,
