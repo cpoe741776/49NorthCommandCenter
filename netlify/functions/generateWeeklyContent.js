@@ -10,10 +10,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ---- Config ----
 const CFG = {
-  OPENAI_MODEL: 'gpt-4o-mini', // Hardcoded for speed (content generation doesn't need full gpt-4)
+  OPENAI_MODEL: 'gpt-4o', // High quality model
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
-  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '2500', 10), // Reduced for speed
-  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10), // 20s timeout
+  OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '1800', 10), // Reduced for speed
+  OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '24000', 10), // 24s timeout (2s buffer)
   
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
   SHEET_ID: process.env.GOOGLE_SHEET_ID,
@@ -267,9 +267,9 @@ async function generateDaySpecificContent(dayType, recentPosts) {
 
   switch (dayType) {
     case 'monday':
-      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC, specializing in resilience training and mental strength development. Generate 2 social media post suggestions for Monday - Resilience Skill Spotlight day.`;
+      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC, specializing in resilience training and mental strength development. Generate 1 social media post suggestion for Monday - Resilience Skill Spotlight day.`;
       
-      userPrompt = `Create 2 different post suggestions for Monday's resilience skill spotlight. Focus on the skill: "${randomSkill}".
+      userPrompt = `Create 1 high-quality post suggestion for Monday's resilience skill spotlight. Focus on the skill: "${randomSkill}".
 
 SKILL DETAILS:
 - Goal: ${skill.goal}
@@ -304,14 +304,14 @@ Each object MUST have these EXACT field names:
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such complete, detailed objects in the array.`;
+Provide 1 complete, detailed object in the array.`;
 
       break;
 
     case 'wednesday':
-      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 2 social media post suggestions for Wednesday - Follow-up & Deeper Dive day.`;
+      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for Wednesday - Follow-up & Deeper Dive day.`;
       
-      userPrompt = `Create 2 different post suggestions for Wednesday's follow-up content. Build on Monday's resilience concept with deeper insights.
+      userPrompt = `Create 1 high-quality post suggestion for Wednesday's follow-up content. Build on Monday's resilience concept with deeper insights.
 
 MONDAY'S POST CONTEXT:
 ${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.includes('weekly-monday'))?.body || 'No recent Monday post found'}
@@ -340,14 +340,14 @@ Each object MUST have these EXACT field names:
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such complete, detailed objects in the array.`;
+Provide 1 complete, detailed object in the array.`;
 
       break;
 
     case 'friday':
-      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 2 social media post suggestions for Friday - Call to Action day.`;
+      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for Friday - Call to Action day.`;
       
-      userPrompt = `Create 2 different post suggestions for Friday's call-to-action content. Synthesize the week's themes into compelling CTAs.
+      userPrompt = `Create 1 high-quality post suggestion for Friday's call-to-action content. Synthesize the week's themes into a compelling CTA.
 
 WEEK'S POSTS CONTEXT:
 Monday: ${recentPosts.find(post => post.purpose?.includes('monday'))?.body || 'No Monday post found'}
@@ -379,7 +379,7 @@ Each object MUST have these EXACT field names:
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such complete, detailed objects in the array.`;
+Provide 1 complete, detailed object in the array.`;
 
       break;
 
@@ -391,9 +391,9 @@ Provide 2 such complete, detailed objects in the array.`;
 }
 
 async function generateCustomContent(customPrompt, recentPosts) {
-  const systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC, specializing in resilience training and mental strength development. Generate 2 social media post suggestions based on the user's custom request.`;
+  const systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC, specializing in resilience training and mental strength development. Generate 1 social media post suggestion based on the user's custom request.`;
   
-  const userPrompt = `Create 2 different post suggestions based on this custom request: "${customPrompt}"
+  const userPrompt = `Create 1 high-quality post suggestion based on this custom request: "${customPrompt}"
 
 COMPANY CONTEXT:
 - Company: ${COMPANY_INFO.name}
@@ -424,7 +424,7 @@ Each object MUST have these EXACT field names:
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such complete, detailed objects in the array.`;
+Provide 1 complete, detailed object in the array.`;
 
   return await callOpenAI(systemPrompt, userPrompt);
 }
