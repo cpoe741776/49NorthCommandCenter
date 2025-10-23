@@ -353,6 +353,53 @@ const SocialMediaOperations = () => {
         </div>
       </div>
 
+      {/* Webinar Reminder Summary Card */}
+      {webinarReminders && webinarReminders.length > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Reminders</h3>
+              <div className="space-y-1">
+                {webinarReminders.some(w => 
+                  w.socialReminders?.oneWeek?.status === 'pending' || 
+                  w.socialReminders?.oneDay?.status === 'pending' || 
+                  w.socialReminders?.oneHour?.status === 'pending'
+                ) && (
+                  <p className="text-sm text-blue-600">
+                    📧 {webinarReminders.filter(w => 
+                      w.socialReminders?.oneWeek?.status === 'pending' || 
+                      w.socialReminders?.oneDay?.status === 'pending' || 
+                      w.socialReminders?.oneHour?.status === 'pending'
+                    ).length} social post reminder{webinarReminders.filter(w => 
+                      w.socialReminders?.oneWeek?.status === 'pending' || 
+                      w.socialReminders?.oneDay?.status === 'pending' || 
+                      w.socialReminders?.oneHour?.status === 'pending'
+                    ).length > 1 ? 's' : ''} pending
+                  </p>
+                )}
+                {webinarReminders.some(w => 
+                  w.socialReminders?.oneWeek?.status === 'overdue' || 
+                  w.socialReminders?.oneDay?.status === 'overdue' || 
+                  w.socialReminders?.oneHour?.status === 'overdue'
+                ) && (
+                  <p className="text-sm text-red-600">
+                    ⚠️ {webinarReminders.filter(w => 
+                      w.socialReminders?.oneWeek?.status === 'overdue' || 
+                      w.socialReminders?.oneDay?.status === 'overdue' || 
+                      w.socialReminders?.oneHour?.status === 'overdue'
+                    ).length} social post reminder{webinarReminders.filter(w => 
+                      w.socialReminders?.oneWeek?.status === 'overdue' || 
+                      w.socialReminders?.oneDay?.status === 'overdue' || 
+                      w.socialReminders?.oneHour?.status === 'overdue'
+                    ).length > 1 ? 's' : ''} overdue
+                  </p>
+                )}
+              </div>
+            </div>
+            <AlertCircle className="text-blue-600" size={40} />
+          </div>
+        </div>
+      )}
 
       {/* Webinar Social Post Reminders */}
       {webinarReminders && webinarReminders.some(w => 

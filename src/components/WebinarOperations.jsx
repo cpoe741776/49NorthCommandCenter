@@ -355,6 +355,35 @@ const WebinarOperations = () => {
             </div>
           </div>
 
+          {/* Webinar Reminder Summary Card */}
+          {reminders && reminders.summary && (reminders.summary.totalWebinarReminders > 0 || reminders.summary.overdueWebinarEmails > 0 || reminders.summary.overdueWebinarSocialPosts > 0) && (
+            <div className="bg-white p-6 rounded-lg shadow border-l-4 border-blue-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Reminders</h3>
+                  <div className="space-y-1">
+                    {reminders.summary.totalWebinarReminders > 0 && (
+                      <p className="text-sm text-blue-600">
+                        📧 {reminders.summary.totalWebinarReminders} reminder{reminders.summary.totalWebinarReminders > 1 ? 's' : ''} pending
+                      </p>
+                    )}
+                    {reminders.summary.overdueWebinarEmails > 0 && (
+                      <p className="text-sm text-red-600">
+                        ⚠️ {reminders.summary.overdueWebinarEmails} email reminder{reminders.summary.overdueWebinarEmails > 1 ? 's' : ''} overdue
+                      </p>
+                    )}
+                    {reminders.summary.overdueWebinarSocialPosts > 0 && (
+                      <p className="text-sm text-purple-600">
+                        🎥 {reminders.summary.overdueWebinarSocialPosts} social post{reminders.summary.overdueWebinarSocialPosts > 1 ? 's' : ''} overdue
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Bell className="text-blue-600" size={40} />
+              </div>
+            </div>
+          )}
+
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Upcoming Webinars</h2>
             {upcomingWebinars.length === 0 ? (

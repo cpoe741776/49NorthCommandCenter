@@ -299,6 +299,34 @@ export function generateTickerItems(data) {
     });
   }
 
+  // 17. PENDING WEBINAR REMINDERS
+  if (data.totalWebinarReminders > 0) {
+    items.push({
+      message: `📧 ${data.totalWebinarReminders} Webinar Reminder${data.totalWebinarReminders > 1 ? 's' : ''} Pending - Review in Social Media`,
+      priority: 'medium',
+      category: 'Reminders',
+      source: 'reminders-webinar-pending',
+      target: 'social',
+      link: '',
+      createdAt: now,
+      status: 'active'
+    });
+  }
+
+  // 18. UPCOMING WEEKLY SOCIAL POSTS
+  if (data.upcomingSocialPosts && data.upcomingSocialPosts.length > 0) {
+    items.push({
+      message: `📅 Upcoming Weekly Posts: ${data.upcomingSocialPosts.join(', ')} - Plan Your Content`,
+      priority: 'medium',
+      category: 'Reminders',
+      source: 'reminders-weekly-upcoming',
+      target: 'social',
+      link: '',
+      createdAt: now,
+      status: 'active'
+    });
+  }
+
   // Sort by priority (high > medium > low), then by category
   const priorityOrder = { high: 3, medium: 2, low: 1 };
   const categoryOrder = { 'Reminders': 0, 'Bids': 1, 'Webinars': 2, 'Surveys': 3, 'Systems': 4, 'Social': 5, 'News': 6 };
