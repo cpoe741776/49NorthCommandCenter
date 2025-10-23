@@ -449,8 +449,39 @@ async function callOpenAI(systemPrompt, userPrompt) {
 
     console.log('[GenerateWeeklyContent] Cleaned OpenAI response:', cleanedContent.substring(0, 200) + '...');
 
-    // Parse JSON response
-    const suggestions = JSON.parse(cleanedContent);
+    // Sanitize JSON - OpenAI sometimes includes unescaped newlines in content
+    // We need to properly escape them for JSON.parse
+    let sanitizedContent = cleanedContent;
+    
+    // Try to parse as-is first
+    let suggestions;
+    try {
+      suggestions = JSON.parse(sanitizedContent);
+    } catch (parseError) {
+      console.warn('[GenerateWeeklyContent] Initial JSON parse failed, applying sanitization...');
+      
+      // More aggressive sanitization: escape literal newlines within string values
+      // This regex finds content within quotes and escapes newlines
+      sanitizedContent = cleanedContent.replace(
+        /"content":\s*"([^"]*(?:\\.[^"]*)*)"/gs,
+        (match, content) => {
+          const escapedContent = content
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+          return `"content": "${escapedContent}"`;
+        }
+      );
+      
+      try {
+        suggestions = JSON.parse(sanitizedContent);
+        console.log('[GenerateWeeklyContent] JSON parsed successfully after sanitization');
+      } catch (secondError) {
+        console.error('[GenerateWeeklyContent] JSON parse failed even after sanitization');
+        console.error('[GenerateWeeklyContent] Raw response:', cleanedContent);
+        throw secondError;
+      }
+    }
     
     // Validate and clean up suggestions
     return suggestions.map((suggestion, index) => ({
