@@ -285,24 +285,26 @@ ${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0,
 
 REQUIREMENTS:
 1. Each suggestion should introduce the resilience skill with an engaging question
-2. Optimize for LinkedIn (professional), Facebook (conversational), and Blog (detailed) formats
-3. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
-4. Avoid repeating recent topics
-5. Include image/video suggestions for each post
+2. Provide 3-5 SPECIFIC, ACTIONABLE tips with brief explanations
+3. Include science-backed insights or real-world examples
+4. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
+5. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
+6. Avoid repeating recent topics
+7. Include image/video suggestions for each post
 
 CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each suggestion should be a COMPLETE, DETAILED post (300-500 words).
+
 Each object MUST have these EXACT field names:
 [
   {
     "title": "Engaging post title",
-    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
-    "facebookPost": "Conversational Facebook version (100-250 chars)",
-    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "content": "Full post content with:\n- Opening hook/question\n- 3-5 actionable tips WITH explanations (not just listed)\n- Science or real examples\n- Clear CTA\n- Use line breaks for readability",
     "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such objects in the array.`;
+Provide 2 such complete, detailed objects in the array.`;
 
       break;
 
@@ -319,26 +321,26 @@ COMPANY CONTEXT:
 - Website: ${COMPANY_INFO.website}
 
 REQUIREMENTS:
-1. Reference Monday's concept subtly (don't explicitly say "Monday's post")
-2. Provide science-backed insights or practical application
-3. Offer 1-2 actionable tips
-4. Medium CTA level (invite engagement)
-5. Optimize for LinkedIn, Facebook, and Blog formats
+1. BUILD DIRECTLY on Monday's specific content (quote concepts, reference the skill)
+2. Go deeper with science-backed research or case studies
+3. Provide 3-5 SPECIFIC, ACTIONABLE application steps with explanations
+4. Medium CTA level (invite engagement or website visit)
+5. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
 6. Include relevant hashtags and image suggestions
 
 CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each suggestion should be a COMPLETE, DETAILED post (300-500 words) that CLEARLY references Monday's post.
+
 Each object MUST have these EXACT field names:
 [
   {
-    "title": "Engaging post title",
-    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
-    "facebookPost": "Conversational Facebook version (100-250 chars)",
-    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "title": "Engaging post title that connects to Monday",
+    "content": "Full post content with:\n- Reference to Monday's concept (be specific)\n- Deeper science or case study\n- 3-5 actionable application steps WITH explanations\n- Real examples\n- Clear CTA\n- Use line breaks for readability",
     "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such objects in the array.`;
+Provide 2 such complete, detailed objects in the array.`;
 
       break;
 
@@ -357,27 +359,27 @@ COMPANY CONTEXT:
 - Company Website: ${COMPANY_INFO.companyWebsite}
 
 REQUIREMENTS:
-1. Synthesize Monday + Wednesday themes
-2. Position 49 North/Mental Armor as the solution
-3. Strong, clear CTA to website
-4. Include organizational training options
-5. Create urgency without being pushy
-6. Optimize for LinkedIn, Facebook, and Blog formats
+1. SYNTHESIZE Monday + Wednesday themes (reference both specifically)
+2. Position 49 North/Mental Armor as the proven solution
+3. Strong, clear CTA to website (www.mymentalarmor.com)
+4. Highlight organizational training options and benefits
+5. Create urgency without being pushy (show value and ROI)
+6. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
 7. Include relevant hashtags and image suggestions
 
 CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each suggestion should be a COMPLETE, DETAILED post (300-500 words) that ties the week together.
+
 Each object MUST have these EXACT field names:
 [
   {
-    "title": "Engaging post title",
-    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
-    "facebookPost": "Conversational Facebook version (100-250 chars)",
-    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "title": "Compelling CTA title",
+    "content": "Full post content with:\n- Recap of Monday + Wednesday themes\n- Why this matters for teams/organizations\n- What 49 North offers (training, proven results)\n- Clear CTA to website\n- Urgency/value proposition\n- Use line breaks for readability",
     "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such objects in the array.`;
+Provide 2 such complete, detailed objects in the array.`;
 
       break;
 
@@ -403,24 +405,26 @@ ${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0,
 
 REQUIREMENTS:
 1. Follow the custom theme while maintaining 49 North's professional, empowering voice
-2. Optimize for LinkedIn (professional), Facebook (conversational), and Blog (detailed) formats
-3. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
-4. Avoid repeating recent topics
-5. Include image/video suggestions for each post
+2. Provide 3-5 SPECIFIC, ACTIONABLE insights or tips with explanations
+3. Include science-backed points or real-world examples
+4. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
+5. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
+6. Avoid repeating recent topics
+7. Include image/video suggestions for each post
 
 CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
+Each suggestion should be a COMPLETE, DETAILED post (300-500 words).
+
 Each object MUST have these EXACT field names:
 [
   {
     "title": "Engaging post title",
-    "linkedinPost": "Professional LinkedIn version (150-300 chars)",
-    "facebookPost": "Conversational Facebook version (100-250 chars)",
-    "blogPost": "Detailed blog post (500-800 words with multiple paragraphs)",
+    "content": "Full post content with:\n- Opening hook\n- 3-5 actionable insights/tips WITH explanations\n- Science or real examples\n- Clear CTA\n- Use line breaks for readability",
     "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
     "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 2 such objects in the array.`;
+Provide 2 such complete, detailed objects in the array.`;
 
   return await callOpenAI(systemPrompt, userPrompt);
 }
@@ -468,9 +472,10 @@ async function callOpenAI(systemPrompt, userPrompt) {
     return suggestions.map((suggestion, index) => ({
       id: index + 1,
       title: suggestion.title || `Suggestion ${index + 1}`,
-      linkedinPost: suggestion.linkedinPost || '',
-      facebookPost: suggestion.facebookPost || '',
-      blogPost: suggestion.blogPost || '',
+      content: suggestion.content || suggestion.linkedinPost || suggestion.facebookPost || suggestion.blogPost || '',
+      linkedinPost: suggestion.content || suggestion.linkedinPost || '', // For backward compatibility
+      facebookPost: suggestion.content || suggestion.facebookPost || '', // For backward compatibility
+      blogPost: suggestion.content || suggestion.blogPost || '', // For backward compatibility
       hashtags: Array.isArray(suggestion.hashtags) ? suggestion.hashtags : [],
       imageSuggestion: suggestion.imageSuggestion || {
         type: 'Photo',
