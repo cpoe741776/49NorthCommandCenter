@@ -3,7 +3,7 @@
 
 const { google } = require('googleapis');
 const OpenAI = require('openai');
-const { corsHeaders, methodGuard, ok, bad, checkAuth, safeJson } = require('./_utils/http');
+const { corsHeaders, methodGuard, ok, bad, safeJson } = require('./_utils/http');
 const { getGoogleAuth } = require('./_utils/google');
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
