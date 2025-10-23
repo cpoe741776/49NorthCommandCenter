@@ -284,27 +284,23 @@ RECENT POSTS CONTEXT:
 ${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0, 100)}...`).join('\n')}
 
 REQUIREMENTS:
-1. Each suggestion should introduce the resilience skill with an engaging question
-2. Provide 3-5 SPECIFIC, ACTIONABLE tips with brief explanations
-3. Include science-backed insights or real-world examples
-4. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
+1. START with an engaging QUESTION that targets organizational leaders
+2. Keep post SHORT (150-250 words max - LinkedIn ideal length)
+3. Provide 2-3 SPECIFIC, ACTIONABLE tips for teams/organizations
+4. Focus on workplace/team applications (not individual self-help)
 5. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
-6. Avoid repeating recent topics
-7. Include image/video suggestions for each post
+6. End with clear CTA to www.mymentalarmor.com
 
-CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
-Each suggestion should be a COMPLETE, DETAILED post (300-500 words).
-
-Each object MUST have these EXACT field names:
+FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 [
   {
     "title": "Engaging post title",
-    "content": "Full post content with:\n- Opening hook/question\n- 3-5 actionable tips WITH explanations (not just listed)\n- Science or real examples\n- Clear CTA\n- Use line breaks for readability",
-    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
-    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+    "content": "CONVERSATION STARTER QUESTION?\n\n[2-3 short paragraphs with 2-3 actionable tips for teams]\n\n[CTA to website]\n\n[Hashtags]",
+    "hashtags": ["#Tag1", "#Tag2"],
+    "imageSuggestion": {"type": "Photo", "description": "Brief description", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 complete, detailed object in the array.`;
+Provide 1 object (150-250 words total).`;
 
       break;
 
@@ -313,34 +309,28 @@ Provide 1 complete, detailed object in the array.`;
       
       userPrompt = `Create 1 high-quality post suggestion for Wednesday's follow-up content. Build on Monday's resilience concept with deeper insights.
 
-MONDAY'S POST CONTEXT:
-${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.includes('weekly-monday'))?.body || 'No recent Monday post found'}
-
-COMPANY CONTEXT:
-- Company: ${COMPANY_INFO.name}
-- Website: ${COMPANY_INFO.website}
+MONDAY'S POST (QUOTE THIS DIRECTLY):
+${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.includes('weekly-monday'))?.body || 'No recent Monday post found - proceed with generic resilience follow-up'}
 
 REQUIREMENTS:
-1. BUILD DIRECTLY on Monday's specific content (quote concepts, reference the skill)
-2. Go deeper with science-backed research or case studies
-3. Provide 3-5 SPECIFIC, ACTIONABLE application steps with explanations
-4. Medium CTA level (invite engagement or website visit)
-5. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
-6. Include relevant hashtags and image suggestions
+1. START with a QUESTION related to Monday's post
+2. QUOTE or REFERENCE a specific phrase from Monday's post above
+3. Keep post SHORT (150-250 words max)
+4. Provide 2-3 actionable tips for teams to apply Monday's concept
+5. Target organizational leaders/teams (not individuals)
+6. End with CTA to www.mymentalarmor.com
+7. Include hashtags: ${COMPANY_INFO.hashtags.join(', ')}
 
-CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
-Each suggestion should be a COMPLETE, DETAILED post (300-500 words) that CLEARLY references Monday's post.
-
-Each object MUST have these EXACT field names:
+FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 [
   {
-    "title": "Engaging post title that connects to Monday",
-    "content": "Full post content with:\n- Reference to Monday's concept (be specific)\n- Deeper science or case study\n- 3-5 actionable application steps WITH explanations\n- Real examples\n- Clear CTA\n- Use line breaks for readability",
-    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
-    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+    "title": "Title connecting to Monday",
+    "content": "QUESTION?\n\n[Reference Monday's specific point]\n\n[2-3 actionable tips for teams]\n\n[CTA]\n\n[Hashtags]",
+    "hashtags": ["#Tag1", "#Tag2"],
+    "imageSuggestion": {"type": "Photo", "description": "Brief", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 complete, detailed object in the array.`;
+Provide 1 object (150-250 words).`;
 
       break;
 
@@ -349,37 +339,28 @@ Provide 1 complete, detailed object in the array.`;
       
       userPrompt = `Create 1 high-quality post suggestion for Friday's call-to-action content. Synthesize the week's themes into a compelling CTA.
 
-WEEK'S POSTS CONTEXT:
-Monday: ${recentPosts.find(post => post.purpose?.includes('monday'))?.body || 'No Monday post found'}
-Wednesday: ${recentPosts.find(post => post.purpose?.includes('wednesday'))?.body || 'No Wednesday post found'}
-
-COMPANY CONTEXT:
-- Company: ${COMPANY_INFO.name}
-- Website: ${COMPANY_INFO.website}
-- Company Website: ${COMPANY_INFO.companyWebsite}
+WEEK'S POSTS:
+Monday: ${recentPosts.find(post => post.purpose?.includes('monday'))?.body || 'No Monday post'}
+Wednesday: ${recentPosts.find(post => post.purpose?.includes('wednesday'))?.body || 'No Wednesday post'}
 
 REQUIREMENTS:
-1. SYNTHESIZE Monday + Wednesday themes (reference both specifically)
-2. Position 49 North/Mental Armor as the proven solution
-3. Strong, clear CTA to website (www.mymentalarmor.com)
-4. Highlight organizational training options and benefits
-5. Create urgency without being pushy (show value and ROI)
-6. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
-7. Include relevant hashtags and image suggestions
+1. START with a QUESTION for organizational leaders
+2. REFERENCE both Monday + Wednesday themes briefly
+3. Keep post SHORT (150-250 words max)
+4. Position 49 North as the solution for teams
+5. Strong CTA to www.mymentalarmor.com
+6. Include hashtags: ${COMPANY_INFO.hashtags.join(', ')}
 
-CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
-Each suggestion should be a COMPLETE, DETAILED post (300-500 words) that ties the week together.
-
-Each object MUST have these EXACT field names:
+FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 [
   {
-    "title": "Compelling CTA title",
-    "content": "Full post content with:\n- Recap of Monday + Wednesday themes\n- Why this matters for teams/organizations\n- What 49 North offers (training, proven results)\n- Clear CTA to website\n- Urgency/value proposition\n- Use line breaks for readability",
-    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
-    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+    "title": "CTA title",
+    "content": "QUESTION?\n\n[Tie Monday+Wednesday together]\n\n[What 49 North offers teams]\n\n[Strong CTA]\n\n[Hashtags]",
+    "hashtags": ["#Tag1", "#Tag2"],
+    "imageSuggestion": {"type": "Photo", "description": "Brief", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 complete, detailed object in the array.`;
+Provide 1 object (150-250 words).`;
 
       break;
 
@@ -404,27 +385,23 @@ RECENT POSTS CONTEXT:
 ${recentPosts.slice(0, 5).map(post => `- ${post.title}: ${post.body.substring(0, 100)}...`).join('\n')}
 
 REQUIREMENTS:
-1. Follow the custom theme while maintaining 49 North's professional, empowering voice
-2. Provide 3-5 SPECIFIC, ACTIONABLE insights or tips with explanations
-3. Include science-backed points or real-world examples
-4. Write ONE version suitable for all platforms (LinkedIn, Facebook, Blog)
-5. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
-6. Avoid repeating recent topics
-7. Include image/video suggestions for each post
+1. START with an engaging QUESTION for organizational leaders
+2. Keep post SHORT (150-250 words max)
+3. Provide 2-3 actionable tips for teams/organizations
+4. Follow custom theme while targeting workplace applications
+5. Include hashtags: ${COMPANY_INFO.hashtags.join(', ')}
+6. End with CTA to www.mymentalarmor.com
 
-CRITICAL: Return ONLY a valid JSON array. DO NOT wrap in markdown code blocks.
-Each suggestion should be a COMPLETE, DETAILED post (300-500 words).
-
-Each object MUST have these EXACT field names:
+FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 [
   {
-    "title": "Engaging post title",
-    "content": "Full post content with:\n- Opening hook\n- 3-5 actionable insights/tips WITH explanations\n- Science or real examples\n- Clear CTA\n- Use line breaks for readability",
-    "hashtags": ["#Tag1", "#Tag2", "#Tag3"],
-    "imageSuggestion": {"type": "Photo", "description": "Image details", "mood": "Professional", "searchTerms": "keywords"}
+    "title": "Engaging title",
+    "content": "QUESTION?\n\n[2-3 paragraphs with actionable tips for teams]\n\n[CTA]\n\n[Hashtags]",
+    "hashtags": ["#Tag1", "#Tag2"],
+    "imageSuggestion": {"type": "Photo", "description": "Brief", "mood": "Professional", "searchTerms": "keywords"}
   }
 ]
-Provide 1 complete, detailed object in the array.`;
+Provide 1 object (150-250 words).`;
 
   return await callOpenAI(systemPrompt, userPrompt);
 }
