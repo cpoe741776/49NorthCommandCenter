@@ -10,7 +10,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ---- Config ----
 const CFG = {
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini', // Faster, cheaper model
+  OPENAI_MODEL: 'gpt-4o-mini', // Hardcoded for speed (content generation doesn't need full gpt-4)
   OPENAI_TEMPERATURE: parseFloat(process.env.OPENAI_TEMPERATURE ?? '0.7'),
   OPENAI_MAX_TOKENS: parseInt(process.env.OPENAI_MAX_TOKENS ?? '2500', 10), // Reduced for speed
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '20000', 10), // 20s timeout
