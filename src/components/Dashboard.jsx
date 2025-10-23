@@ -392,9 +392,21 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
                   </p>
                 )}
                 {(reminderSummary.totalWebinarReminders || 0) > 0 && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    {(reminderSummary.totalWebinarReminders || 0)} webinar reminder{(reminderSummary.totalWebinarReminders || 0) > 1 ? 's' : ''} pending
-                  </p>
+                  <div className="text-xs text-blue-600 mt-1">
+                    <p>{(reminderSummary.totalWebinarReminders || 0)} webinar reminder{(reminderSummary.totalWebinarReminders || 0) > 1 ? 's' : ''} pending</p>
+                    {reminderSummary.webinarReminders && reminderSummary.webinarReminders.length > 0 && (
+                      <div className="mt-1 space-y-1">
+                        {reminderSummary.webinarReminders.slice(0, 3).map((webinar, idx) => (
+                          <div key={idx} className="text-xs text-gray-600">
+                            • {webinar.webinarTitle.substring(0, 40)}... ({webinar.webinarDate})
+                          </div>
+                        ))}
+                        {reminderSummary.webinarReminders.length > 3 && (
+                          <div className="text-xs text-gray-500">+ {reminderSummary.webinarReminders.length - 3} more...</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {(reminderSummary.upcomingSocialPosts || []).length > 0 && (
                   <p className="text-xs text-green-600 mt-1">

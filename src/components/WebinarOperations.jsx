@@ -364,11 +364,23 @@ const WebinarOperations = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Reminders</h3>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {reminders.summary.totalWebinarReminders > 0 && (
-                      <p className="text-sm text-blue-600">
-                        📧 {reminders.summary.totalWebinarReminders} reminder{reminders.summary.totalWebinarReminders > 1 ? 's' : ''} pending
-                      </p>
+                      <div className="text-sm text-blue-600">
+                        <p>📧 {reminders.summary.totalWebinarReminders} reminder{reminders.summary.totalWebinarReminders > 1 ? 's' : ''} pending</p>
+                        {reminders.webinarReminders && reminders.webinarReminders.length > 0 && (
+                          <div className="mt-1 space-y-1 text-xs text-gray-600">
+                            {reminders.webinarReminders.slice(0, 2).map((webinar, idx) => (
+                              <div key={idx}>
+                                • {webinar.webinarTitle.substring(0, 35)}... ({webinar.webinarDate})
+                              </div>
+                            ))}
+                            {reminders.webinarReminders.length > 2 && (
+                              <div className="text-gray-500">+ {reminders.webinarReminders.length - 2} more webinars...</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     )}
                     {reminders.summary.overdueWebinarEmails > 0 && (
                       <p className="text-sm text-red-600">

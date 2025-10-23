@@ -297,23 +297,41 @@ const SocialMediaOperations = () => {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Webinar Social Post Reminders</h3>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {webinarReminders.some(w => 
                   w.socialReminders?.oneWeek?.status === 'pending' || 
                   w.socialReminders?.oneDay?.status === 'pending' || 
                   w.socialReminders?.oneHour?.status === 'pending'
                 ) && (
-                  <p className="text-sm text-blue-600">
-                    📧 {webinarReminders.filter(w => 
-                      w.socialReminders?.oneWeek?.status === 'pending' || 
-                      w.socialReminders?.oneDay?.status === 'pending' || 
-                      w.socialReminders?.oneHour?.status === 'pending'
-                    ).length} social post reminder{webinarReminders.filter(w => 
-                      w.socialReminders?.oneWeek?.status === 'pending' || 
-                      w.socialReminders?.oneDay?.status === 'pending' || 
-                      w.socialReminders?.oneHour?.status === 'pending'
-                    ).length > 1 ? 's' : ''} pending
-                  </p>
+                  <div className="text-sm text-blue-600">
+                    <p>📧 {webinarReminders.reduce((count, w) => {
+                      return count + 
+                        (w.socialReminders?.oneWeek?.status === 'pending' ? 1 : 0) +
+                        (w.socialReminders?.oneDay?.status === 'pending' ? 1 : 0) +
+                        (w.socialReminders?.oneHour?.status === 'pending' ? 1 : 0);
+                    }, 0)} social post reminder{webinarReminders.reduce((count, w) => {
+                      return count + 
+                        (w.socialReminders?.oneWeek?.status === 'pending' ? 1 : 0) +
+                        (w.socialReminders?.oneDay?.status === 'pending' ? 1 : 0) +
+                        (w.socialReminders?.oneHour?.status === 'pending' ? 1 : 0);
+                    }, 0) > 1 ? 's' : ''} pending</p>
+                    <div className="mt-1 space-y-1 text-xs text-gray-600">
+                      {webinarReminders.filter(w => 
+                        w.socialReminders?.oneWeek?.status === 'pending' || 
+                        w.socialReminders?.oneDay?.status === 'pending' || 
+                        w.socialReminders?.oneHour?.status === 'pending'
+                      ).slice(0, 2).map((webinar, idx) => (
+                        <div key={idx}>
+                          • {webinar.webinarTitle.substring(0, 35)}... ({webinar.webinarDate})
+                          <div className="ml-2 text-xs text-gray-500">
+                            {webinar.socialReminders?.oneWeek?.status === 'pending' && '• 1-week post '}
+                            {webinar.socialReminders?.oneDay?.status === 'pending' && '• 1-day post '}
+                            {webinar.socialReminders?.oneHour?.status === 'pending' && '• 1-hour post '}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 {webinarReminders.some(w => 
                   w.socialReminders?.oneWeek?.status === 'overdue' || 
@@ -321,15 +339,17 @@ const SocialMediaOperations = () => {
                   w.socialReminders?.oneHour?.status === 'overdue'
                 ) && (
                   <p className="text-sm text-red-600">
-                    ⚠️ {webinarReminders.filter(w => 
-                      w.socialReminders?.oneWeek?.status === 'overdue' || 
-                      w.socialReminders?.oneDay?.status === 'overdue' || 
-                      w.socialReminders?.oneHour?.status === 'overdue'
-                    ).length} social post reminder{webinarReminders.filter(w => 
-                      w.socialReminders?.oneWeek?.status === 'overdue' || 
-                      w.socialReminders?.oneDay?.status === 'overdue' || 
-                      w.socialReminders?.oneHour?.status === 'overdue'
-                    ).length > 1 ? 's' : ''} overdue
+                    ⚠️ {webinarReminders.reduce((count, w) => {
+                      return count + 
+                        (w.socialReminders?.oneWeek?.status === 'overdue' ? 1 : 0) +
+                        (w.socialReminders?.oneDay?.status === 'overdue' ? 1 : 0) +
+                        (w.socialReminders?.oneHour?.status === 'overdue' ? 1 : 0);
+                    }, 0)} social post reminder{webinarReminders.reduce((count, w) => {
+                      return count + 
+                        (w.socialReminders?.oneWeek?.status === 'overdue' ? 1 : 0) +
+                        (w.socialReminders?.oneDay?.status === 'overdue' ? 1 : 0) +
+                        (w.socialReminders?.oneHour?.status === 'overdue' ? 1 : 0);
+                    }, 0) > 1 ? 's' : ''} overdue
                   </p>
                 )}
               </div>
@@ -718,7 +738,7 @@ const SocialMediaOperations = () => {
           >
             Dismiss
           </button>
-        </div>
+      </div>
       )}
 
       {/* Post Composer Modal */}
