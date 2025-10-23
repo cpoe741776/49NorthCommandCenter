@@ -16,7 +16,7 @@ const CFG = {
   OPENAI_TIMEOUT_MS: parseInt(process.env.OPENAI_TIMEOUT_MS ?? '24000', 10), // 24s timeout (2s buffer)
   
   GOOGLE_TIMEOUT_MS: parseInt(process.env.GOOGLE_TIMEOUT_MS ?? '6000', 10),
-  SHEET_ID: process.env.GOOGLE_SHEET_ID,
+  SHEET_ID: process.env.SOCIAL_MEDIA_SHEET_ID,
 };
 
 // Mental Armor Skills Database

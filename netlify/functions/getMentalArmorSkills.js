@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const { corsHeaders, methodGuard, ok } = require('./_utils/http');
 const { loadServiceAccount } = require('./_utils/google');
 
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const SHEET_ID = process.env.SOCIAL_MEDIA_SHEET_ID;
 
 // Cache for skills data
 let cache = null;
@@ -24,7 +24,7 @@ exports.handler = async (event) => {
     }
 
     if (!SHEET_ID) {
-      return ok(headers, { success: false, error: 'GOOGLE_SHEET_ID not configured' });
+      return ok(headers, { success: false, error: 'SOCIAL_MEDIA_SHEET_ID not configured' });
     }
 
     console.log('[MentalArmorSkills] Fetching skills from Google Sheet...');
