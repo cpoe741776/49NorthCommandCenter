@@ -77,6 +77,25 @@ function parseRegistrations(rows) {
   }));
 }
 
+function parseAttendance(rows) {
+  if (!rows) return [];
+  return rows.map((row) => ({
+    timestamp: row[0] || '',
+    webinarId: row[1] || '',
+    name: row[2] || '',
+    email: row[3] || '',
+    organization: row[4] || '',
+    joinTime: row[5] || '',
+    leaveTime: row[6] || '',
+    duration: row[7] || '',
+    registrationSource: row[8] || '',
+    surveyCompleted: row[9] || '',
+    notes: row[10] || '',
+    status: row[11] || '',
+    extra: row[12] || ''
+  }));
+}
+
 function extractContactLeads(surveys, registrations) {
   const leads = new Map();
   const regByEmail = new Map();
@@ -204,16 +223,21 @@ async function getWebinarAIInsights(webinarData) {
 You are a strategic business analyst for 49 North (Mental Armor™), specializing in webinar performance and lead generation.
 
 Analyze the webinar data and return JSON with:
-- executiveSummary: Brief overview of webinar performance and lead quality
+- executiveSummary: Brief overview of webinar performance, upcoming webinars with recent activity, and lead quality
 - topPriorities: Array of {title, action, urgency} for webinar strategy
 - contentInsights: Object with {topPerforming, suggestions} for content strategy
 - hotLeads: Array of {name, organization, score, factors} for highest-value prospects
 
-Focus on:
-- Attendance rates and trends
+IMPORTANT: Pay special attention to:
+- UPCOMING WEBINARS: Mention upcoming webinars by title, date, current registration count, and recent registrations (last 24-48 hours)
+- RECENT REGISTRATIONS: Highlight webinars that have received new registrations recently (especially in the last 24-48 hours)
+- Attendance rates and trends from completed webinars
 - Presenter performance scores
 - Lead quality and contact requests
 - Content topics that drive engagement
+- Attendance data patterns
+
+When an upcoming webinar has recent registrations, highlight this prominently as it indicates growing interest.
 `.trim();
 
   const userPrompt = `
@@ -264,8 +288,8 @@ exports.handler = async (event, context) => {
     const auth = await googleAuth.getClient();
     const sheets = google.sheets({ version: 'v4', auth });
     
-    // Fetch webinar data
-    const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F'];
+    // Fetch webinar data - ALL 4 TABS: Webinars, Survey_Responses, Registrations, Attendance
+    const webinarRanges = ['Webinars!A2:L', 'Survey_Responses!A2:L', 'Registrations!A2:F', 'Attendance!A2:M'];
     
     const webinarData = await withTimeout(
       sheets.spreadsheets.values.batchGet({
@@ -285,22 +309,64 @@ exports.handler = async (event, context) => {
       });
     }
 
-    // Parse data
+    // Parse data - ALL 4 TABS
     const webinars = parseWebinars(webinarData.data.valueRanges[0]?.values || []);
     const surveys = parseSurveys(webinarData.data.valueRanges[1]?.values || []);
     const registrations = parseRegistrations(webinarData.data.valueRanges[2]?.values || []);
+    const attendance = parseAttendance(webinarData.data.valueRanges[3]?.values || []);
 
     // Analysis
     const contactLeads = extractContactLeads(surveys, registrations);
     const webinarKPIs = computeWebinarKPIs(webinars, surveys);
     const completedWebinars = webinars.filter((w) => w.status === 'Completed').length;
 
+    // Calculate recent registrations (last 24-48 hours)
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const recentRegistrations = registrations.filter(r => {
+      if (!r.timestamp) return false;
+      const regDate = new Date(r.timestamp);
+      return regDate >= yesterday;
+    });
+
+    // Group recent registrations by webinar
+    const recentRegsByWebinar = new Map();
+    recentRegistrations.forEach(r => {
+      const webinarId = r.webinarId;
+      if (!recentRegsByWebinar.has(webinarId)) {
+        recentRegsByWebinar.set(webinarId, []);
+      }
+      recentRegsByWebinar.get(webinarId).push(r);
+    });
+
+    // Get upcoming webinars with registration details
+    const upcomingWebinars = webinars
+      .filter(w => w.status === 'Upcoming' || w.status === 'Scheduled')
+      .map(w => ({
+        id: w.id,
+        title: w.title,
+        date: w.date,
+        time: w.time,
+        registrationCount: w.registrationCount,
+        recentRegistrationsCount: recentRegsByWebinar.get(w.id)?.length || 0,
+        recentRegistrations: recentRegsByWebinar.get(w.id)?.slice(0, 5).map(r => ({
+          name: r.name,
+          organization: r.organization,
+          email: r.email,
+          timestamp: r.timestamp
+        })) || []
+      }))
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
     const webinarDataForAI = {
       summary: {
         totalWebinars: webinars.length,
         completedWebinars,
+        upcomingWebinars: upcomingWebinars.length,
         totalRegistrations: registrations.length,
+        recentRegistrations24h: recentRegistrations.length,
         totalSurveyResponses: surveys.length,
+        totalAttendance: attendance.length,
         contactRequests: contactLeads.length
       },
       webinarKPIs,
@@ -321,7 +387,16 @@ exports.handler = async (event, context) => {
           date: w.date,
           attendance: w.attendanceCount,
           registrations: w.registrationCount
-        }))
+        })),
+      upcomingWebinars: upcomingWebinars.slice(0, 10), // Include top 10 upcoming webinars
+      attendanceInsights: {
+        totalAttendees: attendance.length,
+        recentAttendees: attendance.filter(a => {
+          if (!a.timestamp) return false;
+          const attDate = new Date(a.timestamp);
+          return attDate >= yesterday;
+        }).length
+      }
     };
 
     // AI analysis
@@ -344,6 +419,8 @@ exports.handler = async (event, context) => {
       webinarKPIs: webinarDataForAI.webinarKPIs,
       hotLeads: webinarDataForAI.hotLeads,
       recentWebinars: webinarDataForAI.recentWebinars,
+      upcomingWebinars: webinarDataForAI.upcomingWebinars,
+      attendanceInsights: webinarDataForAI.attendanceInsights,
       processingTime: `${Date.now() - started}ms`,
       section: 'webinars'
     });
