@@ -263,7 +263,10 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
       const payload = {
         ...formData,
         platforms: selectedPlatforms.join(','),
-        status: 'Draft'
+        status: 'Draft',
+        // Explicitly include webinar data to ensure it's saved (columns T and U)
+        webinarId: formData.webinarId || initialPost?.webinarId || '',
+        webinarTitle: formData.webinarTitle || initialPost?.webinarTitle || ''
       };
 
       const result = await createSocialPost(payload);
@@ -309,7 +312,10 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
       const payload = {
         ...formData,
         platforms: selectedPlatforms.join(','),
-        status: 'Scheduled'
+        status: 'Scheduled',
+        // Explicitly include webinar data to ensure it's saved (columns T and U)
+        webinarId: formData.webinarId || initialPost?.webinarId || '',
+        webinarTitle: formData.webinarTitle || initialPost?.webinarTitle || ''
       };
 
       const result = await createSocialPost(payload);
@@ -344,8 +350,18 @@ const PostComposerModal = ({ isOpen, onClose, onSuccess, initialPost }) => {
       const payload = {
         ...formData,
         platforms: selectedPlatforms.join(','),
-        status: 'Draft' // Will be updated to Published by publishSocialPost
+        status: 'Draft', // Will be updated to Published by publishSocialPost
+        // Explicitly include webinar data to ensure it's saved (columns T and U)
+        webinarId: formData.webinarId || initialPost?.webinarId || '',
+        webinarTitle: formData.webinarTitle || initialPost?.webinarTitle || ''
       };
+
+      console.log('[PostComposer] Publishing with webinar data:', {
+        webinarId: payload.webinarId,
+        webinarTitle: payload.webinarTitle,
+        contentType: payload.contentType,
+        purpose: payload.purpose
+      });
 
       const createResult = await createSocialPost(payload);
       

@@ -52,6 +52,26 @@ exports.handler = async (event) => {
     // Use ISO timestamp as a stable postId (your other function looks rows up by A)
     const timestamp = new Date().toISOString();
 
+    // Extract webinar data
+    const webinarId = formData.webinarId || '';
+    const webinarTitle = formData.webinarTitle || '';
+
+    // Log webinar data for debugging (especially important for webinar posts)
+    if (formData.purpose?.includes('webinar') || formData.contentType?.includes('webinar')) {
+      console.log('[CreateSocialPost] Webinar post detected:', {
+        purpose: formData.purpose,
+        contentType: formData.contentType,
+        webinarId,
+        webinarTitle,
+        hasWebinarId: !!webinarId,
+        hasWebinarTitle: !!webinarTitle
+      });
+      
+      if (!webinarId && (formData.purpose?.includes('webinar') || formData.contentType?.includes('webinar'))) {
+        console.warn('[CreateSocialPost] WARNING: Webinar post missing webinarId! This will affect reminder tracking.');
+      }
+    }
+
     const row = [
       timestamp,                          // A timestamp (also acts as an ID in your flows)
       formData.status || 'Draft',         // B status
@@ -72,8 +92,8 @@ exports.handler = async (event) => {
       formData.createdBy || 'system',     // Q createdBy
       tags,                               // R tags
       formData.purpose || 'general',      // S purpose (reminder tracking)
-      formData.webinarId || '',           // T webinarId (for webinar posts)
-      formData.webinarTitle || ''         // U webinarTitle (for reference)
+      webinarId,                          // T webinarId (for webinar posts)
+      webinarTitle                        // U webinarTitle (for reference)
     ];
 
     await sheets.spreadsheets.values.append({
