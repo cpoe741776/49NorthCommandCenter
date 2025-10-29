@@ -234,12 +234,12 @@ async function getRecentPosts() {
     const rows = response.data.values || [];
     if (rows.length === 0) return []; // No data
 
-    // Get last 10 posts (rows already exclude header since we used A2:U)
+    // Map rows to post objects
     // Columns: A=timestamp, B=status, C=contentType, D=title, E=body, F=imageUrl, G=videoUrl, 
     //          H=platforms, I=scheduleDate, J=publishedDate, K=postPermalink, L=facebookPostId,
     //          M=linkedInPostId, N=wordPressPostId, O=brevoEmailId, P=analytics, Q=createdBy,
     //          R=tags, S=Purpose, T=Webinar ID, U=Webinar Title
-    const recentPosts = rows.slice(0, 10).map(row => ({
+    const allPosts = rows.map(row => ({
       timestamp: row[0] || '',
       status: row[1] || '',
       contentType: row[2] || '',
@@ -249,7 +249,23 @@ async function getRecentPosts() {
       purpose: row[18] || '', // Column S (index 18)
       publishedDate: row[9] || '',
       tags: row[17] || ''
-    })).filter(post => post.title && post.body);
+    })).filter(post => post.title && post.body && post.timestamp);
+
+    // Sort by timestamp DESCENDING (most recent first) to ensure we get the latest posts
+    allPosts.sort((a, b) => {
+      const dateA = new Date(a.timestamp || 0);
+      const dateB = new Date(b.timestamp || 0);
+      return dateB - dateA; // Descending order
+    });
+
+    // Get most recent 20 posts (increased from 10 to ensure we capture enough context)
+    const recentPosts = allPosts.slice(0, 20);
+
+    console.log('[GenerateWeeklyContent] Recent posts sorted by date:', recentPosts.slice(0, 3).map(p => ({
+      title: p.title.substring(0, 40),
+      purpose: p.purpose,
+      timestamp: p.timestamp
+    })));
 
     return recentPosts;
   } catch (error) {
@@ -363,10 +379,16 @@ Provide 1 object (150-250 words total).`;
     case 'wednesday':
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for Wednesday - Follow-up & Deeper Dive day.`;
       
+      // Find the MOST RECENT weekly-monday post (posts are sorted by timestamp DESC)
+      const mostRecentMondayPost = recentPosts.find(post => 
+        (post.purpose?.toLowerCase().includes('weekly-monday') || post.purpose?.toLowerCase().includes('monday')) &&
+        (post.status === 'Published' || post.status === 'published')
+      );
+      
       userPrompt = `Create 1 high-quality post suggestion for Wednesday's follow-up content. Build on Monday's resilience concept with deeper insights.
 
-MONDAY'S POST (QUOTE THIS DIRECTLY):
-${recentPosts.find(post => post.purpose?.includes('monday') || post.purpose?.includes('weekly-monday'))?.body || 'No recent Monday post found - proceed with generic resilience follow-up'}
+MONDAY'S POST (QUOTE THIS DIRECTLY - THIS IS THE MOST RECENT WEEKLY-MONDAY POST):
+${mostRecentMondayPost ? `Title: ${mostRecentMondayPost.title}\nBody: ${mostRecentMondayPost.body}\nPublished: ${mostRecentMondayPost.publishedDate || mostRecentMondayPost.timestamp}` : 'No recent Monday post found - proceed with generic resilience follow-up'}
 
 REQUIREMENTS:
 1. START with a QUESTION related to Monday's post
@@ -393,11 +415,24 @@ Provide 1 object (150-250 words).`;
     case 'friday':
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for Friday - Call to Action day.`;
       
+      // Find the MOST RECENT weekly posts (posts are sorted by timestamp DESC)
+      const mostRecentMondayForFriday = recentPosts.find(post => 
+        (post.purpose?.toLowerCase().includes('weekly-monday') || post.purpose?.toLowerCase().includes('monday')) &&
+        (post.status === 'Published' || post.status === 'published')
+      );
+      const mostRecentWednesdayPost = recentPosts.find(post => 
+        (post.purpose?.toLowerCase().includes('weekly-wednesday') || post.purpose?.toLowerCase().includes('wednesday')) &&
+        (post.status === 'Published' || post.status === 'published')
+      );
+      
       userPrompt = `Create 1 high-quality post suggestion for Friday's call-to-action content. Synthesize the week's themes into a compelling CTA.
 
-WEEK'S POSTS:
-Monday: ${recentPosts.find(post => post.purpose?.includes('monday'))?.body || 'No Monday post'}
-Wednesday: ${recentPosts.find(post => post.purpose?.includes('wednesday'))?.body || 'No Wednesday post'}
+WEEK'S POSTS (MOST RECENT):
+Monday Post:
+${mostRecentMondayForFriday ? `Title: ${mostRecentMondayForFriday.title}\nBody: ${mostRecentMondayForFriday.body}\nPublished: ${mostRecentMondayForFriday.publishedDate || mostRecentMondayForFriday.timestamp}` : 'No Monday post found'}
+
+Wednesday Post:
+${mostRecentWednesdayPost ? `Title: ${mostRecentWednesdayPost.title}\nBody: ${mostRecentWednesdayPost.body}\nPublished: ${mostRecentWednesdayPost.publishedDate || mostRecentWednesdayPost.timestamp}` : 'No Wednesday post found'}
 
 REQUIREMENTS:
 1. START with a QUESTION for organizational leaders
