@@ -455,6 +455,48 @@ Provide 1 object (150-250 words).`;
 
       break;
 
+    case 'webinar':
+      systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for a webinar promotional post that builds on a recent webinar post.`;
+      
+      // Find the MOST RECENT webinar post (posts are sorted by timestamp DESC)
+      const mostRecentWebinarPost = recentPosts.find(post => 
+        (post.purpose?.toLowerCase().includes('webinar') || post.contentType?.toLowerCase().includes('webinar')) &&
+        (post.status === 'Published' || post.status === 'published')
+      );
+      
+      userPrompt = `Create 1 high-quality webinar promotional post suggestion that builds on or complements the most recent webinar social post.
+
+MOST RECENT WEBINAR POST (BUILD ON THIS):
+${mostRecentWebinarPost ? `Title: ${mostRecentWebinarPost.title}\nBody: ${mostRecentWebinarPost.body}\nPublished: ${mostRecentWebinarPost.publishedDate || mostRecentWebinarPost.timestamp}\nPurpose: ${mostRecentWebinarPost.purpose}` : 'No recent webinar post found - create a generic webinar promotional post'}
+
+COMPANY CONTEXT:
+- Company: ${COMPANY_INFO.name}
+- Website: ${COMPANY_INFO.website}
+- Description: ${COMPANY_INFO.description}
+
+REQUIREMENTS:
+1. START with an engaging QUESTION for organizational leaders
+2. REFERENCE or BUILD UPON the recent webinar post (if available) - mention the topic, speaker, or key insights
+3. Keep post SHORT (150-250 words max - LinkedIn ideal length)
+4. Provide 2-3 SPECIFIC, ACTIONABLE tips or insights related to the webinar topic
+5. Focus on workplace/team applications and benefits
+6. Include relevant hashtags: ${COMPANY_INFO.hashtags.join(', ')}
+7. Include clear CTA to register at www.mymentalarmor.com/webinar-choice/
+8. If no recent post found, create a compelling general webinar promotion post
+
+FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
+[
+  {
+    "title": "Engaging webinar post title",
+    "content": "QUESTION?\n\n[Reference recent post or introduce webinar topic]\n\n[2-3 actionable tips/insights]\n\n[Clear registration CTA]\n\n[Hashtags]",
+    "hashtags": ["#Tag1", "#Tag2"],
+    "imageSuggestion": {"type": "Photo", "description": "Brief description", "mood": "Professional", "searchTerms": "keywords"}
+  }
+]
+Provide 1 object (150-250 words).`;
+
+      break;
+
     default:
       throw new Error(`Invalid dayType: ${dayType}`);
   }

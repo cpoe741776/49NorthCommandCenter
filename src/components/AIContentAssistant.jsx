@@ -2,7 +2,7 @@
 // AI-powered weekly content generation assistant
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Loader2, Copy, Check, Calendar, MessageSquare, Target, Lightbulb } from 'lucide-react';
+import { Sparkles, Loader2, Copy, Check, Calendar, MessageSquare, Target, Lightbulb, Video } from 'lucide-react';
 
 const AIContentAssistant = ({ onUseSuggestion }) => {
   const [dayType, setDayType] = useState('monday');
@@ -19,6 +19,7 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
     { value: 'monday', label: 'Monday - Resilience Skill Spotlight', icon: Lightbulb },
     { value: 'wednesday', label: 'Wednesday - Follow-Up & Deeper Dive', icon: MessageSquare },
     { value: 'friday', label: 'Friday - Call to Action', icon: Target },
+    { value: 'webinar', label: 'Webinar - Build on Recent Post', icon: Video },
     { value: 'custom', label: 'Custom Theme...', icon: Calendar }
   ];
 
@@ -129,7 +130,7 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Content Type
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
             {dayTypeOptions.map((option) => {
               const Icon = option.icon;
               return (
@@ -182,6 +183,22 @@ const AIContentAssistant = ({ onUseSuggestion }) => {
                 Choose a specific skill or leave blank for AI to pick randomly ({mentalArmorSkills.length} skills available)
               </p>
             )}
+          </div>
+        )}
+
+        {/* Webinar Post Info */}
+        {dayType === 'webinar' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start gap-2">
+              <Video className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold mb-1">💡 Webinar Post Generation</p>
+                <p className="mb-2">This will generate a promotional post based on your most recent webinar social post.</p>
+                <p className="text-xs text-blue-700 mt-2">
+                  <strong>Note:</strong> After using the suggestion, remember to set the Content Type to "webinar" and select the appropriate webinar timing (1-week, 1-day, or 1-hour) in the post composer.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
