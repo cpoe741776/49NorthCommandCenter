@@ -60,6 +60,7 @@ const SocialMediaOperations = () => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [weeklyReminders, setWeeklyReminders] = useState(null);
   const [webinarReminders, setWebinarReminders] = useState(null);
+  const [forcingRefresh, setForcingRefresh] = useState(false);
 
   // filters
   const [q, setQ] = useState('');
@@ -98,6 +99,39 @@ const SocialMediaOperations = () => {
     load();
     loadWeeklyReminders();
   }, [load, loadWeeklyReminders]);
+
+  const forceRefreshReminders = useCallback(async () => {
+    try {
+      setForcingRefresh(true);
+      const appToken = window.__APP_TOKEN;
+      if (!appToken) {
+        alert('Authentication required');
+        return;
+      }
+      // Clear server-side caches
+      const res = await fetch('/.netlify/functions/clearCaches', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Token': appToken
+        },
+        body: JSON.stringify({ scope: 'reminders,webinars,ticker' })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Cache clear failed (${res.status})`);
+      }
+      // Reload local data immediately
+      await loadWeeklyReminders();
+      await load();
+      alert('Refreshed. Server caches cleared and data reloaded.');
+    } catch (e) {
+      console.error('Force refresh failed:', e);
+      alert('Force refresh failed: ' + e.message);
+    } finally {
+      setForcingRefresh(false);
+    }
+  }, [loadWeeklyReminders, load]);
 
   const platforms = useMemo(() => {
     const set = new Set();
@@ -204,6 +238,17 @@ const SocialMediaOperations = () => {
       </div>
 
       {/* Weekly Post Reminders - MOVED TO TOP */}
+      <div className="flex items-center justify-end gap-2 mb-3">
+        <button
+          onClick={forceRefreshReminders}
+          disabled={forcingRefresh}
+          className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-md border border-blue-300 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+          title="Clear server caches and reload reminders"
+        >
+          <RefreshCw size={16} /> {forcingRefresh ? 'Refreshing…' : 'Force Refresh Reminders'}
+        </button>
+      </div>
+
       {weeklyReminders && weeklyReminders.monday && weeklyReminders.wednesday && weeklyReminders.friday && (weeklyReminders.monday.overdue || weeklyReminders.wednesday.overdue || weeklyReminders.friday.overdue) && (
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow">
           <div className="flex items-start gap-3">
