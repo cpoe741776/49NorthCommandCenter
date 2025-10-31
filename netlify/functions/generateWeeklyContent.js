@@ -333,7 +333,7 @@ async function generateDaySpecificContent(dayType, recentPosts, selectedSkill = 
   let systemPrompt, userPrompt;
 
   switch (dayType) {
-    case 'monday':
+    case 'monday': {
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC, specializing in resilience training and mental strength development. Generate 1 social media post suggestion for Monday - Resilience Skill Spotlight day.`;
       
       userPrompt = `Create 1 high-quality post suggestion for Monday's resilience skill spotlight. Focus on the skill: "${skillToUse}".
@@ -374,9 +374,9 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 ]
 Provide 1 object (150-250 words total).`;
 
-      break;
+      break; }
 
-    case 'wednesday':
+    case 'wednesday': {
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for Wednesday - Follow-up & Deeper Dive day.`;
       
       // Find the MOST RECENT weekly-monday post (posts are sorted by timestamp DESC)
@@ -410,9 +410,9 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 ]
 Provide 1 object (150-250 words).`;
 
-      break;
+      break; }
 
-    case 'friday':
+    case 'friday': {
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for Friday - Call to Action day.`;
       
       // Find the MOST RECENT weekly posts (posts are sorted by timestamp DESC)
@@ -453,9 +453,9 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 ]
 Provide 1 object (150-250 words).`;
 
-      break;
+      break; }
 
-    case 'webinar':
+    case 'webinar': {
       systemPrompt = `You are a content strategist for 49 North, a division of TechWerks, LLC. Generate 1 social media post suggestion for a webinar promotional post that builds on a recent webinar post.`;
       
       // Find the MOST RECENT webinar post (posts are sorted by timestamp DESC)
@@ -495,7 +495,7 @@ FORMAT: Return ONLY a valid JSON array (NO markdown blocks).
 ]
 Provide 1 object (150-250 words).`;
 
-      break;
+      break; }
 
     default:
       throw new Error(`Invalid dayType: ${dayType}`);

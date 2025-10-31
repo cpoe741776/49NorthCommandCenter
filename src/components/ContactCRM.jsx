@@ -352,15 +352,24 @@ const ContactCRM = () => {
     try {
       const res = await fetch('/.netlify/functions/syncWebinarContactsToBrevo', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(window.__APP_TOKEN ? { 'X-App-Token': window.__APP_TOKEN } : {})
+        }
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        throw new Error(`Unexpected response (${res.status}).`);
+      }
       
-      if (data.success) {
+      if (res.ok && data.success) {
         alert(`✅ Sync complete!\n\nCreated: ${data.created}\nUpdated: ${data.updated}\nErrors: ${data.errors}`);
         loadSummary(); // Refresh summary
       } else {
-        alert(`❌ Sync failed: ${data.error}`);
+        alert(`❌ Sync failed: ${data.error || `HTTP ${res.status}`}`);
       }
     } catch (err) {
       alert(`❌ Sync error: ${err.message}`);

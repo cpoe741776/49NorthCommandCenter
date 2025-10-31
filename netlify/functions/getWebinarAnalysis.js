@@ -108,9 +108,22 @@ function extractContactLeads(surveys, registrations) {
     const email = (survey.email || '').toLowerCase().trim();
     if (!email) return;
 
-    const val = String(survey.contactRequest || '');
-    const wantsContact = val.toLowerCase().includes('yes');
-    const wantsReminder = val.includes('🟢 Drop me a reminder in 3 months');
+    const valRaw = String(survey.contactRequest || '').trim();
+    // Normalize: collapse spaces, lowercase (keep emojis intact)
+    const norm = valRaw.toLowerCase().replace(/\s+/g, ' ').trim();
+
+    // Exact dropdown options (normalized)
+    const OPT_REMINDER = '🟢 drop me a reminder in 3 months or so';
+    const OPT_MEETING = '🟢 🌟 let’s schedule a meeting within the next week';
+    const OPT_NO = '🔴 no, thank you';
+
+    // Determine intent by exact-match first; fallback to robust contains
+    const isReminderExact = norm === OPT_REMINDER;
+    const isMeetingExact = norm === OPT_MEETING;
+    const isNoExact = norm === OPT_NO;
+
+    const wantsReminder = isReminderExact || norm.includes('reminder') || norm.includes('3 month');
+    const wantsContact = isMeetingExact || (!isNoExact && (norm.includes('schedule') || norm.includes('meeting')));
 
     if (wantsContact || wantsReminder) {
       if (!leads.has(email)) {
