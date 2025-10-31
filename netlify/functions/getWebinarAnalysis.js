@@ -104,26 +104,37 @@ function extractContactLeads(surveys, registrations) {
     if (email) regByEmail.set(email, r);
   });
 
+  const normalizeText = (input) => {
+    const s = String(input || '')
+      .toLowerCase()
+      .normalize('NFKD') // split accents
+      .replace(/[\u0300-\u036f]/g, '') // remove diacritics
+      .replace(/[’']/g, "'") // unify quotes
+      .replace(/\s+/g, ' ') // collapse spaces
+      .trim();
+    // Remove leading emojis and decorative symbols while keeping words
+    return s.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').replace(/\s+/g, ' ').trim();
+  };
+
   surveys.forEach((survey) => {
     const email = (survey.email || '').toLowerCase().trim();
     if (!email) return;
 
     const valRaw = String(survey.contactRequest || '').trim();
-    // Normalize: collapse spaces, lowercase (keep emojis intact)
-    const norm = valRaw.toLowerCase().replace(/\s+/g, ' ').trim();
+    const norm = normalizeText(valRaw);
 
     // Exact dropdown options (normalized)
-    const OPT_REMINDER = '🟢 drop me a reminder in 3 months or so';
-    const OPT_MEETING = '🟢 🌟 let’s schedule a meeting within the next week';
-    const OPT_NO = '🔴 no, thank you';
+    const OPT_REMINDER = normalizeText('🟢 Drop me a reminder in 3 months or so');
+    const OPT_MEETING = normalizeText("🟢 🌟 Let’s schedule a meeting within the next week");
+    const OPT_NO = normalizeText('🔴 No, thank you');
 
     // Determine intent by exact-match first; fallback to robust contains
     const isReminderExact = norm === OPT_REMINDER;
     const isMeetingExact = norm === OPT_MEETING;
     const isNoExact = norm === OPT_NO;
 
-    const wantsReminder = isReminderExact || norm.includes('reminder') || norm.includes('3 month');
-    const wantsContact = isMeetingExact || (!isNoExact && (norm.includes('schedule') || norm.includes('meeting')));
+    const wantsReminder = isReminderExact || /reminder|3 month/.test(norm);
+    const wantsContact = isMeetingExact || (!isNoExact && /(schedule|meeting|contact)/.test(norm));
 
     if (wantsContact || wantsReminder) {
       if (!leads.has(email)) {
@@ -425,8 +436,24 @@ exports.handler = async (event, context) => {
       hotLeads: []
     };
 
+    // Normalize executiveSummary to a plain string (in case AI returned an object)
+    let executiveSummaryText = '';
+    const exec = finalInsights.executiveSummary;
+    if (typeof exec === 'string') {
+      executiveSummaryText = exec;
+    } else if (exec && typeof exec === 'object') {
+      const parts = [];
+      if (typeof exec.overview === 'string') parts.push(exec.overview);
+      if (typeof exec.leadQuality === 'string') parts.push(exec.leadQuality);
+      if (typeof exec.summary === 'string') parts.push(exec.summary);
+      executiveSummaryText = parts.join(' ').trim() || 'Insights available; expand details below.';
+    } else {
+      executiveSummaryText = 'Insights available; expand details below.';
+    }
+
     return ok(headers, {
       ...finalInsights,
+      executiveSummary: executiveSummaryText,
       timestamp: new Date().toISOString(),
       summary: webinarDataForAI.summary,
       webinarKPIs: webinarDataForAI.webinarKPIs,
