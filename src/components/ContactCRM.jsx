@@ -1133,9 +1133,9 @@ const ContactCRM = () => {
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getLeadStatusBadge(contact.leadStatus)}`}>
                             {getLeadStatusIcon(contact.leadStatus)} {contact.leadStatus}
                           </span>
-                          {contact.surveyContact === 'Yes' && (
-                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium" title="Survey: Contact me">
-                              📋 Survey
+                          {contact.surveyContact && !contact.surveyContact.toLowerCase().includes('no, thank') && (
+                            <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-medium" title={`Survey: ${contact.surveyContact}`}>
+                              {contact.surveyContact.includes('schedule') || contact.surveyContact.includes('meeting') ? '📞' : '📋'} Survey
                             </span>
                           )}
                         </div>

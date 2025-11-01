@@ -128,7 +128,7 @@ exports.handler = async (event) => {
         PHONE_MOBILE: contact.phone || '',
         WEBINARS_ATTENDED_COUNT: String(contact.attendedWebinarIds.size),
         ATTENDED_WEBINAR: contact.attendedWebinarIds.size > 0 ? 'Yes' : 'No',
-        WEB_CONTACT_REQ: contact.surveys.some(s => s.contactMe === 'Yes') ? 'Yes' : 'No',
+        WEB_CONTACT_REQ: contact.surveys.length > 0 ? (contact.surveys[0].contactMe || '') : '',
         SOURCED_FROM: 'Webinar',
         LAST_CHANGED: new Date().toISOString(),
         INITIAL_CONTACT_TIME: contact.registrations[0]?.timestamp || new Date().toISOString(),

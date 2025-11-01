@@ -582,10 +582,18 @@ const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
                       <div>
                         <span className="font-semibold text-gray-600">Survey Contact Request:</span>
                         <div className="text-gray-900">
-                          {details?.contact?.surveyContact === 'Yes' ? (
-                            <span className="text-green-600 font-semibold">✓ Yes - Contact Me</span>
+                          {details?.contact?.surveyContact ? (
+                            <span className={`font-semibold ${
+                              details.contact.surveyContact.includes('schedule') || details.contact.surveyContact.includes('meeting') 
+                                ? 'text-red-600' 
+                                : details.contact.surveyContact.includes('reminder') 
+                                ? 'text-yellow-600' 
+                                : 'text-gray-500'
+                            }`}>
+                              {details.contact.surveyContact}
+                            </span>
                           ) : (
-                            <span className="text-gray-500">No</span>
+                            <span className="text-gray-500">No survey response</span>
                           )}
                         </div>
                       </div>
@@ -802,9 +810,15 @@ const ContactDetailModal = ({ contact, isOpen, onClose, onUpdate }) => {
                         <div className="text-sm text-gray-600">
                           {new Date(survey.timestamp).toLocaleDateString()}
                         </div>
-                        {survey.contactMe === 'Yes' && (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold">
-                            📞 Wants Contact
+                        {survey.contactMe && !survey.contactMe.toLowerCase().includes('no, thank') && (
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            survey.contactMe.includes('schedule') || survey.contactMe.includes('meeting')
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {survey.contactMe.includes('schedule') || survey.contactMe.includes('meeting') 
+                              ? '📞 Immediate Contact' 
+                              : '🔔 3-Month Reminder'}
                           </span>
                         )}
                       </div>

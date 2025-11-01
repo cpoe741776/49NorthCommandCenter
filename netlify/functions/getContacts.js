@@ -95,25 +95,30 @@ exports.handler = async (event) => {
       // Calculate lead status based on Brevo data (matching getWebinarAnalysis logic)
       let leadStatus = 'Cold';
       const webinarCount = contact.webinarsAttendedCount || 0;
-      const isSurveyContact = contact.surveyContact === 'Yes';
-      const requestedContact = contact.surveyContact === 'Yes'; // WEB_CONTACT_REQ field
       
-      // Hot Lead: Requested contact OR 2+ webinars
-      if (requestedContact || webinarCount >= 2) {
+      // Check survey response for contact request (NOT "Yes", but emoji options)
+      const surveyResponse = (contact.surveyContact || '').toLowerCase();
+      const requestedImmediateContact = surveyResponse.includes('schedule') || surveyResponse.includes('meeting');
+      const requestedReminder = surveyResponse.includes('reminder') || surveyResponse.includes('3 month');
+      const completedSurvey = surveyResponse && !surveyResponse.includes('no, thank');
+      
+      // Hot Lead: Requested immediate contact OR 2+ webinars
+      if (requestedImmediateContact || webinarCount >= 2) {
         leadStatus = 'Hot Lead';
       } 
-      // Warm Lead: 1 webinar OR attended any webinar
-      else if (webinarCount >= 1 || contact.attendedWebinar === 'Yes') {
+      // Warm Lead: 1 webinar OR requested reminder OR completed survey
+      else if (webinarCount >= 1 || requestedReminder || (completedSurvey && contact.attendedWebinar === 'Yes')) {
         leadStatus = 'Warm';
       }
 
       // Calculate lead score (matching getWebinarAnalysis scoring)
       let leadScore = 0;
-      if (requestedContact) leadScore += 100; // Contact request is highest priority
+      if (requestedImmediateContact) leadScore += 100; // Immediate contact request = highest priority
+      if (requestedReminder) leadScore += 30; // 3-month reminder
       if (webinarCount >= 3) leadScore += 15 + (30 * (webinarCount - 1)); // 15 for first, 30 each after
       else if (webinarCount === 2) leadScore += 45; // 15 + 30
       else if (webinarCount === 1) leadScore += 15;
-      if (isSurveyContact) leadScore += 25; // Survey completion bonus
+      if (completedSurvey) leadScore += 25; // Survey completion bonus
       if (contact.attendedWebinar === 'Yes') leadScore += 10; // Attendance bonus
       leadScore += contactNotes.length * 5; // 5 points per note
       leadScore = Math.min(200, leadScore); // Cap at 200 to match backend
@@ -443,14 +448,18 @@ async function calculateGlobalStats() {
 
     contacts.forEach(c => {
       const webinarCount = parseInt(c.attributes?.WEBINARS_ATTENDED_COUNT || '0', 10);
-      const isSurveyContact = c.attributes?.WEB_CONTACT_REQ === 'Yes';
       const attendedWebinar = c.attributes?.ATTENDED_WEBINAR === 'Yes';
+      
+      // Check survey response for contact request (NOT "Yes", but emoji options)
+      const surveyResponse = (c.attributes?.WEB_CONTACT_REQ || '').toLowerCase();
+      const requestedImmediateContact = surveyResponse.includes('schedule') || surveyResponse.includes('meeting');
 
       if (webinarCount > 0 || attendedWebinar) {
         webinarAttendees++;
       }
 
-      if (isSurveyContact || webinarCount >= 2) {
+      // Hot Lead: Requested immediate contact OR 2+ webinars
+      if (requestedImmediateContact || webinarCount >= 2) {
         hotLeads++;
       } else if (webinarCount >= 1 || attendedWebinar) {
         warmLeads++;
