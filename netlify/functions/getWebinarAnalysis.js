@@ -188,14 +188,26 @@ function extractContactLeads(surveys, registrations, attendance) {
     const uniqueWebinarIds = new Set(attendances.map(a => a.webinarId));
     const attendanceCount = uniqueWebinarIds.size;
     
-    if (attendanceCount >= 2) {
-      lead.score += 30 * (attendanceCount - 1);
+    // Webinar attendance scoring
+    if (attendanceCount >= 3) {
+      lead.score += 30 * (attendanceCount - 1); // Extra points for 3+
+      lead.factors.push(`${attendanceCount} Webinars Attended`);
+    } else if (attendanceCount === 2) {
+      lead.score += 30;
       lead.factors.push(`${attendanceCount} Webinars Attended`);
     } else if (attendanceCount === 1) {
-      lead.score += 10;
-      lead.factors.push('Attended Webinar');
+      lead.score += 15;
+      lead.factors.push('Attended 1 Webinar');
     }
     
+    // Survey completion bonus
+    const hasSurvey = surveys.some(s => s.email.toLowerCase().trim() === email);
+    if (hasSurvey) {
+      lead.score += 25;
+      lead.factors.push('Completed Survey');
+    }
+    
+    // Detailed comments bonus
     if ((lead.comments || '').trim().length > 10) {
       lead.score += 20;
       lead.factors.push('Left Detailed Comments');
@@ -269,19 +281,27 @@ async function getWebinarAIInsights(webinarData) {
 You are a strategic business analyst for 49 North (Mental Armor™), specializing in webinar performance and lead generation.
 
 Analyze the webinar data and return JSON with:
-- executiveSummary: Brief overview of webinar performance, upcoming webinars with recent activity, and lead quality
+- executiveSummary: Brief overview of webinar performance, upcoming webinars with recent activity, and lead quality (mention hot vs warm leads)
 - topPriorities: Array of {title, action, urgency} for webinar strategy
 - contentInsights: Object with {topPerforming, suggestions} for content strategy
 - hotLeads: Array of {name, organization, score, factors} for highest-value prospects
 
 IMPORTANT: Pay special attention to:
+- LEAD QUALITY: Distinguish between HOT LEADS (requested contact OR attended 2+ webinars) and WARM LEADS (attended 1 webinar, completed survey)
+- HOT LEAD SCORING: Contacts score higher for: requesting immediate contact (100 pts), completing surveys (25 pts), attending multiple webinars (30 pts each after first), and leaving detailed comments (20 pts)
 - UPCOMING WEBINARS: Mention upcoming webinars by title, date, current registration count, and recent registrations (last 24-48 hours)
 - RECENT REGISTRATIONS: Highlight webinars that have received new registrations recently (especially in the last 24-48 hours)
 - Attendance rates and trends from completed webinars
+- Survey completion rates and feedback quality
 - Presenter performance scores
-- Lead quality and contact requests
+- Lead quality and contact requests with urgency levels
 - Content topics that drive engagement
-- Attendance data patterns
+- Attendance data patterns and drop-off rates
+
+LEAD SEGMENTATION:
+- Hot Leads: Requested contact OR 2+ webinars attended
+- Warm Leads: 1 webinar attended OR completed survey
+- Cold Leads: Registered but never attended
 
 When an upcoming webinar has recent registrations, highlight this prominently as it indicates growing interest.
 `.trim();
@@ -404,6 +424,11 @@ exports.handler = async (event, context) => {
       }))
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // Segment leads by temperature
+    const hotLeads = contactLeads.filter(l => l.score >= 100 || l.factors.includes('Requested Contact'));
+    const warmLeads = contactLeads.filter(l => l.score >= 40 && l.score < 100 && !l.factors.includes('Requested Contact'));
+    const coldLeads = registrations.length - new Set(attendance.map(a => a.email.toLowerCase())).size;
+
     const webinarDataForAI = {
       summary: {
         totalWebinars: webinars.length,
@@ -412,10 +437,32 @@ exports.handler = async (event, context) => {
         totalRegistrations: registrations.length,
         recentRegistrations24h: recentRegistrations.length,
         totalSurveyResponses: surveys.length,
+        surveyCompletionRate: registrations.length > 0 ? Math.round((surveys.length / registrations.length) * 100) : 0,
         totalAttendance: attendance.length,
-        contactRequests: contactLeads.length
+        attendanceRate: registrations.length > 0 ? Math.round((attendance.length / registrations.length) * 100) : 0,
+        contactRequests: contactLeads.filter(l => l.factors.includes('Requested Contact')).length,
+        hotLeadsCount: hotLeads.length,
+        warmLeadsCount: warmLeads.length,
+        coldLeadsCount: coldLeads
       },
       webinarKPIs,
+      leadSegmentation: {
+        hotLeads: hotLeads.slice(0, 5).map(lead => ({
+          name: lead.name,
+          organization: lead.organization,
+          score: lead.score,
+          factors: lead.factors
+        })),
+        warmLeads: warmLeads.slice(0, 5).map(lead => ({
+          name: lead.name,
+          organization: lead.organization,
+          score: lead.score,
+          factors: lead.factors
+        })),
+        totalHot: hotLeads.length,
+        totalWarm: warmLeads.length,
+        totalCold: coldLeads
+      },
       hotLeads: contactLeads.slice(0, 10).map(lead => ({
         name: lead.name,
         organization: lead.organization,
@@ -437,6 +484,7 @@ exports.handler = async (event, context) => {
       upcomingWebinars: upcomingWebinars.slice(0, 10), // Include top 10 upcoming webinars
       attendanceInsights: {
         totalAttendees: attendance.length,
+        uniqueAttendees: new Set(attendance.map(a => a.email.toLowerCase())).size,
         recentAttendees: attendance.filter(a => {
           if (!a.timestamp) return false;
           const attDate = new Date(a.timestamp);

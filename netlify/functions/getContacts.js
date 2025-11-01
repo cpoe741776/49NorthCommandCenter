@@ -124,9 +124,9 @@ exports.handler = async (event) => {
     // Apply filters
     let filtered = enrichedContacts;
     if (filter === 'hot-leads') {
-      filtered = enrichedContacts.filter(c => c.leadStatus === 'Hot Lead' || c.surveyContact);
+      filtered = enrichedContacts.filter(c => c.leadStatus === 'Hot Lead');
     } else if (filter === 'webinar-attendees') {
-      filtered = enrichedContacts.filter(c => c.webinarCount > 0);
+      filtered = enrichedContacts.filter(c => (c.webinarsAttendedCount || 0) > 0 || c.attendedWebinar === 'Yes');
     } else if (filter === 'cold-leads') {
       filtered = enrichedContacts.filter(c => c.leadStatus === 'Cold');
     }
