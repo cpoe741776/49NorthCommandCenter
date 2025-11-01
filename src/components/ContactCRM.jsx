@@ -81,11 +81,47 @@ const ContactCRM = () => {
     }
   }, []);
 
+  // Filter-only search (no text criteria required)
+  const handleFilterSearch = useCallback(async (filter) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setHasSearched(true);
+      
+      const params = new URLSearchParams();
+      params.append('limit', '1000'); // Get more results for filters
+      params.append('offset', 0);
+      if (filter && filter !== 'all') params.append('filter', filter);
+      
+      const res = await fetch(`/.netlify/functions/getContacts?${params}`);
+      const data = await res.json();
+      
+      if (data.success) {
+        setContacts(data.contacts || []);
+        if (data.contacts.length === 0) {
+          setError(`No ${filter} found`);
+        }
+      } else {
+        setError(data.error || 'Failed to load contacts');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // New: Search with dedicated fields
   const handleSearch = useCallback(async () => {
-    // At least one field must be filled
-    if (!searchFirstName.trim() && !searchLastName.trim() && !searchEmail.trim() && 
-        !searchOrganization.trim() && !searchState.trim() && !searchCountry.trim() && !selectedCustomTag) {
+    // If no search criteria but filter is set, use filter-only search
+    const hasSearchCriteria = searchFirstName.trim() || searchLastName.trim() || searchEmail.trim() || 
+        searchOrganization.trim() || searchState.trim() || searchCountry.trim() || selectedCustomTag;
+    
+    if (!hasSearchCriteria) {
+      if (filterType !== 'all') {
+        // Use filter-only search
+        return handleFilterSearch(filterType);
+      }
       alert('Please enter at least one search criteria (Name, Email, Organization, State, Country, or Custom Tag)');
       return;
     }
@@ -96,7 +132,7 @@ const ContactCRM = () => {
       setHasSearched(true);
       
       const params = new URLSearchParams();
-      params.append('limit', '100'); // Limit search results
+      params.append('limit', '1000'); // Limit search results
       params.append('offset', page * 100);
       if (filterType !== 'all') params.append('filter', filterType);
       if (searchFirstName.trim()) params.append('firstName', searchFirstName.trim());
@@ -123,7 +159,7 @@ const ContactCRM = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, selectedCustomTag, page]);
+  }, [filterType, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, selectedCustomTag, page, handleFilterSearch]);
 
   const clearSearch = () => {
     setSearchFirstName('');
@@ -496,10 +532,7 @@ const ContactCRM = () => {
             onClick={() => { 
               setFilterType('hot-leads'); 
               setPage(0); 
-              // Trigger search if not already searched
-              if (!hasSearched) {
-                handleSearch();
-              }
+              handleFilterSearch('hot-leads');
             }}
             className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-lg shadow border-2 border-red-200 cursor-pointer hover:shadow-lg transition-shadow"
           >
@@ -513,17 +546,14 @@ const ContactCRM = () => {
               </div>
               <Star className="text-red-600" size={32} />
             </div>
-            <p className="text-xs text-red-600 mt-2">Click to search</p>
+            <p className="text-xs text-red-600 mt-2">Click to view all</p>
           </div>
 
           <div 
             onClick={() => { 
               setFilterType('webinar-attendees'); 
               setPage(0); 
-              // Trigger search if not already searched
-              if (!hasSearched) {
-                handleSearch();
-              }
+              handleFilterSearch('webinar-attendees');
             }}
             className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
           >
@@ -537,7 +567,7 @@ const ContactCRM = () => {
               </div>
               <Users className="text-purple-600" size={32} />
             </div>
-            <p className="text-xs text-gray-500 mt-2">Click to search</p>
+            <p className="text-xs text-gray-500 mt-2">Click to view all</p>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow">
@@ -554,10 +584,7 @@ const ContactCRM = () => {
             onClick={() => { 
               setFilterType('cold-leads'); 
               setPage(0); 
-              // Trigger search if not already searched
-              if (!hasSearched) {
-                handleSearch();
-              }
+              handleFilterSearch('cold-leads');
             }}
             className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
           >
@@ -571,7 +598,7 @@ const ContactCRM = () => {
               </div>
               <AlertCircle className="text-gray-400" size={32} />
             </div>
-            <p className="text-xs text-gray-500 mt-2">Click to filter</p>
+            <p className="text-xs text-gray-500 mt-2">Click to view all</p>
           </div>
         </div>
       )}
@@ -693,7 +720,8 @@ const ContactCRM = () => {
         </div>
 
         <p className="text-sm text-gray-600 mb-4">
-          Search the entire database by any combination of fields. <strong>Combine fields</strong> (e.g., State + Organization) to narrow results. Perfect for targeted outreach campaigns!
+          Search the entire database by any combination of fields. <strong>Combine fields</strong> (e.g., State + Organization) to narrow results. 
+          Or use the filter dropdown below to view all Hot Leads, Webinar Attendees, or Cold Leads without entering search criteria.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
@@ -801,18 +829,31 @@ const ContactCRM = () => {
             {loading ? 'Searching...' : 'Search Contacts'}
           </button>
 
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-gray-600" />
-            <select
-              value={filterType}
-              onChange={(e) => { setFilterType(e.target.value); setPage(0); }}
-              className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Contacts</option>
-              <option value="hot-leads">🔥 Hot Leads</option>
-              <option value="webinar-attendees">🎥 Webinar Attendees</option>
-              <option value="cold-leads">❄️ Cold Leads</option>
-            </select>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-gray-600" />
+              <select
+                value={filterType}
+                onChange={(e) => { 
+                  const newFilter = e.target.value;
+                  setFilterType(newFilter); 
+                  setPage(0);
+                  // Auto-load if switching to a specific filter
+                  if (newFilter !== 'all') {
+                    handleFilterSearch(newFilter);
+                  }
+                }}
+                className="px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Contacts (requires search)</option>
+                <option value="hot-leads">🔥 Hot Leads (click to load)</option>
+                <option value="webinar-attendees">🎥 Webinar Attendees (click to load)</option>
+                <option value="cold-leads">❄️ Cold Leads (click to load)</option>
+              </select>
+            </div>
+            <p className="text-xs text-gray-500 ml-6">
+              💡 Select a filter to view contacts without entering search criteria
+            </p>
           </div>
 
           {hasSearched && (
