@@ -96,12 +96,31 @@ function parseAttendance(rows) {
   }));
 }
 
-function extractContactLeads(surveys, registrations) {
+function extractContactLeads(surveys, registrations, attendance) {
   const leads = new Map();
   const regByEmail = new Map();
+  const attendanceByEmail = new Map();
+  
+  // Map registrations by email
   registrations.forEach((r) => {
     const email = (r.email || '').toLowerCase().trim();
-    if (email) regByEmail.set(email, r);
+    if (email) {
+      if (!regByEmail.has(email)) {
+        regByEmail.set(email, []);
+      }
+      regByEmail.get(email).push(r);
+    }
+  });
+
+  // Map attendance by email
+  attendance.forEach((a) => {
+    const email = (a.email || '').toLowerCase().trim();
+    if (email) {
+      if (!attendanceByEmail.has(email)) {
+        attendanceByEmail.set(email, []);
+      }
+      attendanceByEmail.get(email).push(a);
+    }
   });
 
   const normalizeText = (input) => {
@@ -109,7 +128,7 @@ function extractContactLeads(surveys, registrations) {
       .toLowerCase()
       .normalize('NFKD') // split accents
       .replace(/[\u0300-\u036f]/g, '') // remove diacritics
-      .replace(/[’']/g, "'") // unify quotes
+      .replace(/['']/g, "'") // unify quotes
       .replace(/\s+/g, ' ') // collapse spaces
       .trim();
     // Remove leading emojis and decorative symbols while keeping words
@@ -125,7 +144,7 @@ function extractContactLeads(surveys, registrations) {
 
     // Exact dropdown options (normalized)
     const OPT_REMINDER = normalizeText('🟢 Drop me a reminder in 3 months or so');
-    const OPT_MEETING = normalizeText("🟢 🌟 Let’s schedule a meeting within the next week");
+    const OPT_MEETING = normalizeText("🟢 🌟 Let's schedule a meeting within the next week");
     const OPT_NO = normalizeText('🔴 No, thank you');
 
     // Determine intent by exact-match first; fallback to robust contains
@@ -138,12 +157,13 @@ function extractContactLeads(surveys, registrations) {
 
     if (wantsContact || wantsReminder) {
       if (!leads.has(email)) {
-        const reg = regByEmail.get(email);
+        const regs = regByEmail.get(email) || [];
+        const firstReg = regs[0];
         leads.set(email, {
           email: survey.email,
-          name: reg?.name || 'Unknown',
-          organization: reg?.organization || 'Unknown',
-          phone: reg?.phone || '',
+          name: firstReg?.name || 'Unknown',
+          organization: firstReg?.organization || 'Unknown',
+          phone: firstReg?.phone || '',
           score: 0,
           factors: [],
           comments: survey.comments || '',
@@ -152,7 +172,7 @@ function extractContactLeads(surveys, registrations) {
       }
       const lead = leads.get(email);
       if (wantsContact) {
-        lead.score += 50;
+        lead.score += 100; // Increased from 50 - highest priority!
         lead.factors.push('Requested Contact');
       }
       if (wantsReminder) {
@@ -162,18 +182,20 @@ function extractContactLeads(surveys, registrations) {
     }
   });
 
-  const counts = new Map();
-  registrations.forEach((r) => {
-    const email = (r.email || '').toLowerCase().trim();
-    if (email) counts.set(email, (counts.get(email) || 0) + 1);
-  });
-
+  // Add points for webinar attendance (not just registrations)
   leads.forEach((lead, email) => {
-    const c = counts.get(email) || 0;
-    if (c >= 2) {
-      lead.score += 30 * (c - 1);
-      lead.factors.push(`${c} Webinars Attended`);
+    const attendances = attendanceByEmail.get(email) || [];
+    const uniqueWebinarIds = new Set(attendances.map(a => a.webinarId));
+    const attendanceCount = uniqueWebinarIds.size;
+    
+    if (attendanceCount >= 2) {
+      lead.score += 30 * (attendanceCount - 1);
+      lead.factors.push(`${attendanceCount} Webinars Attended`);
+    } else if (attendanceCount === 1) {
+      lead.score += 10;
+      lead.factors.push('Attended Webinar');
     }
+    
     if ((lead.comments || '').trim().length > 10) {
       lead.score += 20;
       lead.factors.push('Left Detailed Comments');
@@ -340,7 +362,7 @@ exports.handler = async (event, context) => {
     const attendance = parseAttendance(webinarData.data.valueRanges[3]?.values || []);
 
     // Analysis
-    const contactLeads = extractContactLeads(surveys, registrations);
+    const contactLeads = extractContactLeads(surveys, registrations, attendance);
     const webinarKPIs = computeWebinarKPIs(webinars, surveys);
     const completedWebinars = webinars.filter((w) => w.status === 'Completed').length;
 

@@ -288,7 +288,7 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           </div>
         </div>
 
-        {/* Webinars (static placeholder; wire to webinarService when ready) */}
+        {/* Webinars */}
         <div
           onClick={() => onNavigate('webinars')}
           className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
@@ -297,11 +297,17 @@ const Dashboard = ({ summary, loading, onNavigate, onTickerUpdate }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Upcoming Webinars</p>
-              <p className="text-3xl font-bold text-gray-900 mt-1">2</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">
+                {aiInsights?.webinars?.upcomingWebinars?.length || summary?.upcomingWebinars || 0}
+              </p>
             </div>
             <Video className="text-blue-600" size={40} />
           </div>
-          <div className="mt-4 text-sm text-gray-600">Next: Oct 30, 2025</div>
+          <div className="mt-4 text-sm text-gray-600">
+            {aiInsights?.webinars?.upcomingWebinars?.[0] 
+              ? `Next: ${aiInsights.webinars.upcomingWebinars[0].date}` 
+              : 'No upcoming webinars'}
+          </div>
         </div>
 
         {/* Social Posts */}

@@ -493,7 +493,14 @@ const ContactCRM = () => {
           </div>
 
           <div 
-            onClick={() => { setFilterType('hot-leads'); setPage(0); }}
+            onClick={() => { 
+              setFilterType('hot-leads'); 
+              setPage(0); 
+              // Trigger search if not already searched
+              if (!hasSearched) {
+                handleSearch();
+              }
+            }}
             className="bg-gradient-to-br from-red-50 to-orange-50 p-6 rounded-lg shadow border-2 border-red-200 cursor-pointer hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center justify-between">
@@ -506,11 +513,18 @@ const ContactCRM = () => {
               </div>
               <Star className="text-red-600" size={32} />
             </div>
-            <p className="text-xs text-red-600 mt-2">Click to filter</p>
+            <p className="text-xs text-red-600 mt-2">Click to search</p>
           </div>
 
           <div 
-            onClick={() => { setFilterType('webinar-attendees'); setPage(0); }}
+            onClick={() => { 
+              setFilterType('webinar-attendees'); 
+              setPage(0); 
+              // Trigger search if not already searched
+              if (!hasSearched) {
+                handleSearch();
+              }
+            }}
             className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center justify-between">
@@ -523,7 +537,7 @@ const ContactCRM = () => {
               </div>
               <Users className="text-purple-600" size={32} />
             </div>
-            <p className="text-xs text-gray-500 mt-2">Click to filter</p>
+            <p className="text-xs text-gray-500 mt-2">Click to search</p>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow">
@@ -537,7 +551,14 @@ const ContactCRM = () => {
           </div>
 
           <div 
-            onClick={() => { setFilterType('cold-leads'); setPage(0); }}
+            onClick={() => { 
+              setFilterType('cold-leads'); 
+              setPage(0); 
+              // Trigger search if not already searched
+              if (!hasSearched) {
+                handleSearch();
+              }
+            }}
             className="bg-white p-6 rounded-lg shadow cursor-pointer hover:shadow-lg transition-shadow"
           >
             <div className="flex items-center justify-between">
