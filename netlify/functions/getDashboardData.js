@@ -78,6 +78,69 @@ const parseAdmin = (rows = []) => rows.map((r) => ({ status: r[9] || '' })); // 
 const parseWebinars = (rows = []) => rows.map((r) => ({ status: r[6] || '' })); // col G
 const parseSocial = (rows = []) => rows.map((r) => ({ status: r[1] || '' })); // col B
 
+// Parse survey data for hot leads
+const parseSurveys = (rows = []) => rows.map((r) => ({
+  timestamp: r[0] || '',
+  email: r[1] || '',
+  webinarId: r[2] || '',
+  contactRequest: r[9] || ''
+}));
+
+const parseRegistrations = (rows = []) => rows.map((r) => ({
+  timestamp: r[0] || '',
+  webinarId: r[1] || '',
+  email: r[3] || ''
+}));
+
+// Count hot leads from survey responses
+function countHotLeads(surveys, registrations) {
+  const leads = new Set();
+  const regCountByEmail = new Map();
+  
+  // Count registrations per email
+  registrations.forEach((r) => {
+    const email = (r.email || '').toLowerCase().trim();
+    if (email) regCountByEmail.set(email, (regCountByEmail.get(email) || 0) + 1);
+  });
+
+  const normalizeText = (input) => {
+    const s = String(input || '')
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/['']/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim();
+    return s.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').replace(/\s+/g, ' ').trim();
+  };
+
+  surveys.forEach((survey) => {
+    const email = (survey.email || '').toLowerCase().trim();
+    if (!email) return;
+
+    const valRaw = String(survey.contactRequest || '').trim();
+    const norm = normalizeText(valRaw);
+
+    const OPT_REMINDER = normalizeText('🟢 Drop me a reminder in 3 months or so');
+    const OPT_MEETING = normalizeText("🟢 🌟 Let's schedule a meeting within the next week");
+    const OPT_NO = normalizeText('🔴 No, thank you');
+
+    const isReminderExact = norm === OPT_REMINDER;
+    const isMeetingExact = norm === OPT_MEETING;
+    const isNoExact = norm === OPT_NO;
+
+    const wantsReminder = isReminderExact || /reminder|3 month/.test(norm);
+    const wantsContact = isMeetingExact || (!isNoExact && /(schedule|meeting|contact)/.test(norm));
+    const multipleWebinars = (regCountByEmail.get(email) || 0) >= 2;
+
+    if (wantsContact || wantsReminder || multipleWebinars) {
+      leads.add(email);
+    }
+  });
+
+  return leads.size;
+}
+
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin);
   const ifNoneMatch = event.headers?.['if-none-match'] || event.headers?.['If-None-Match'];
@@ -158,6 +221,7 @@ exports.handler = async (event) => {
         activeBidsCount: 0, respondCount: 0, gatherInfoCount: 0,
         completedWebinars: 0, totalWebinars: 0,
         socialPostsTotal: 0, socialPostsPublished: 0, socialPostsDrafts: 0,
+        hotLeadsCount: 0,
       }};
       return { statusCode: 200, headers, body: JSON.stringify(payload) };
     }
@@ -166,6 +230,8 @@ exports.handler = async (event) => {
     const activeBids = parseBids(bidsRes?.data?.valueRanges?.[0]?.values || []);
     const adminEmails = parseAdmin(bidsRes?.data?.valueRanges?.[3]?.values || []);
     const webinars = parseWebinars(webinarRes?.data?.valueRanges?.[0]?.values || []);
+    const surveys = parseSurveys(webinarRes?.data?.valueRanges?.[1]?.values || []);
+    const registrations = parseRegistrations(webinarRes?.data?.valueRanges?.[2]?.values || []);
 
     const socialPosts = SOC_SHEET
       ? parseSocial(socialRes?.data?.valueRanges?.[0]?.values || [])
@@ -174,6 +240,7 @@ exports.handler = async (event) => {
     // --- Aggregate KPIs (normalized) ---
     const respondCount = activeBids.filter(b => normalizeRec(b.recommendation) === 'respond').length;
     const gatherInfoCount = activeBids.filter(b => normalizeRec(b.recommendation) === 'gather').length;
+    const hotLeadsCount = countHotLeads(surveys, registrations);
 
     const summary = {
       adminEmailsCount: adminEmails.length,
@@ -189,6 +256,8 @@ exports.handler = async (event) => {
       socialPostsTotal: socialPosts.length,
       socialPostsPublished: socialPosts.filter(p => p.status === 'Published').length,
       socialPostsDrafts: socialPosts.filter(p => p.status === 'Draft').length,
+      
+      hotLeadsCount: hotLeadsCount,
     };
 
     const responsePayload = { success: true, summary };
