@@ -1,3 +1,5 @@
+console.log("SECRETARY_REMIND_DUE_VERSION: 2026-01-06-B");
+console.log("SECRETARY_REMIND_DUE_VERSION: 2026-01-06-A");
 const { google } = require("googleapis");
 const { getAllTasks } = require("./lib/sheets");
 const { sendPushover } = require("./lib/pushover");
