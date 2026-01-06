@@ -16,6 +16,7 @@ try {
       stack: e && e.stack ? String(e.stack) : null
     })
   });
+  // IMPORTANT: bail out of module init
   return;
 }
 

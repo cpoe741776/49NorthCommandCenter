@@ -149,7 +149,7 @@ exports.handler = async (event) => {
       if (!dryRun) {
         await sendPushover("Reminder: " + title, "Diana — Task Due");
 
-        const sheetRow = r + 2;               // header row + 1-based
+        const sheetRow = r + 2;                 // header row + 1-based
         const sheetCol = idx.lastNotifiedAt + 1; // 1-based column
         await updateLastNotifiedAt(
           sheetRow,
