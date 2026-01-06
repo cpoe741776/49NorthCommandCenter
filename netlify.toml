@@ -11,7 +11,4 @@
 [functions.publishScheduledPosts]
   schedule = "0 * * * *"
 
-# Scheduled function to send Secretary reminders
-# Runs every 5 minutes
-[functions.secretaryReminder]
-  schedule = "*/5 * * * *"
+# (We will add a new secretary schedule block later for the new function name)
