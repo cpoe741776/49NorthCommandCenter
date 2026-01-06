@@ -2,7 +2,6 @@
   command = "npm run build"
   functions = "netlify/functions"
   publish = "build"
-  environment = { SECRETS_SCAN_OMIT_PATHS = "*.md,scripts/**/*.txt", SECRETS_SCAN_OMIT_KEYS = "LINKEDIN_ORG_URN,WP_POSTS_URL,LINKEDIN_CLIENT_ID,LINKEDIN_REDIRECT_URI,WP_USERNAME,WEBINAR_SHEET_ID" }
 
 [functions]
   node_bundler = "esbuild"
