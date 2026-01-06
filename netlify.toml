@@ -10,8 +10,8 @@
 # Runs every hour at :00
 [functions.publishScheduledPosts]
   schedule = "0 * * * *"
-  
+
 # Scheduled function to send Secretary reminders (new loop)
 # Runs every 5 minutes
-[functions.secretaryLoop]
+[functions.secretaryRemindDue2]
   schedule = "*/5 * * * *"
