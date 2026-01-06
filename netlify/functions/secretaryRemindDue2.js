@@ -1,14 +1,12 @@
 const { google } = require("googleapis");
-const { sendPushover } = require("./secretary/lib/pushover");
 const { getSecret } = require("./_utils/secrets");
+const { sendPushover } = require("./secretary/lib/pushover");
 
-// Simple ISO parser
 function parseISO(s) {
   const t = Date.parse(s);
   return Number.isFinite(t) ? t : null;
 }
 
-// Column index (1-based) -> A/B/AA, etc.
 function colToLetter(n) {
   let s = "";
   while (n > 0) {
@@ -19,74 +17,90 @@ function colToLetter(n) {
   return s;
 }
 
-// Auth using your bootstrap env vars
 function getAuth() {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
   if (!clientEmail || !privateKey) {
     throw new Error("Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY");
   }
+
+  // Netlify-style multiline key handling
   privateKey = privateKey.replace(/\\n/g, "\n");
+
   return new google.auth.JWT({
     email: clientEmail,
     key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
   });
 }
 
-// Read all tasks from the Tasks tab
-async function getAllTasks() {
-  const spreadsheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
+async function getTasksSheetId() {
+  // Loaded from 49N_Secrets tab
+  return getSecret("SECRETARY_TASKS_SHEET_ID");
+}
+
+async function getTasks() {
+  const spreadsheetId = await getTasksSheetId();
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: "Tasks!A:M",
+    range: "Tasks!A:Z"
   });
 
   const rows = res.data.values || [];
-  if (rows.length < 2) {
+  if (!rows.length) {
     return { header: [], data: [] };
   }
 
   const [header, ...data] = rows;
-  return { header, data, spreadsheetId };
+  return { header, data };
+}
+
+async function updateLastNotifiedAt(rowIndex1Based, colIndex1Based, isoString) {
+  const spreadsheetId = await getTasksSheetId();
+  const auth = getAuth();
+  const sheets = google.sheets({ version: "v4", auth });
+
+  const colLetter = colToLetter(colIndex1Based);
+  const range = `Tasks!${colLetter}${rowIndex1Based}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: [[isoString || ""]] }
+  });
 }
 
 exports.handler = async (event) => {
-  const qs = (event && event.queryStringParameters) || {};
-  const dryRun =
-    qs.dryRun === "1" ||
-    qs.dryRun === "true" ||
-    qs.dryRun === "yes";
-
   try {
-    const { header, data, spreadsheetId } = await getAllTasks();
+    const dryRun = !!(
+      event &&
+      event.queryStringParameters &&
+      (event.queryStringParameters.dryRun === "1" ||
+       event.queryStringParameters.dryRun === "true")
+    );
 
+    const { header, data } = await getTasks();
     if (!header.length) {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ok: true,
-          headerMissing: true,
-          scanned: 0,
-          sent: 0,
-          dryRun,
-        }),
+        body: JSON.stringify({ ok: true, scanned: 0, sent: 0, dryRun })
       };
     }
 
     const colIndex = (name) => header.indexOf(name);
 
     const idx = {
-      id: colIndex("id"),
       title: colIndex("title"),
       dueAt: colIndex("dueAt"),
       status: colIndex("status"),
       lastNotifiedAt: colIndex("lastNotifiedAt"),
-      notifyEveryMins: colIndex("notifyEveryMins"),
+      notifyEveryMins: colIndex("notifyEveryMins")
     };
 
     const missing = Object.entries(idx)
@@ -101,14 +115,10 @@ exports.handler = async (event) => {
           ok: false,
           error: "Missing required columns",
           missing,
-          header,
-          dryRun,
-        }),
+          header
+        })
       };
     }
-
-    const auth = getAuth();
-    const sheets = google.sheets({ version: "v4", auth });
 
     const now = Date.now();
     let scanned = 0;
@@ -124,30 +134,27 @@ exports.handler = async (event) => {
       const dueAtStr = String(row[idx.dueAt] || "");
       const dueMs = parseISO(dueAtStr);
       if (!dueMs) continue;
-      if (dueMs > now) continue;
+      if (dueMs > now) continue; // not due yet
 
       const title = String(row[idx.title] || "Task");
+
       const lastNotifiedMs =
         parseISO(String(row[idx.lastNotifiedAt] || "")) || 0;
       const everyMins =
         parseInt(String(row[idx.notifyEveryMins] || "60"), 10) || 60;
-
       const nextAllowed = lastNotifiedMs + everyMins * 60 * 1000;
       if (lastNotifiedMs && now < nextAllowed) continue;
 
       if (!dryRun) {
         await sendPushover(`Reminder: ${title}`, "Diana — Task Due");
 
-        const sheetRow = r + 2; // header row + 1-based
+        const sheetRow = r + 2; // account for header row
         const sheetCol = idx.lastNotifiedAt + 1; // 1-based column index
-        const range = `Tasks!${colToLetter(sheetCol)}${sheetRow}`;
-
-        await sheets.spreadsheets.values.update({
-          spreadsheetId,
-          range,
-          valueInputOption: "USER_ENTERED",
-          requestBody: { values: [[new Date().toISOString()]] },
-        });
+        await updateLastNotifiedAt(
+          sheetRow,
+          sheetCol,
+          new Date().toISOString()
+        );
       }
 
       sent++;
@@ -156,25 +163,16 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ok: true,
-        scanned,
-        sent,
-        dryRun,
-      }),
+      body: JSON.stringify({ ok: true, scanned, sent, dryRun })
     };
   } catch (err) {
-    console.error("SecretaryRemindDue2 ERROR:", err);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ok: false,
-        error: String(err && err.message ? err.message : err),
-        stack: err && err.stack ? String(err.stack) : null,
-        dryRun,
-        stage: "top-level",
-      }),
+        error: String(err && err.message ? err.message : err)
+      })
     };
   }
 };
