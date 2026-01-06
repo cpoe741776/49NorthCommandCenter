@@ -1,17 +1,32 @@
+let impl;
+try {
+  impl = require("./secretary/remind-due.js");
+} catch (e) {
+  exports.handler = async () => ({
+    statusCode: 500,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ok: false,
+      stage: "require(./secretary/remind-due.js)",
+      error: String(e && e.message ? e.message : e),
+      stack: e && e.stack ? String(e.stack) : null
+    })
+  });
+  return;
+}
+
 exports.handler = async (event, context) => {
   try {
-    const remind = require("./secretary/remind-due.js");
-    return await remind.handler(event, context);
-  } catch (err) {
-    console.log("SECRETARY_REMIND_DUE_WRAPPER_ERROR_MESSAGE:", err && err.message ? err.message : String(err));
-    console.log("SECRETARY_REMIND_DUE_WRAPPER_ERROR_STACK:", err && err.stack ? err.stack : "(no stack)");
+    return await impl.handler(event, context);
+  } catch (e) {
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ok: false,
-        where: "wrapper",
-        message: err && err.message ? err.message : String(err)
+        stage: "impl.handler",
+        error: String(e && e.message ? e.message : e),
+        stack: e && e.stack ? String(e.stack) : null
       })
     };
   }
