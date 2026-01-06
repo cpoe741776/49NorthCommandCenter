@@ -1,8 +1,8 @@
 const { google } = require("googleapis");
 
 function getAuth() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  let privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
   if (!clientEmail || !privateKey) throw new Error("Missing Google service account env vars");
 
