@@ -51,32 +51,32 @@ async function getAllTasks() {
   return { header, data };
 }
 
+function colToLetter(n) {
+  let s = "";
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 async function updateTaskCell(rowIndex1Based, colIndex1Based, value) {
   const spreadsheetId = await getTasksSheetId();
 
   const auth = getAuth();
   const sheets = google.sheets({ version: "v4", auth });
 
-  // Convert row/col to A1 notation by updating a single-cell range via grid indices is more work;
-  // easiest MVP: use values.update with explicit range like Tasks!L5 if we compute column letter.
-  const colToLetter = (n) => {
-    let s = "";
-    while (n > 0) {
-      const m = (n - 1) % 26;
-      s = String.fromCharCode(65 + m) + s;
-      n = Math.floor((n - 1) / 26);
-    }
-    return s;
-  };
-
   const colLetter = colToLetter(colIndex1Based);
   const range = `Tasks!${colLetter}${rowIndex1Based}`;
+
+  const v = (value === undefined || value === null) ? "" : String(value);
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range,
     valueInputOption: "USER_ENTERED",
-    requestBody: { values: [[value]] }
+    requestBody: { values: [[v]] }
   });
 }
 
