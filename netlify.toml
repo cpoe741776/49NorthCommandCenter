@@ -12,6 +12,6 @@
   schedule = "0 * * * *"
 # Scheduled function to send Secretary reminders
 # Runs every 5 minutes
-[functions.secretaryRemindDue]
+[functions.secretaryRemindDue2]
   schedule = "*/5 * * * *"
 
