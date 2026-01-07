@@ -1,6 +1,6 @@
 // netlify/functions/secretaryLoop.js
-// deploy-bump: 1767806061
-// DIAGNOSTIC VERSION - will log exactly where it fails
+// deploy-bump: 1767806062
+// Ultra-defensive version with fetch fallback
 
 function toBool(v) {
   return String(v || "").trim() === "1" || String(v || "").toLowerCase() === "true";
@@ -36,8 +36,23 @@ function buildBaseUrl(event) {
   return host ? `${proto}://${host}` : "https://49northcommandcenter.netlify.app";
 }
 
+// Fetch with fallback for older Node versions
 async function fetchJson(url, opts) {
-  const res = await fetch(url, opts);
+  let fetchFn;
+  
+  if (typeof fetch !== "undefined") {
+    fetchFn = fetch;
+  } else {
+    // Fallback for Node < 18
+    try {
+      const nodeFetch = require("node-fetch");
+      fetchFn = nodeFetch;
+    } catch {
+      throw new Error("fetch not available and node-fetch not installed");
+    }
+  }
+  
+  const res = await fetchFn(url, opts);
   const text = await res.text();
   const json = safeJsonParse(text);
   return { ok: res.ok, status: res.status, json, text };
@@ -89,81 +104,60 @@ function buildTaskRow({
 }
 
 exports.handler = async (event) => {
-  // STEP 1: Log entry
-  console.log("SECRETARY_LOOP_START", nowIso(), {
-    path: event?.path,
-    qs: event?.queryStringParameters || {},
-  });
-
+  // Wrap EVERYTHING in try-catch
+  let logPrefix = "SECRETARY_LOOP";
+  
   try {
+    console.log(`${logPrefix}_START`, nowIso());
+    
     const qs = event?.queryStringParameters || {};
     const dryRun = toBool(qs.dryRun);
+    console.log(`${logPrefix}: dryRun=${dryRun}`);
 
-    // STEP 2: Try requiring googleapis
-    console.log("SECRETARY_LOOP: Requiring googleapis...");
-    let google;
-    try {
-      const googleapis = require("googleapis");
-      google = googleapis.google;
-      console.log("SECRETARY_LOOP: googleapis loaded OK");
-    } catch (err) {
-      console.error("SECRETARY_LOOP: googleapis require FAILED", err.message);
-      throw new Error(`Failed to load googleapis: ${err.message}`);
-    }
+    console.log(`${logPrefix}: Loading googleapis...`);
+    const googleapis = require("googleapis");
+    const google = googleapis.google;
+    console.log(`${logPrefix}: googleapis OK`);
 
-    // STEP 3: Try requiring secrets
-    console.log("SECRETARY_LOOP: Requiring secrets...");
-    let getSecret;
-    try {
-      const secrets = require("./_utils/secrets");
-      getSecret = secrets.getSecret;
-      console.log("SECRETARY_LOOP: secrets loaded OK");
-    } catch (err) {
-      console.error("SECRETARY_LOOP: secrets require FAILED", err.message);
-      throw new Error(`Failed to load secrets: ${err.message}`);
-    }
+    console.log(`${logPrefix}: Loading secrets...`);
+    const secrets = require("./_utils/secrets");
+    const getSecret = secrets.getSecret;
+    console.log(`${logPrefix}: secrets OK`);
 
-    // STEP 4: Try requiring google auth
-    console.log("SECRETARY_LOOP: Requiring google auth...");
-    let getGoogleAuth;
-    try {
-      const googleUtils = require("./_utils/google");
-      getGoogleAuth = googleUtils.getGoogleAuth;
-      console.log("SECRETARY_LOOP: google auth loaded OK");
-    } catch (err) {
-      console.error("SECRETARY_LOOP: google auth require FAILED", err.message);
-      throw new Error(`Failed to load google auth: ${err.message}`);
-    }
+    console.log(`${logPrefix}: Loading google auth...`);
+    const googleUtils = require("./_utils/google");
+    const getGoogleAuth = googleUtils.getGoogleAuth;
+    console.log(`${logPrefix}: google auth OK`);
 
-    // STEP 5: Get sheet ID
-    console.log("SECRETARY_LOOP: Getting sheet ID...");
+    console.log(`${logPrefix}: Getting sheet ID...`);
     const sheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
     if (!sheetId) throw new Error("Missing SECRETARY_TASKS_SHEET_ID");
-    console.log("SECRETARY_LOOP: Sheet ID retrieved OK");
+    console.log(`${logPrefix}: Sheet ID OK:`, sheetId.substring(0, 10) + "...");
 
     const baseUrl = buildBaseUrl(event);
-    console.log("SECRETARY_LOOP: Base URL:", baseUrl);
+    console.log(`${logPrefix}: Base URL:`, baseUrl);
 
-    // STEP 6: Fetch data
-    console.log("SECRETARY_LOOP: Fetching data from endpoints...");
-    const [bids, socials, webinars] = await Promise.all([
-      fetchJson(`${baseUrl}/.netlify/functions/getBids`).catch(e => {
-        console.error("SECRETARY_LOOP: getBids failed", e.message);
-        return { ok: false, json: null };
-      }),
-      fetchJson(`${baseUrl}/.netlify/functions/getSocialMediaContent?limit=0`).catch(e => {
-        console.error("SECRETARY_LOOP: getSocialMediaContent failed", e.message);
-        return { ok: false, json: null };
-      }),
-      fetchJson(`${baseUrl}/.netlify/functions/getWebinars`).catch(e => {
-        console.error("SECRETARY_LOOP: getWebinars failed", e.message);
-        return { ok: false, json: null };
-      }),
+    console.log(`${logPrefix}: Fetching endpoint data...`);
+    
+    const [bids, socials, webinars] = await Promise.allSettled([
+      fetchJson(`${baseUrl}/.netlify/functions/getBids`),
+      fetchJson(`${baseUrl}/.netlify/functions/getSocialMediaContent?limit=0`),
+      fetchJson(`${baseUrl}/.netlify/functions/getWebinars`),
     ]);
 
-    const bidSummary = bids?.json?.summary || {};
-    const socialSummary = socials?.json?.summary || {};
-    const webinarSummary = webinars?.json?.summary || {};
+    console.log(`${logPrefix}: Fetch results:`, {
+      bids: bids.status,
+      socials: socials.status,
+      webinars: webinars.status,
+    });
+
+    const bidsData = bids.status === "fulfilled" ? bids.value : { ok: false, json: null };
+    const socialsData = socials.status === "fulfilled" ? socials.value : { ok: false, json: null };
+    const webinarsData = webinars.status === "fulfilled" ? webinars.value : { ok: false, json: null };
+
+    const bidSummary = bidsData?.json?.summary || {};
+    const socialSummary = socialsData?.json?.summary || {};
+    const webinarSummary = webinarsData?.json?.summary || {};
 
     const totalActiveBids = Number(bidSummary.totalActive || 0);
     const respondCount = Number(bidSummary.respondCount || 0);
@@ -174,14 +168,13 @@ exports.handler = async (event) => {
 
     const upcomingWebinars = Number(webinarSummary.upcomingCount || 0);
 
-    console.log("SECRETARY_LOOP_INPUTS", {
-      bids: { ok: bids.ok, status: bids.status, totalActiveBids, respondCount, gatherCount },
-      social: { ok: socials.ok, status: socials.status, socialScheduled, socialDrafts },
-      webinars: { ok: webinars.ok, status: webinars.status, upcomingWebinars },
+    console.log(`${logPrefix}_INPUTS`, {
+      bids: { ok: bidsData.ok, totalActiveBids, respondCount, gatherCount },
+      social: { ok: socialsData.ok, socialScheduled, socialDrafts },
+      webinars: { ok: webinarsData.ok, upcomingWebinars },
     });
 
-    // STEP 7: Generate focus tasks
-    console.log("SECRETARY_LOOP: Generating focus tasks...");
+    console.log(`${logPrefix}: Generating focus tasks...`);
     const focusTasks = [];
 
     if (totalActiveBids > 0) {
@@ -214,8 +207,10 @@ exports.handler = async (event) => {
       });
     }
 
+    console.log(`${logPrefix}: Generated ${focusTasks.length} tasks`);
+
     if (!focusTasks.length) {
-      console.log("SECRETARY_LOOP_NO_TASKS");
+      console.log(`${logPrefix}_NO_TASKS`);
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json" },
@@ -229,17 +224,13 @@ exports.handler = async (event) => {
       };
     }
 
-    console.log("SECRETARY_LOOP: Generated", focusTasks.length, "tasks");
-
-    // STEP 8: Connect to Google Sheets
-    console.log("SECRETARY_LOOP: Connecting to Google Sheets...");
+    console.log(`${logPrefix}: Connecting to Google Sheets...`);
     const googleAuth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
     const auth = await googleAuth.getClient();
     const sheets = google.sheets({ version: "v4", auth });
-    console.log("SECRETARY_LOOP: Google Sheets client created");
+    console.log(`${logPrefix}: Google Sheets client created`);
 
-    // STEP 9: Read existing tasks
-    console.log("SECRETARY_LOOP: Reading Tasks sheet...");
+    console.log(`${logPrefix}: Reading Tasks sheet...`);
     const read = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: "Tasks!A:Z",
@@ -255,13 +246,12 @@ exports.handler = async (event) => {
     if (idIdx === -1) throw new Error("Tasks header missing required column: id");
 
     const statusIdx = header.indexOf("status");
-    console.log("SECRETARY_LOOP: Read", data.length, "existing tasks");
+    console.log(`${logPrefix}: Read ${data.length} existing tasks`);
 
     const findRow = (taskId) =>
       data.findIndex((r) => String(r[idIdx] || "") === String(taskId));
 
-    // STEP 10: Upsert tasks
-    console.log("SECRETARY_LOOP: Upserting tasks...");
+    console.log(`${logPrefix}: Upserting tasks...`);
     const batchUpdates = [];
     let upserted = 0;
 
@@ -269,7 +259,7 @@ exports.handler = async (event) => {
       const existingIdx = findRow(t.id);
 
       if (existingIdx === -1) {
-        console.log("SECRETARY_LOOP: Appending new task:", t.id);
+        console.log(`${logPrefix}: Appending new task: ${t.id}`);
         if (!dryRun) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: sheetId,
@@ -286,11 +276,11 @@ exports.handler = async (event) => {
           statusIdx === -1 ? "open" : String(row[statusIdx] || "").toLowerCase();
 
         if (existingStatus === "closed") {
-          console.log("SECRETARY_LOOP: Skipping closed task:", t.id);
+          console.log(`${logPrefix}: Skipping closed task: ${t.id}`);
           continue;
         }
 
-        console.log("SECRETARY_LOOP: Updating existing task:", t.id);
+        console.log(`${logPrefix}: Updating existing task: ${t.id}`);
         const updated = new Array(header.length).fill("");
 
         for (let i = 0; i < header.length; i++) updated[i] = row[i] ?? "";
@@ -319,7 +309,7 @@ exports.handler = async (event) => {
     }
 
     if (!dryRun && batchUpdates.length) {
-      console.log("SECRETARY_LOOP: Executing batch update with", batchUpdates.length, "updates");
+      console.log(`${logPrefix}: Executing batch update with ${batchUpdates.length} updates`);
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: sheetId,
         requestBody: {
@@ -329,7 +319,7 @@ exports.handler = async (event) => {
       });
     }
 
-    console.log("SECRETARY_LOOP_DONE", { dryRun, generated: focusTasks.length, upserted });
+    console.log(`${logPrefix}_DONE`, { dryRun, generated: focusTasks.length, upserted });
 
     return {
       statusCode: 200,
@@ -343,13 +333,19 @@ exports.handler = async (event) => {
       }),
     };
   } catch (err) {
-    console.error("SECRETARY_LOOP_ERROR", err && err.stack ? err.stack : err);
+    console.error(`${logPrefix}_ERROR`, {
+      message: err.message,
+      stack: err.stack,
+      name: err.name,
+    });
+    
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ok: false,
-        error: String(err && err.message ? err.message : err),
+        error: err.message,
+        type: err.name,
       }),
     };
   }
