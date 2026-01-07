@@ -2,7 +2,7 @@
 // Scheduled every 5 minutes
 // Sends Pushover notifications for Tasks that are due or "due soon" based on priority windows.
 //
-// Due-soon policy (requested):
+// Due-soon policy:
 // - code-red:    within 72 hours
 // - code-yellow: within 7 days
 // - code-green:  within 14 days
@@ -16,6 +16,16 @@
 // Sending policy:
 // - NO CAP on Code Red (send all eligible reds each run)
 // - Cap non-reds per run to prevent spam
+//
+// Quiet Hours (from ExecutiveAssistant_Settings tab):
+// - quietHoursEnabled (true/false)
+// - quietStart (HH:MM) default 21:00
+// - quietEnd (HH:MM) default 08:00
+// - quietTimeZone default Europe/London
+// - quietMode: silent|suppress (default silent)
+//
+// silent   => still sends, but sound=none
+// suppress => sends nothing during quiet hours
 
 function nowIso() {
   return new Date().toISOString();
@@ -27,6 +37,11 @@ function toBool(v) {
 
 function safeStr(v) {
   return String(v ?? "").trim();
+}
+
+function toInt(v, fallback) {
+  const n = parseInt(String(v ?? ""), 10);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function normalizePriority(p) {
@@ -48,18 +63,13 @@ function parseIsoDate(s) {
   const v = safeStr(s);
   if (!v) return null;
   const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isFinite(d.getTime()) ? d : null;
 }
 
 function minsSince(iso) {
   const d = parseIsoDate(iso);
   if (!d) return Infinity;
   return Math.floor((Date.now() - d.getTime()) / (60 * 1000));
-}
-
-function toInt(v, fallback) {
-  const n = parseInt(String(v ?? ""), 10);
-  return Number.isFinite(n) ? n : fallback;
 }
 
 function parseHHMM(s) {
@@ -101,6 +111,21 @@ function isInQuietHours({ enabled, startHHMM, endHHMM, timeZone }) {
   return nowMins >= start || nowMins < end;
 }
 
+function toBoolLoose(v) {
+  const s = String(v || "").toLowerCase().trim();
+  return s === "1" || s === "true" || s === "yes" || s === "y";
+}
+
+function colToLetter(n) {
+  let s = "";
+  while (n > 0) {
+    const m = (n - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 async function readEaSettings({ sheets, spreadsheetId }) {
   try {
     const res = await sheets.spreadsheets.values.get({
@@ -118,11 +143,6 @@ async function readEaSettings({ sheets, spreadsheetId }) {
   } catch {
     return {};
   }
-}
-
-function toBoolLoose(v) {
-  const s = String(v || "").toLowerCase().trim();
-  return s === "1" || s === "true" || s === "yes" || s === "y";
 }
 
 async function pushoverSend({ token, user, title, message, priority, sound }) {
@@ -150,8 +170,8 @@ function mapToPushoverPriority(codePriority) {
   return 0;
 }
 
-function mapToPushoverSound(codePriority, inQuiet) {
-  if (inQuiet) return "none"; // silent during quiet hours
+function mapToPushoverSound(codePriority, inQuiet, quietMode) {
+  if (inQuiet && quietMode === "silent") return "none";
   const p = normalizePriority(codePriority);
   if (p === "code-red") return "siren";
   return "pushover";
@@ -182,14 +202,14 @@ exports.handler = async (event) => {
     const auth = await googleAuth.getClient();
     const sheets = google.sheets({ version: "v4", auth });
 
-    // Read EA quiet settings ONCE
+    // Read settings ONCE
     const settings = await readEaSettings({ sheets, spreadsheetId: sheetId });
     const quiet = {
       enabled: toBoolLoose(settings.quietHoursEnabled ?? "true"),
       start: settings.quietStart ?? "21:00",
       end: settings.quietEnd ?? "08:00",
       tz: settings.quietTimeZone ?? "Europe/London",
-      mode: (settings.quietMode || "silent").toLowerCase(), // silent|suppress (we use silent now)
+      mode: (settings.quietMode || "silent").toLowerCase(), // silent|suppress
     };
 
     const inQuiet = isInQuietHours({
@@ -210,7 +230,6 @@ exports.handler = async (event) => {
 
     const header = rows[0] || [];
     const data = rows.slice(1);
-
     const idx = (name) => header.indexOf(name);
 
     const idIdx = idx("id");
@@ -276,6 +295,31 @@ exports.handler = async (event) => {
       });
     }
 
+    // If suppress mode, bail early during quiet hours
+    if (inQuiet && quiet.mode === "suppress") {
+      console.log("SECRETARY_REMIND_DUE2_QUIET_SUPPRESS", {
+        scanned,
+        eligible: candidates.length,
+        quiet,
+      });
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ok: true,
+          dryRun,
+          scanned,
+          eligible: candidates.length,
+          reds: candidates.filter((c) => c.priority === "code-red").length,
+          nonReds: candidates.filter((c) => c.priority !== "code-red").length,
+          sent: 0,
+          suppressedByQuietHours: true,
+          quiet,
+        }),
+      };
+    }
+
     // Sort: soonest due first
     candidates.sort((a, b) => a.msToDue - b.msToDue);
 
@@ -285,9 +329,6 @@ exports.handler = async (event) => {
     // NO CAP on reds
     const MAX_NON_RED_PER_RUN = 8;
     const toSend = [...reds, ...nonReds.slice(0, MAX_NON_RED_PER_RUN)];
-
-    // Optional: if you ever want "quietMode = suppress" to fully stop pushes:
-    // if (inQuiet && quiet.mode === "suppress") toSend = [];
 
     let sent = 0;
     const updates = [];
@@ -318,7 +359,7 @@ exports.handler = async (event) => {
           title: pushTitle,
           message,
           priority: mapToPushoverPriority(c.priority),
-          sound: mapToPushoverSound(c.priority, inQuiet),
+          sound: mapToPushoverSound(c.priority, inQuiet, quiet.mode),
         });
 
         if (!res.ok) {
@@ -326,8 +367,8 @@ exports.handler = async (event) => {
           continue;
         }
 
-        const sheetRowNumber = c.rowIndex + 2;
-        const lastNotifiedColLetter = String.fromCharCode(65 + lastNotifiedAtIdx); // assumes < 26 cols
+        const sheetRowNumber = c.rowIndex + 2; // header + 1-based indexing
+        const lastNotifiedColLetter = colToLetter(lastNotifiedAtIdx + 1);
 
         updates.push({
           range: `Tasks!${lastNotifiedColLetter}${sheetRowNumber}`,
@@ -355,7 +396,7 @@ exports.handler = async (event) => {
       nonReds: nonReds.length,
       sent,
       dryRun,
-      quiet: { enabled: quiet.enabled, start: quiet.start, end: quiet.end, tz: quiet.tz, inQuiet },
+      quiet: { ...quiet, inQuiet },
     });
 
     return {
@@ -370,7 +411,7 @@ exports.handler = async (event) => {
         nonReds: nonReds.length,
         sent,
         sentIds: toSend.map((x) => x.taskId),
-        quiet: { enabled: quiet.enabled, start: quiet.start, end: quiet.end, tz: quiet.tz, inQuiet },
+        quiet: { ...quiet, inQuiet },
       }),
     };
   } catch (err) {
