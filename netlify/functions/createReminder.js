@@ -1,7 +1,24 @@
 // netlify/functions/createReminder.js
 const { google } = require("googleapis");
 const { getSecret } = require("./_utils/secrets");
-const { auth } = require("./_utils/google");
+
+function getAuth() {
+  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
+
+  if (!clientEmail || !privateKey) {
+    throw new Error("Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY");
+  }
+
+  // Netlify multiline key handling
+  privateKey = privateKey.replace(/\\n/g, "\n");
+
+  return new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  });
+}
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -24,8 +41,6 @@ exports.handler = async (event) => {
       dueAt
     } = body;
 
-    // If dueAt isn't provided, start immediately from createdAt.
-    // If dueAt is in the future, the loop won't start until then.
     const effectiveDueAt =
       dueAt && String(dueAt).trim() ? String(dueAt).trim() : createdAt;
 
@@ -43,28 +58,28 @@ exports.handler = async (event) => {
     const safeTitle = String(title || "").trim();
     const safeNotes = String(notes || "").trim();
 
-    // NOTE: Your Tasks sheet headers you showed end at notifyEveryMins (no contactEmail).
-    // If your sheet truly has no contactEmail column, remove the last element below.
-    // For now, we keep it because you’ve planned CRM-linked reminders.
+    // Your Tasks headers (exact order):
+    // id, createdAt, createdBy, rawText, title, contactEmail, notes, dueAt, tz,
+    // recurrence, priority, status, lastNotifiedAt, notifyEveryMins
     const row = [
-      Date.now().toString(),          // id
-      createdAt,                      // createdAt
-      "CommandApp",                   // createdBy
+      Date.now().toString(),                // id
+      createdAt,                            // createdAt
+      "CommandApp",                         // createdBy
       `${safeType} Reminder: ${safeTitle}`, // rawText
-      safeTitle,                      // title
-      safeNotes,                      // notes
-      effectiveDueAt,                 // dueAt
-      "UTC",                          // tz
-      "",                             // recurrence
-      p,                              // priority
-      "open",                         // status
-      "",                             // lastNotifiedAt
-      notifyEveryMins,                // notifyEveryMins
-      safeType === "CRM" ? String(contactEmail || "").trim() : "" // contactEmail
+      safeTitle,                            // title
+      safeType === "CRM" ? String(contactEmail || "").trim() : "", // contactEmail
+      safeNotes,                            // notes
+      effectiveDueAt,                       // dueAt
+      "UTC",                                // tz
+      "",                                   // recurrence
+      p,                                    // priority
+      "open",                               // status
+      "",                                   // lastNotifiedAt
+      notifyEveryMins                       // notifyEveryMins
     ];
 
-    const authClient = await auth();
-    const sheets = google.sheets({ version: "v4", auth: authClient });
+    const auth = getAuth();
+    const sheets = google.sheets({ version: "v4", auth });
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
