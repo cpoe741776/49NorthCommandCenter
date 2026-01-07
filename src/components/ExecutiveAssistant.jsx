@@ -1,6 +1,7 @@
 // src/components/ExecutiveAssistant.jsx
-import React, { useState, useCallback } from "react";
-import { PlusCircle } from "lucide-react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { PlusCircle, RefreshCw, CheckCircle2, CalendarClock } from "lucide-react";
+import { fetchReminders, updateReminder } from "../services/reminderService";
 
 const initialState = {
   type: "Personal",
@@ -30,7 +31,7 @@ function minNowLocal() {
 
 function toIsoFromLocalDateTime(dueAtLocal) {
   if (!dueAtLocal || !String(dueAtLocal).trim()) return "";
-  const d = new Date(dueAtLocal); // interpreted as local time
+  const d = new Date(dueAtLocal); // local time
   const ms = d.getTime();
   if (!Number.isFinite(ms)) return "";
   return d.toISOString();
@@ -50,33 +51,53 @@ function addHoursFromNow(hours) {
   return d;
 }
 
-// Normalization: trim, collapse whitespace, normalize newlines
 function normalizeText(s) {
   if (s == null) return "";
   const str = String(s);
-
-  // Convert CRLF to LF, trim outer whitespace
   const trimmed = str.replace(/\r\n/g, "\n").trim();
-
-  // Collapse runs of spaces/tabs; keep newlines but collapse multiple blank lines
   const collapseSpaces = trimmed.replace(/[ \t]+/g, " ");
   const collapseBlankLines = collapseSpaces.replace(/\n{3,}/g, "\n\n");
-
   return collapseBlankLines;
 }
 
 function normalizeEmail(s) {
-  const e = normalizeText(s).toLowerCase();
-  return e;
+  return normalizeText(s).toLowerCase();
+}
+
+function parseISO(s) {
+  const t = Date.parse(String(s || ""));
+  return Number.isFinite(t) ? new Date(t) : null;
+}
+
+function formatLocal(dt) {
+  if (!dt) return "";
+  try {
+    return dt.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  } catch {
+    return String(dt);
+  }
 }
 
 const ExecutiveAssistant = () => {
+  // Create form
   const [form, setForm] = useState(initialState);
+  const [quickHours, setQuickHours] = useState(2);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const [quickHours, setQuickHours] = useState(2);
+  // Task list
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState("");
+  const [rescheduleDraft, setRescheduleDraft] = useState({}); // { [id]: "YYYY-MM-DDTHH:mm" }
+  const [rowBusy, setRowBusy] = useState({}); // { [id]: true }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -94,6 +115,32 @@ const ExecutiveAssistant = () => {
     setForm((prev) => ({ ...prev, dueAtLocal: "" }));
   };
 
+  const loadTasks = useCallback(async () => {
+    setTasksLoading(true);
+    setTasksError("");
+    try {
+      const data = await fetchReminders();
+
+      // Be forgiving about response shape
+      const list =
+        Array.isArray(data?.tasks) ? data.tasks :
+        Array.isArray(data?.reminders) ? data.reminders :
+        Array.isArray(data?.items) ? data.items :
+        Array.isArray(data) ? data :
+        [];
+
+      setTasks(list);
+    } catch (e) {
+      setTasksError(e?.message || "Failed to load tasks");
+    } finally {
+      setTasksLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
@@ -103,14 +150,12 @@ const ExecutiveAssistant = () => {
 
       const createdAt = new Date().toISOString();
 
-      // Normalize user inputs
       const type = normalizeText(form.type) || "Personal";
       const title = normalizeText(form.title);
       const notes = normalizeText(form.notes);
       const priority = normalizeText(form.priority) || "code-green";
       const contactEmail = normalizeEmail(form.contactEmail);
 
-      // Local time (England for you) -> ISO
       const dueAtIso = toIsoFromLocalDateTime(form.dueAtLocal);
 
       const payload = {
@@ -134,6 +179,7 @@ const ExecutiveAssistant = () => {
         if (res.ok && data.success) {
           setSuccessMsg("Reminder created successfully.");
           setForm(initialState);
+          await loadTasks();
         } else {
           setErrorMsg(data.error || `Failed to create reminder (HTTP ${res.status}).`);
         }
@@ -143,8 +189,71 @@ const ExecutiveAssistant = () => {
         setLoading(false);
       }
     },
-    [form]
+    [form, loadTasks]
   );
+
+  const sortedTasks = useMemo(() => {
+    const list = Array.isArray(tasks) ? tasks.slice() : [];
+    const statusRank = (s) => (String(s || "").toLowerCase() === "open" ? 0 : 1);
+
+    list.sort((a, b) => {
+      const sa = statusRank(a.status);
+      const sb = statusRank(b.status);
+      if (sa !== sb) return sa - sb;
+
+      const da = Date.parse(String(a.dueAt || "")) || 0;
+      const db = Date.parse(String(b.dueAt || "")) || 0;
+      return da - db;
+    });
+
+    return list;
+  }, [tasks]);
+
+  const startReschedule = (task) => {
+    const existing = parseISO(task?.dueAt);
+    setRescheduleDraft((prev) => ({
+      ...prev,
+      [task.id]: existing ? toLocalDateTimeInputValue(existing) : minNowLocal()
+    }));
+  };
+
+  const saveReschedule = async (taskId) => {
+    const local = rescheduleDraft[taskId];
+    const iso = toIsoFromLocalDateTime(local);
+
+    if (!iso) {
+      setTasksError("Please choose a valid date/time to reschedule.");
+      return;
+    }
+
+    setRowBusy((p) => ({ ...p, [taskId]: true }));
+    try {
+      await updateReminder({ id: taskId, action: "reschedule", dueAt: iso });
+      // clear draft
+      setRescheduleDraft((prev) => {
+        const copy = { ...prev };
+        delete copy[taskId];
+        return copy;
+      });
+      await loadTasks();
+    } catch (e) {
+      setTasksError(e?.message || "Failed to reschedule");
+    } finally {
+      setRowBusy((p) => ({ ...p, [taskId]: false }));
+    }
+  };
+
+  const markComplete = async (taskId) => {
+    setRowBusy((p) => ({ ...p, [taskId]: true }));
+    try {
+      await updateReminder({ id: taskId, action: "complete" });
+      await loadTasks();
+    } catch (e) {
+      setTasksError(e?.message || "Failed to complete task");
+    } finally {
+      setRowBusy((p) => ({ ...p, [taskId]: false }));
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-6">
@@ -152,6 +261,7 @@ const ExecutiveAssistant = () => {
         Executive Assistant – Create Reminder
       </h2>
 
+      {/* Create Reminder Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block font-semibold mb-1">Reminder Type</label>
@@ -224,7 +334,6 @@ const ExecutiveAssistant = () => {
               type="button"
               onClick={() => setDueToDate(addMinutesFromNow(15))}
               className="px-3 py-1 rounded border hover:bg-gray-50"
-              title="Set due time to 15 minutes from now (local)"
             >
               +15m
             </button>
@@ -233,7 +342,6 @@ const ExecutiveAssistant = () => {
               type="button"
               onClick={() => setDueToDate(addMinutesFromNow(30))}
               className="px-3 py-1 rounded border hover:bg-gray-50"
-              title="Set due time to 30 minutes from now (local)"
             >
               +30m
             </button>
@@ -244,7 +352,6 @@ const ExecutiveAssistant = () => {
               value={quickHours}
               onChange={(e) => setQuickHours(parseInt(e.target.value, 10))}
               className="p-2 border rounded"
-              title="Choose hours from now (local)"
             >
               {[1, 2, 3, 4, 5, 6, 7, 8].map((h) => (
                 <option key={h} value={h}>
@@ -257,7 +364,6 @@ const ExecutiveAssistant = () => {
               type="button"
               onClick={() => setDueToDate(addHoursFromNow(quickHours))}
               className="px-3 py-1 rounded border hover:bg-gray-50"
-              title="Set due time to selected hours from now (local)"
             >
               Set
             </button>
@@ -266,14 +372,13 @@ const ExecutiveAssistant = () => {
               type="button"
               onClick={clearDue}
               className="px-3 py-1 rounded border hover:bg-gray-50 ml-auto"
-              title="Clear due time (starts immediately)"
             >
               Clear
             </button>
           </div>
 
           <div className="text-xs text-gray-600 mt-1">
-            Times are based on your local computer time (England). The system stores an ISO timestamp.
+            Times are based on your local computer time (England). Saved to the sheet as an ISO timestamp.
           </div>
         </div>
 
@@ -304,6 +409,147 @@ const ExecutiveAssistant = () => {
         {successMsg && <div className="text-green-600 font-semibold mt-2">{successMsg}</div>}
         {errorMsg && <div className="text-red-600 font-semibold mt-2">{errorMsg}</div>}
       </form>
+
+      {/* Task List */}
+      <div className="mt-10 border-t pt-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-800">
+            Executive Assistant Task List
+          </h3>
+
+          <button
+            type="button"
+            onClick={loadTasks}
+            className="px-3 py-1 rounded border hover:bg-gray-50 flex items-center gap-2"
+            disabled={tasksLoading}
+            title="Refresh tasks"
+          >
+            <RefreshCw size={16} />
+            {tasksLoading ? "Refreshing…" : "Refresh"}
+          </button>
+        </div>
+
+        {tasksError && (
+          <div className="text-red-600 font-semibold mt-3">{tasksError}</div>
+        )}
+
+        {tasksLoading && (
+          <div className="text-gray-600 mt-3">Loading tasks…</div>
+        )}
+
+        {!tasksLoading && !sortedTasks.length && (
+          <div className="text-gray-600 mt-3">No tasks found.</div>
+        )}
+
+        <div className="mt-4 space-y-3">
+          {sortedTasks.map((t) => {
+            const id = String(t.id || "");
+            const isOpen = String(t.status || "").toLowerCase() === "open";
+            const due = parseISO(t.dueAt);
+            const last = parseISO(t.lastNotifiedAt);
+            const busy = !!rowBusy[id];
+            const showResched = rescheduleDraft[id] != null;
+
+            return (
+              <div key={id} className="border rounded p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 truncate">
+                      {t.title || "Untitled"}
+                    </div>
+
+                    <div className="text-sm text-gray-700 mt-1">
+                      <span className="font-semibold">Due:</span>{" "}
+                      {due ? formatLocal(due) : "(none)"}
+                      {"  "}
+                      <span className="mx-2">•</span>
+                      <span className="font-semibold">Priority:</span>{" "}
+                      {String(t.priority || "").toLowerCase()}
+                      {"  "}
+                      <span className="mx-2">•</span>
+                      <span className="font-semibold">Status:</span>{" "}
+                      {isOpen ? "open" : "closed"}
+                    </div>
+
+                    {(t.notes || t.rawText || last) && (
+                      <div className="text-sm text-gray-600 mt-2">
+                        {t.notes ? <div><span className="font-semibold">Notes:</span> {t.notes}</div> : null}
+                        {last ? <div><span className="font-semibold">Last notified:</span> {formatLocal(last)}</div> : null}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2 shrink-0">
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded border hover:bg-gray-50 flex items-center gap-2"
+                      onClick={() => startReschedule(t)}
+                      disabled={busy}
+                      title="Reschedule this task"
+                    >
+                      <CalendarClock size={16} />
+                      Reschedule
+                    </button>
+
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded border hover:bg-gray-50 flex items-center gap-2"
+                      onClick={() => markComplete(id)}
+                      disabled={busy || !isOpen}
+                      title="Mark task as completed"
+                    >
+                      <CheckCircle2 size={16} />
+                      Task Completed
+                    </button>
+                  </div>
+                </div>
+
+                {showResched && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      value={rescheduleDraft[id]}
+                      min={minNowLocal()}
+                      onChange={(e) =>
+                        setRescheduleDraft((prev) => ({ ...prev, [id]: e.target.value }))
+                      }
+                      className="p-2 border rounded"
+                    />
+
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded border hover:bg-gray-50"
+                      onClick={() => saveReschedule(id)}
+                      disabled={busy}
+                    >
+                      Save
+                    </button>
+
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded border hover:bg-gray-50"
+                      onClick={() =>
+                        setRescheduleDraft((prev) => {
+                          const copy = { ...prev };
+                          delete copy[id];
+                          return copy;
+                        })
+                      }
+                      disabled={busy}
+                    >
+                      Cancel
+                    </button>
+
+                    <div className="text-xs text-gray-600 ml-auto">
+                      Rescheduling clears lastNotifiedAt so it can alert again at the new due time.
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 };
