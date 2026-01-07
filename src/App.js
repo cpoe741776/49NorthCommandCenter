@@ -15,6 +15,7 @@ const truncate = (str, max = 180) => {
 
 // 🔻 Code-split feature modules (keeps initial bundle lean)
 const Dashboard = lazy(() => import('./components/Dashboard'));
+const ExecutiveAssistant = lazy(() => import('./components/ExecutiveAssistant'));
 const BidOperations = lazy(() => import('./components/BidOperations'));
 const WebinarOperations = lazy(() => import('./components/WebinarOperations'));
 const SocialMediaOperations = lazy(() => import('./components/SocialMediaOperations'));
@@ -25,6 +26,7 @@ const ContactCRM = lazy(() => import('./components/ContactCRM'));
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'executive', label: 'Executive Assistant', icon: Activity }, // or UserCheck, ClipboardList, or Sparkles
   { id: 'bids', label: 'Bid Operations', icon: FileText },
   { id: 'webinars', label: 'Webinar Operations', icon: Video },
   { id: 'social', label: 'Social Media', icon: Share2 },
@@ -267,6 +269,8 @@ const App = () => {
             onTickerUpdate={loadTickerFeed}
           />
         );
+        case 'executive':
+  return <ExecutiveAssistant />;
       case 'bids':
         return (
           <BidOperations
