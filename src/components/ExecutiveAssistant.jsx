@@ -1,7 +1,7 @@
 // src/components/ExecutiveAssistant.jsx
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { PlusCircle, RefreshCw, CheckCircle2, CalendarClock } from "lucide-react";
-import { fetchReminders, updateReminder } from "../services/reminderService";
+import { fetchExecutiveTasks, updateReminder } from "../services/reminderService";
 
 const initialState = {
   type: "Personal",
@@ -119,19 +119,11 @@ const ExecutiveAssistant = () => {
     setTasksLoading(true);
     setTasksError("");
     try {
-      const data = await fetchReminders();
-
-      // Be forgiving about response shape
-      const list =
-        Array.isArray(data?.tasks) ? data.tasks :
-        Array.isArray(data?.reminders) ? data.reminders :
-        Array.isArray(data?.items) ? data.items :
-        Array.isArray(data) ? data :
-        [];
-
-      setTasks(list);
+      const list = await fetchExecutiveTasks();
+      setTasks(Array.isArray(list) ? list : []);
     } catch (e) {
       setTasksError(e?.message || "Failed to load tasks");
+      setTasks([]);
     } finally {
       setTasksLoading(false);
     }
@@ -229,7 +221,6 @@ const ExecutiveAssistant = () => {
     setRowBusy((p) => ({ ...p, [taskId]: true }));
     try {
       await updateReminder({ id: taskId, action: "reschedule", dueAt: iso });
-      // clear draft
       setRescheduleDraft((prev) => {
         const copy = { ...prev };
         delete copy[taskId];
@@ -473,8 +464,16 @@ const ExecutiveAssistant = () => {
 
                     {(t.notes || t.rawText || last) && (
                       <div className="text-sm text-gray-600 mt-2">
-                        {t.notes ? <div><span className="font-semibold">Notes:</span> {t.notes}</div> : null}
-                        {last ? <div><span className="font-semibold">Last notified:</span> {formatLocal(last)}</div> : null}
+                        {t.notes ? (
+                          <div>
+                            <span className="font-semibold">Notes:</span> {t.notes}
+                          </div>
+                        ) : null}
+                        {last ? (
+                          <div>
+                            <span className="font-semibold">Last notified:</span> {formatLocal(last)}
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>

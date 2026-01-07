@@ -1,5 +1,6 @@
 // netlify/functions/updateReminder.js
 const { google } = require("googleapis");
+const { corsHeaders, methodGuard, ok, serverErr } = require("./_utils/http");
 const { getSecret } = require("./_utils/secrets");
 
 function colToLetter(n) {
@@ -35,9 +36,9 @@ function parseISO(s) {
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
+  const headers = corsHeaders(event.headers?.origin);
+  const guard = methodGuard(event, headers, "POST", "OPTIONS");
+  if (guard) return guard;
 
   try {
     const sheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
@@ -48,6 +49,8 @@ exports.handler = async (event) => {
 
     if (!id) throw new Error("Missing id");
     if (!action) throw new Error("Missing action (complete|reschedule)");
+
+    const act = String(action).toLowerCase();
 
     const auth = getAuth();
     const sheets = google.sheets({ version: "v4", auth });
@@ -62,7 +65,6 @@ exports.handler = async (event) => {
     if (!rows.length) throw new Error("Tasks sheet is empty");
 
     const [header, ...data] = rows;
-
     const idx = (name) => header.indexOf(name);
 
     const col = {
@@ -88,34 +90,32 @@ exports.handler = async (event) => {
 
     const updates = [];
 
-    if (String(action).toLowerCase() === "complete") {
+    if (act === "complete") {
       // status -> closed
       const statusColLetter = colToLetter(col.status + 1);
       updates.push({
         range: `Tasks!${statusColLetter}${sheetRow}`,
         values: [["closed"]]
       });
-    } else if (String(action).toLowerCase() === "reschedule") {
-      // dueAt -> new value (must be ISO), and clear lastNotifiedAt
+    } else if (act === "reschedule") {
       const dueMs = parseISO(dueAt);
       if (!dueMs) throw new Error("Invalid dueAt (must be ISO date string)");
 
+      // dueAt -> new value (ISO), clear lastNotifiedAt, ensure status open
       const dueColLetter = colToLetter(col.dueAt + 1);
       const lastColLetter = colToLetter(col.lastNotifiedAt + 1);
+      const statusColLetter = colToLetter(col.status + 1);
 
       updates.push({
         range: `Tasks!${dueColLetter}${sheetRow}`,
         values: [[String(dueAt)]]
       });
 
-      // Clear lastNotifiedAt so it can notify again at the new dueAt
       updates.push({
         range: `Tasks!${lastColLetter}${sheetRow}`,
         values: [[""]]
       });
 
-      // Ensure status is open (in case it was closed previously)
-      const statusColLetter = colToLetter(col.status + 1);
       updates.push({
         range: `Tasks!${statusColLetter}${sheetRow}`,
         values: [["open"]]
@@ -132,17 +132,9 @@ exports.handler = async (event) => {
       }
     });
 
-    return {
-      statusCode: 200,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: true })
-    };
+    return ok(headers, { success: true });
   } catch (err) {
     console.error("❌ updateReminder error:", err);
-    return {
-      statusCode: 500,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: err.message || String(err) })
-    };
+    return serverErr(headers, err.message || String(err));
   }
 };
