@@ -62,6 +62,69 @@ function toInt(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function parseHHMM(s) {
+  const m = String(s || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return hh * 60 + mm;
+}
+
+function minutesInTimeZone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const hh = Number(parts.find((p) => p.type === "hour")?.value);
+  const mm = Number(parts.find((p) => p.type === "minute")?.value);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return hh * 60 + mm;
+}
+
+function isInQuietHours({ enabled, startHHMM, endHHMM, timeZone }) {
+  if (!enabled) return false;
+
+  const start = parseHHMM(startHHMM);
+  const end = parseHHMM(endHHMM);
+  if (start == null || end == null) return false;
+
+  const nowMins = minutesInTimeZone(new Date(), timeZone || "Europe/London");
+  if (nowMins == null) return false;
+
+  // handles wrap-around windows like 21:00 -> 08:00
+  if (start < end) return nowMins >= start && nowMins < end;
+  return nowMins >= start || nowMins < end;
+}
+
+async function readEaSettings({ sheets, spreadsheetId }) {
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "ExecutiveAssistant_Settings!A:B",
+    });
+    const rows = res.data.values || [];
+    const out = {};
+    for (const r of rows.slice(1)) {
+      const k = String(r[0] || "").trim();
+      const v = String(r[1] || "").trim();
+      if (k) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function toBoolLoose(v) {
+  const s = String(v || "").toLowerCase().trim();
+  return s === "1" || s === "true" || s === "yes" || s === "y";
+}
+
 async function pushoverSend({ token, user, title, message, priority, sound }) {
   const res = await fetch("https://api.pushover.net/1/messages.json", {
     method: "POST",
@@ -87,7 +150,8 @@ function mapToPushoverPriority(codePriority) {
   return 0;
 }
 
-function mapToPushoverSound(codePriority) {
+function mapToPushoverSound(codePriority, inQuiet) {
+  if (inQuiet) return "none"; // silent during quiet hours
   const p = normalizePriority(codePriority);
   if (p === "code-red") return "siren";
   return "pushover";
@@ -117,6 +181,23 @@ exports.handler = async (event) => {
     const googleAuth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
     const auth = await googleAuth.getClient();
     const sheets = google.sheets({ version: "v4", auth });
+
+    // Read EA quiet settings ONCE
+    const settings = await readEaSettings({ sheets, spreadsheetId: sheetId });
+    const quiet = {
+      enabled: toBoolLoose(settings.quietHoursEnabled ?? "true"),
+      start: settings.quietStart ?? "21:00",
+      end: settings.quietEnd ?? "08:00",
+      tz: settings.quietTimeZone ?? "Europe/London",
+      mode: (settings.quietMode || "silent").toLowerCase(), // silent|suppress (we use silent now)
+    };
+
+    const inQuiet = isInQuietHours({
+      enabled: quiet.enabled,
+      startHHMM: quiet.start,
+      endHHMM: quiet.end,
+      timeZone: quiet.tz,
+    });
 
     // Read Tasks
     const read = await sheets.spreadsheets.values.get({
@@ -195,15 +276,18 @@ exports.handler = async (event) => {
       });
     }
 
-    // Sort: soonest due first inside each bucket
+    // Sort: soonest due first
     candidates.sort((a, b) => a.msToDue - b.msToDue);
 
     const reds = candidates.filter((c) => c.priority === "code-red");
     const nonReds = candidates.filter((c) => c.priority !== "code-red");
 
     // NO CAP on reds
-    const MAX_NON_RED_PER_RUN = 8; // adjust if you want more/less noise
+    const MAX_NON_RED_PER_RUN = 8;
     const toSend = [...reds, ...nonReds.slice(0, MAX_NON_RED_PER_RUN)];
+
+    // Optional: if you ever want "quietMode = suppress" to fully stop pushes:
+    // if (inQuiet && quiet.mode === "suppress") toSend = [];
 
     let sent = 0;
     const updates = [];
@@ -234,7 +318,7 @@ exports.handler = async (event) => {
           title: pushTitle,
           message,
           priority: mapToPushoverPriority(c.priority),
-          sound: mapToPushoverSound(c.priority),
+          sound: mapToPushoverSound(c.priority, inQuiet),
         });
 
         if (!res.ok) {
@@ -242,7 +326,7 @@ exports.handler = async (event) => {
           continue;
         }
 
-        const sheetRowNumber = c.rowIndex + 2; // header + 1-based indexing
+        const sheetRowNumber = c.rowIndex + 2;
         const lastNotifiedColLetter = String.fromCharCode(65 + lastNotifiedAtIdx); // assumes < 26 cols
 
         updates.push({
@@ -271,6 +355,7 @@ exports.handler = async (event) => {
       nonReds: nonReds.length,
       sent,
       dryRun,
+      quiet: { enabled: quiet.enabled, start: quiet.start, end: quiet.end, tz: quiet.tz, inQuiet },
     });
 
     return {
@@ -285,6 +370,7 @@ exports.handler = async (event) => {
         nonReds: nonReds.length,
         sent,
         sentIds: toSend.map((x) => x.taskId),
+        quiet: { enabled: quiet.enabled, start: quiet.start, end: quiet.end, tz: quiet.tz, inQuiet },
       }),
     };
   } catch (err) {

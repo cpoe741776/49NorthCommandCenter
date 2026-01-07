@@ -84,6 +84,32 @@ function formatLocal(dt) {
   }
 }
 
+// -------------------- Quiet Hours UI helpers --------------------
+function isHHMM(s) {
+  return /^(\d{1,2}):(\d{2})$/.test(String(s || "").trim());
+}
+
+function Toggle({ checked, onChange, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+        checked ? "bg-green-600" : "bg-gray-300"
+      } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
+      aria-pressed={checked}
+      aria-disabled={disabled ? "true" : "false"}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+          checked ? "translate-x-5" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+// ---------------------------------------------------------------
+
 const ExecutiveAssistant = () => {
   // Create form
   const [form, setForm] = useState(initialState);
@@ -98,6 +124,16 @@ const ExecutiveAssistant = () => {
   const [tasksError, setTasksError] = useState("");
   const [rescheduleDraft, setRescheduleDraft] = useState({}); // { [id]: "YYYY-MM-DDTHH:mm" }
   const [rowBusy, setRowBusy] = useState({}); // { [id]: true }
+
+  // Quiet Hours settings state
+  const [qhLoading, setQhLoading] = useState(true);
+  const [qhSaving, setQhSaving] = useState(false);
+  const [qhError, setQhError] = useState("");
+  const [qhEnabled, setQhEnabled] = useState(true);
+  const [qhStart, setQhStart] = useState("21:00");
+  const [qhEnd, setQhEnd] = useState("08:00");
+  const [qhTz, setQhTz] = useState("Europe/London");
+  const [qhMode, setQhMode] = useState("silent"); // silent | suppress
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -129,9 +165,75 @@ const ExecutiveAssistant = () => {
     }
   }, []);
 
+  // Load Quiet Hours settings
+  const loadQuietHours = useCallback(async () => {
+    setQhLoading(true);
+    setQhError("");
+    try {
+      const res = await fetch("/.netlify/functions/getExecutiveAssistantSettings");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || `Failed to load quiet hours (HTTP ${res.status}).`);
+      }
+
+      const s = json.settings || {};
+      setQhEnabled(String(s.quietHoursEnabled ?? "true").toLowerCase() === "true");
+      setQhStart(String(s.quietStart ?? "21:00"));
+      setQhEnd(String(s.quietEnd ?? "08:00"));
+      setQhTz(String(s.quietTimeZone ?? "Europe/London"));
+      setQhMode(String(s.quietMode ?? "silent").toLowerCase());
+    } catch (e) {
+      setQhError(e?.message || "Failed to load quiet hours");
+    } finally {
+      setQhLoading(false);
+    }
+  }, []);
+
+  const saveQuietHours = useCallback(async () => {
+    setQhError("");
+
+    if (!isHHMM(qhStart) || !isHHMM(qhEnd)) {
+      setQhError("Start and End must be in HH:MM format (e.g., 21:00).");
+      return;
+    }
+    if (!["silent", "suppress"].includes(String(qhMode || "").toLowerCase())) {
+      setQhError("Quiet mode must be 'silent' or 'suppress'.");
+      return;
+    }
+
+    setQhSaving(true);
+    try {
+      const payload = {
+        settings: {
+          quietHoursEnabled: qhEnabled ? "true" : "false",
+          quietStart: qhStart,
+          quietEnd: qhEnd,
+          quietTimeZone: qhTz,
+          quietMode: qhMode
+        }
+      };
+
+      const res = await fetch("/.netlify/functions/setExecutiveAssistantSettings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || `Failed to save quiet hours (HTTP ${res.status}).`);
+      }
+    } catch (e) {
+      setQhError(e?.message || "Failed to save quiet hours");
+    } finally {
+      setQhSaving(false);
+    }
+  }, [qhEnabled, qhStart, qhEnd, qhTz, qhMode]);
+
   useEffect(() => {
     loadTasks();
-  }, [loadTasks]);
+    loadQuietHours();
+  }, [loadTasks, loadQuietHours]);
 
   const handleSubmit = useCallback(
     async (e) => {
@@ -401,16 +503,121 @@ const ExecutiveAssistant = () => {
         {errorMsg && <div className="text-red-600 font-semibold mt-2">{errorMsg}</div>}
       </form>
 
-      {/* Task List */}
+      {/* Quiet Hours */}
       <div className="mt-10 border-t pt-6">
+        <div className="border rounded p-4 bg-white">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-lg font-bold text-gray-900">Quiet Hours</div>
+              <div className="text-sm text-gray-600 mt-1">
+                Silence alert sounds during your chosen hours. (You can travel and update the timezone anytime.)
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-700">{qhEnabled ? "On" : "Off"}</span>
+              <Toggle checked={qhEnabled} onChange={setQhEnabled} disabled={qhLoading || qhSaving} />
+            </div>
+          </div>
+
+          {qhLoading ? (
+            <div className="text-sm text-gray-600 mt-3">Loading quiet hours…</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                <div>
+                  <label className="block font-semibold mb-1">Start (HH:MM)</label>
+                  <input
+                    value={qhStart}
+                    onChange={(e) => setQhStart(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="21:00"
+                    disabled={qhSaving}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">End (HH:MM)</label>
+                  <input
+                    value={qhEnd}
+                    onChange={(e) => setQhEnd(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="08:00"
+                    disabled={qhSaving}
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Time Zone</label>
+                  <input
+                    value={qhTz}
+                    onChange={(e) => setQhTz(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="Europe/London"
+                    disabled={qhSaving}
+                  />
+                  <div className="text-xs text-gray-600 mt-1">
+                    Use IANA zone names (e.g., Europe/London, America/New_York).
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1">Quiet Mode</label>
+                  <select
+                    value={qhMode}
+                    onChange={(e) => setQhMode(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    disabled={qhSaving}
+                  >
+                    <option value="silent">Silent (send push, no sound)</option>
+                    <option value="suppress">Suppress (no push at all)</option>
+                  </select>
+                </div>
+              </div>
+
+              {qhError && (
+                <div className="text-red-600 font-semibold mt-3">{qhError}</div>
+              )}
+
+              <div className="flex items-center justify-between mt-4">
+                <button
+                  type="button"
+                  onClick={loadQuietHours}
+                  className="px-3 py-1 rounded border hover:bg-gray-50"
+                  disabled={qhLoading || qhSaving}
+                >
+                  Reload
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveQuietHours}
+                  className="bg-brand-blue hover:bg-blue-700 text-white px-4 py-2 rounded"
+                  disabled={qhSaving}
+                >
+                  {qhSaving ? "Saving…" : "Save Quiet Hours"}
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-600 mt-2">
+                Tip: If you set mode to <span className="font-semibold">Silent</span>, the notification still appears
+                but your siren won’t wake the house.
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Task List */}
+      <div className="mt-6">
         <div className="bg-gray-50 border rounded p-3 mb-4">
-  <div className="font-semibold text-gray-900">
-    Hey Top, we need to work on these as well as your other reminders I have for you below.
-  </div>
-  <div className="text-sm text-gray-600 mt-1">
-    (These include your auto-generated focus tasks plus anything you added manually.)
-  </div>
-</div>
+          <div className="font-semibold text-gray-900">
+            Hey Top, we need to work on these as well as your other reminders I have for you below.
+          </div>
+          <div className="text-sm text-gray-600 mt-1">
+            (These include your auto-generated focus tasks plus anything you added manually.)
+          </div>
+        </div>
 
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">
