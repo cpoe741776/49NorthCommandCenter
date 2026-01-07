@@ -60,7 +60,7 @@ exports.handler = async (event) => {
       'UTC',
       '', // recurrence
       priority,
-      'pending',
+      'open',
       '', // lastNotifiedAt
       notifyEveryMins,
       type === 'CRM' ? contactEmail : ''
