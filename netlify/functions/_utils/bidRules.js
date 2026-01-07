@@ -9,7 +9,8 @@ function safeStr(v) {
 }
 
 function toNumber(v) {
-  const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
+  // ESLint: no-useless-escape -> don't escape '-' inside a char class when placed at the end
+  const n = Number(String(v ?? "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : NaN;
 }
 
@@ -32,7 +33,8 @@ function parseDate(value) {
   if (!isNaN(native.getTime())) return native;
 
   // Try MM/DD/YYYY (or M/D/YYYY)
-  const mdy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  // ESLint: no-useless-escape -> inside [] we can use [/-]
+  const mdy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (mdy) {
     const mm = Number(mdy[1]);
     const dd = Number(mdy[2]);
@@ -86,7 +88,7 @@ function looksDateOnly(raw) {
   if (/\b(am|pm|utc|gmt)\b/i.test(s)) return false;
 
   // MM/DD/YYYY or Month Day, Year or YYYY-MM-DD
-  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(s)) return true;
+  if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(s)) return true;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return true;
   if (/^[A-Za-z]+\s+\d{1,2},\s*\d{4}$/.test(s)) return true;
 
@@ -268,7 +270,9 @@ function evaluateBidOpenings(submittedBids = [], existingTaskIdsSet) {
     const agencyRaw = safeAgency(bid);
     const agencyTitle = trimTitle(agencyRaw, 95);
 
-    const dueAt = looksDateOnly(openingRaw) ? toEndOfDayUtcIso(openingRaw) : (parseDate(openingRaw)?.toISOString?.() || "");
+    const dueAt = looksDateOnly(openingRaw)
+      ? toEndOfDayUtcIso(openingRaw)
+      : (parseDate(openingRaw)?.toISOString?.() || "");
 
     tasks.push({
       id,
