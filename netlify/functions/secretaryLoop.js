@@ -1,4 +1,5 @@
 // netlify/functions/secretaryLoop.js
+// deploy-bump: 1767806060
 // Hourly "Executive Assistant focus tasks" generator (rules-based)
 // - Safe: avoids init-crash by requiring deps inside handler
 // - Upserts stable focus tasks (no duplicates): focus-bids, focus-social, focus-webinars
