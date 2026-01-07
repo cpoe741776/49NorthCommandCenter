@@ -55,7 +55,7 @@ exports.handler = async (event) => {
     const auth = getAuth();
     const sheets = google.sheets({ version: "v4", auth });
 
-    // Read Tasks
+    // Read Tasks (to find row index + column indexes)
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: "Tasks!A:Z"
@@ -86,53 +86,69 @@ exports.handler = async (event) => {
     const r = data.findIndex((row) => String(row[col.id] || "") === String(id));
     if (r === -1) throw new Error(`Task id not found: ${id}`);
 
-    const sheetRow = r + 2; // header row + 1-based
-
-    const updates = [];
+    const sheetRow1Based = r + 2; // header row + 1-based
+    const sheetRow0BasedForDelete = sheetRow1Based - 1; // Sheets API deleteDimension uses 0-based indices
 
     if (act === "complete") {
-      // status -> closed
-      const statusColLetter = colToLetter(col.status + 1);
-      updates.push({
-        range: `Tasks!${statusColLetter}${sheetRow}`,
-        values: [["closed"]]
+      // ✅ DELETE the row from the sheet (hard remove)
+      // NOTE: This requires the actual sheet/tabId, not the name.
+      const meta = await sheets.spreadsheets.get({
+        spreadsheetId: sheetId
       });
-    } else if (act === "reschedule") {
+
+      const tasksSheet = (meta.data.sheets || []).find(
+        (s) => s.properties && s.properties.title === "Tasks"
+      );
+      const sheetTabId = tasksSheet?.properties?.sheetId;
+      if (sheetTabId == null) throw new Error("Could not find sheetId for tab 'Tasks'");
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          requests: [
+            {
+              deleteDimension: {
+                range: {
+                  sheetId: sheetTabId,
+                  dimension: "ROWS",
+                  startIndex: sheetRow0BasedForDelete, // inclusive
+                  endIndex: sheetRow0BasedForDelete + 1 // exclusive
+                }
+              }
+            }
+          ]
+        }
+      });
+
+      return ok(headers, { success: true, deleted: true });
+    }
+
+    if (act === "reschedule") {
       const dueMs = parseISO(dueAt);
       if (!dueMs) throw new Error("Invalid dueAt (must be ISO date string)");
 
-      // dueAt -> new value (ISO), clear lastNotifiedAt, ensure status open
       const dueColLetter = colToLetter(col.dueAt + 1);
       const lastColLetter = colToLetter(col.lastNotifiedAt + 1);
       const statusColLetter = colToLetter(col.status + 1);
 
-      updates.push({
-        range: `Tasks!${dueColLetter}${sheetRow}`,
-        values: [[String(dueAt)]]
+      const updates = [
+        { range: `Tasks!${dueColLetter}${sheetRow1Based}`, values: [[String(dueAt)]] },
+        { range: `Tasks!${lastColLetter}${sheetRow1Based}`, values: [[""]] },
+        { range: `Tasks!${statusColLetter}${sheetRow1Based}`, values: [["open"]] }
+      ];
+
+      await sheets.spreadsheets.values.batchUpdate({
+        spreadsheetId: sheetId,
+        requestBody: {
+          valueInputOption: "USER_ENTERED",
+          data: updates
+        }
       });
 
-      updates.push({
-        range: `Tasks!${lastColLetter}${sheetRow}`,
-        values: [[""]]
-      });
-
-      updates.push({
-        range: `Tasks!${statusColLetter}${sheetRow}`,
-        values: [["open"]]
-      });
-    } else {
-      throw new Error("Unknown action. Use 'complete' or 'reschedule'.");
+      return ok(headers, { success: true });
     }
 
-    await sheets.spreadsheets.values.batchUpdate({
-      spreadsheetId: sheetId,
-      requestBody: {
-        valueInputOption: "USER_ENTERED",
-        data: updates
-      }
-    });
-
-    return ok(headers, { success: true });
+    throw new Error("Unknown action. Use 'complete' or 'reschedule'.");
   } catch (err) {
     console.error("❌ updateReminder error:", err);
     return serverErr(headers, err.message || String(err));
