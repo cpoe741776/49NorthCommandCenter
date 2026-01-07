@@ -333,21 +333,27 @@ const ContactCRM = () => {
   const sortedContacts = useMemo(() => {
     if (!contacts || contacts.length === 0) return [];
 
-    const sorted = [...contacts].sort((a, b) => {
+    // Filter out any undefined/null contacts
+    const validContacts = contacts.filter(c => c && c.email);
+
+    const sorted = [...validContacts].sort((a, b) => {
+      // Safety check - ensure both contacts exist
+      if (!a || !b) return 0;
+      
       let aVal, bVal;
 
       switch (sortField) {
         case 'name':
-          aVal = (a.name || a.email || '').toLowerCase();
-          bVal = (b.name || b.email || '').toLowerCase();
+          aVal = ((a.name || a.email || '') + '').toLowerCase();
+          bVal = ((b.name || b.email || '') + '').toLowerCase();
           break;
         case 'email':
-          aVal = (a.email || '').toLowerCase();
-          bVal = (b.email || '').toLowerCase();
+          aVal = ((a.email || '') + '').toLowerCase();
+          bVal = ((b.email || '') + '').toLowerCase();
           break;
         case 'organization':
-          aVal = (a.organization || '').toLowerCase();
-          bVal = (b.organization || '').toLowerCase();
+          aVal = ((a.organization || '') + '').toLowerCase();
+          bVal = ((b.organization || '') + '').toLowerCase();
           break;
         case 'leadScore':
           aVal = a.leadScore || 0;
@@ -892,101 +898,7 @@ const ContactCRM = () => {
         </div>
       )}
 
-      {hasSearched && contacts.length > 0 && (() => {
-        const hideUnused = true; // Remove pagination for now
-        if (hideUnused) return null;
-          const totalPages = Math.ceil(summary.totalContacts / 1000);
-          const currentPage = page + 1;
-          
-          // Calculate page range to show
-          let startPage = Math.max(1, currentPage - 2);
-          let endPage = Math.min(totalPages, currentPage + 2);
-          
-          // Adjust if we're at the beginning or end
-          if (currentPage <= 3) {
-            endPage = Math.min(7, totalPages);
-          } else if (currentPage >= totalPages - 2) {
-            startPage = Math.max(1, totalPages - 6);
-          }
-          
-          const pageNumbers = [];
-          for (let i = startPage; i <= endPage; i++) {
-            pageNumbers.push(i);
-          }
-          
-          return (
-            <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
-              {/* Page numbers */}
-              <div className="flex items-center justify-center gap-1 flex-wrap">
-                {/* First page */}
-                {startPage > 1 && (
-                  <>
-                    <button
-                      onClick={() => setPage(0)}
-                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                    >
-                      1
-                    </button>
-                    {startPage > 2 && <span className="px-2 text-gray-400">...</span>}
-                  </>
-                )}
-                
-                {/* Page number buttons */}
-                {pageNumbers.map(pageNum => (
-                  <button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum - 1)}
-                    className={`px-3 py-1 text-sm rounded ${
-                      pageNum === currentPage
-                        ? 'bg-blue-600 text-white font-semibold'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                ))}
-                
-                {/* Last page */}
-                {endPage < totalPages && (
-                  <>
-                    {endPage < totalPages - 1 && <span className="px-2 text-gray-400">...</span>}
-                    <button
-                      onClick={() => setPage(totalPages - 1)}
-                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-                    >
-                      {totalPages}
-                    </button>
-                  </>
-                )}
-              </div>
-              
-              {/* Previous/Next buttons */}
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Page {currentPage} of {totalPages} • Showing contacts {(page * 1000) + 1}-{Math.min((page + 1) * 1000, summary.totalContacts)}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage(p => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                  >
-                    ← Previous
-                  </button>
-                  <button
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={(page + 1) * 1000 >= summary.totalContacts}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-        {/* Table display */}
+      {hasSearched && contacts.length > 0 && (
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -1726,4 +1638,3 @@ const ContactCRM = () => {
 };
 
 export default ContactCRM;
-
