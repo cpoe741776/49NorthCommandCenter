@@ -1,24 +1,6 @@
 // netlify/functions/createReminder.js
-const { google } = require("googleapis");
 const { getSecret } = require("./_utils/secrets");
-
-function getAuth() {
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  let privateKey = process.env.GOOGLE_PRIVATE_KEY;
-
-  if (!clientEmail || !privateKey) {
-    throw new Error("Missing GOOGLE_CLIENT_EMAIL or GOOGLE_PRIVATE_KEY");
-  }
-
-  // Netlify multiline key handling
-  privateKey = privateKey.replace(/\\n/g, "\n");
-
-  return new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-  });
-}
+const { getGoogleAuth, sheetsClient } = require("./_utils/google");
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -41,6 +23,8 @@ exports.handler = async (event) => {
       dueAt
     } = body;
 
+    // If dueAt isn't provided, start immediately from createdAt.
+    // If dueAt is in the future, reminder loop won’t start until then.
     const effectiveDueAt =
       dueAt && String(dueAt).trim() ? String(dueAt).trim() : createdAt;
 
@@ -57,8 +41,10 @@ exports.handler = async (event) => {
     const safeType = String(type || "Personal");
     const safeTitle = String(title || "").trim();
     const safeNotes = String(notes || "").trim();
+    const safeContactEmail =
+      safeType === "CRM" ? String(contactEmail || "").trim() : "";
 
-    // Your Tasks headers (exact order):
+    // Tasks headers (exact order):
     // id, createdAt, createdBy, rawText, title, contactEmail, notes, dueAt, tz,
     // recurrence, priority, status, lastNotifiedAt, notifyEveryMins
     const row = [
@@ -67,7 +53,7 @@ exports.handler = async (event) => {
       "CommandApp",                         // createdBy
       `${safeType} Reminder: ${safeTitle}`, // rawText
       safeTitle,                            // title
-      safeType === "CRM" ? String(contactEmail || "").trim() : "", // contactEmail
+      safeContactEmail,                     // contactEmail
       safeNotes,                            // notes
       effectiveDueAt,                       // dueAt
       "UTC",                                // tz
@@ -78,8 +64,11 @@ exports.handler = async (event) => {
       notifyEveryMins                       // notifyEveryMins
     ];
 
-    const auth = getAuth();
-    const sheets = google.sheets({ version: "v4", auth });
+    const googleAuth = getGoogleAuth([
+      "https://www.googleapis.com/auth/spreadsheets"
+    ]);
+    const authClient = await googleAuth.getClient();
+    const sheets = sheetsClient(authClient);
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: sheetId,
@@ -99,7 +88,10 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ success: false, error: err.message || String(err) })
+      body: JSON.stringify({
+        success: false,
+        error: err && err.message ? err.message : String(err)
+      })
     };
   }
 };
