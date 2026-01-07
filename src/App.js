@@ -7,6 +7,12 @@ import { fetchDashboardData, fetchBids } from './services/bidService';
 import { fetchComprehensiveTicker, generateTickerItems, normalizeTickerItem } from './services/comprehensiveTickerService';
 import RadioPlayer from './components/RadioPlayer';
 
+const truncate = (str, max = 180) => {
+  if (!str) return '';
+  const s = String(str);
+  return s.length <= max ? s : s.slice(0, max - 1) + '…';
+};
+
 // 🔻 Code-split feature modules (keeps initial bundle lean)
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const BidOperations = lazy(() => import('./components/BidOperations'));
@@ -169,41 +175,44 @@ const App = () => {
 
   // Build ordered ticker items by priority
   const displayItems = useMemo(() => {
-    const normalized = (tickerItems || [])
-      .map(i => ({
-        ...i,
-        message: (i?.message || '').trim(),
-        priority: (i?.priority || 'low').toLowerCase(),
-        target: i?.target || i?.route || null
-      }))
-      .filter(i => i.message.length > 0);
+  const normalized = (tickerItems || [])
+    .map(i => ({
+      ...i,
+      // 🔹 Truncate here so nothing crazy long hits the DOM
+      message: truncate((i?.message || '').trim(), 200),
+      priority: (i?.priority || 'low').toLowerCase(),
+      target: i?.target || i?.route || null
+    }))
+    .filter(i => i.message.length > 0);
 
-    const map = new Map();
-    for (const i of normalized) if (!map.has(i.message)) map.set(i.message, i);
-    const unique = Array.from(map.values());
-    if (!unique.length) return unique;
+  // (rest of your logic stays exactly the same)
+  const map = new Map();
+  for (const i of normalized) if (!map.has(i.message)) map.set(i.message, i);
+  const unique = Array.from(map.values());
+  if (!unique.length) return unique;
 
-    const hi = unique.filter(i => i.priority === 'high');
-    const mid = unique.filter(i => i.priority === 'medium');
-    const low = unique.filter(i => i.priority !== 'high' && i.priority !== 'medium');
+  const hi = unique.filter(i => i.priority === 'high');
+  const mid = unique.filter(i => i.priority === 'medium');
+  const low = unique.filter(i => i.priority !== 'high' && i.priority !== 'medium');
 
-    const out = [];
-    const queues = [hi, mid, low];
-    let added = true;
-    while (added) {
-      added = false;
-      for (const q of queues) {
-        if (q.length) {
-          const next = q.shift();
-          if (!out.length || out[out.length - 1].message !== next.message) {
-            out.push(next);
-            added = true;
-          }
+  const out = [];
+  const queues = [hi, mid, low];
+  let added = true;
+  while (added) {
+    added = false;
+    for (const q of queues) {
+      if (q.length) {
+        const next = q.shift();
+        if (!out.length || out[out.length - 1].message !== next.message) {
+          out.push(next);
+          added = true;
         }
       }
     }
-    return out;
-  }, [tickerItems]);
+  }
+  return out;
+}, [tickerItems]);
+
 
   // Compute ticker duration from visible content width
   useEffect(() => {
