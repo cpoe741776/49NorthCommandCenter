@@ -1,14 +1,17 @@
 // netlify/functions/getReminders.js
 // Returns current reminder status for webinars and weekly social posts
+// OPTIONAL: ?includeExecutiveTasks=1 will also return executiveTasks from Secretary Tasks sheet
+// Default behavior (no query param) is unchanged and remains cached.
 
 const { google } = require('googleapis');
 const { corsHeaders, methodGuard, ok, serverErr } = require('./_utils/http');
 const { loadServiceAccount } = require('./_utils/google');
+const { getSecret } = require('./_utils/secrets');
 
 const WEBINAR_SHEET_ID = process.env.WEBINAR_SHEET_ID;
 const SOCIAL_SHEET_ID = process.env.SOCIAL_MEDIA_SHEET_ID;
 
-// In-memory cache (5 minute TTL)
+// In-memory cache (5 minute TTL) — ONLY for default webinar/social payload
 let cache = null;
 let cacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -26,12 +29,12 @@ function getWeekDates(weekNumber, year) {
   const jan1 = new Date(year, 0, 1);
   const daysOffset = (weekNumber - 1) * 7;
   const weekStart = new Date(jan1.getTime() + daysOffset * 24 * 60 * 60 * 1000);
-  
+
   // Adjust to Monday
   const dayOfWeek = weekStart.getDay();
   const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   weekStart.setDate(weekStart.getDate() + diff);
-  
+
   return {
     monday: new Date(weekStart),
     wednesday: new Date(weekStart.getTime() + 2 * 24 * 60 * 60 * 1000),
@@ -39,22 +42,73 @@ function getWeekDates(weekNumber, year) {
   };
 }
 
+async function fetchExecutiveTasks(sheets) {
+  const sheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
+  if (!sheetId) throw new Error("Missing SECRETARY_TASKS_SHEET_ID secret");
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: sheetId,
+    range: "Tasks!A:Z"
+  });
+
+  const rows = res.data.values || [];
+  if (!rows.length) return [];
+
+  const [header, ...data] = rows;
+
+  const idx = (name) => header.indexOf(name);
+  const get = (row, key) => {
+    const i = idx(key);
+    return i >= 0 ? (row[i] ?? "") : "";
+  };
+
+  // Map into objects; tolerate missing columns (don’t break other modules)
+  const tasks = data
+    .map(row => ({
+      id: String(get(row, "id") || "").trim(),
+      createdAt: get(row, "createdAt"),
+      createdBy: get(row, "createdBy"),
+      rawText: get(row, "rawText"),
+      title: get(row, "title"),
+      contactEmail: get(row, "contactEmail"),
+      notes: get(row, "notes"),
+      dueAt: get(row, "dueAt"),
+      tz: get(row, "tz"),
+      recurrence: get(row, "recurrence"),
+      priority: get(row, "priority"),
+      status: get(row, "status"),
+      lastNotifiedAt: get(row, "lastNotifiedAt"),
+      notifyEveryMins: get(row, "notifyEveryMins")
+    }))
+    .filter(t => t.id && t.title); // keep it clean
+
+  return tasks;
+}
+
 exports.handler = async (event) => {
   const headers = corsHeaders(event.headers?.origin);
   const guard = methodGuard(event, headers, 'GET', 'OPTIONS');
   if (guard) return guard;
 
+  const includeExecutiveTasks =
+    event?.queryStringParameters?.includeExecutiveTasks === "1" ||
+    (event?.queryStringParameters?.includeExecutiveTasks || "").toLowerCase() === "true";
+
   try {
-    // Check cache first
+    // Cache only applies to the original payload (webinar/social),
+    // and only when NOT asking for executive tasks.
     const nowMs = Date.now();
-    if (cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
+    if (!includeExecutiveTasks && cache && (nowMs - cacheTimestamp) < CACHE_TTL_MS) {
       console.log('[Reminders] Returning cached data (age: ' + Math.round((nowMs - cacheTimestamp) / 1000) + 's)');
       return ok(headers, { ...cache, cached: true });
     }
 
     console.log('[Reminders] Cache miss or expired, fetching fresh data...');
     const credentials = loadServiceAccount();
-    const auth = new google.auth.GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
+    const auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    });
     const sheets = google.sheets({ version: 'v4', auth });
 
     const now = new Date();
@@ -86,7 +140,9 @@ exports.handler = async (event) => {
     upcomingWebinars.forEach(w => {
       const webDate = new Date(w.date + ' ' + (w.time || '12:00'));
       const oneWeekBefore = new Date(webDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-      console.log(`[Reminders] Webinar "${w.title}" on ${w.date} - 1 week reminder due: ${oneWeekBefore.toISOString().split('T')[0]} (today: ${now.toISOString().split('T')[0]})`);
+      console.log(
+        `[Reminders] Webinar "${w.title}" on ${w.date} - 1 week reminder due: ${oneWeekBefore.toISOString().split('T')[0]} (today: ${now.toISOString().split('T')[0]})`
+      );
     });
 
     // Fetch reminder tracking AND social posts (needed for purpose checking)
@@ -114,7 +170,7 @@ exports.handler = async (event) => {
     // Build webinar reminders status
     const webinarReminders = upcomingWebinars.map(webinar => {
       const webinarDate = new Date(webinar.date + ' ' + (webinar.time || '12:00'));
-      
+
       const timings = {
         oneWeek: new Date(webinarDate.getTime() - 7 * 24 * 60 * 60 * 1000),
         oneDay: new Date(webinarDate.getTime() - 24 * 60 * 60 * 1000),
@@ -149,8 +205,16 @@ exports.handler = async (event) => {
       // Debug logging for this webinar
       console.log(`[Reminders] Webinar "${webinar.title}" (${webinar.id}):`);
       console.log(`  - 1 week reminder due: ${timings.oneWeek.toISOString().split('T')[0]}`);
-      console.log(`  - 1 week reminder status: ${oneWeekReminder ? oneWeekReminder[4] : (now > timings.oneWeek ? 'overdue' : 'pending')}`);
-      console.log(`  - 1 week social status: ${hasWebinarPost('webinar-1week') ? 'posted' : (now > timings.oneWeek ? 'overdue' : 'pending')}`);
+      console.log(
+        `  - 1 week reminder status: ${
+          oneWeekReminder ? oneWeekReminder[4] : (now > timings.oneWeek ? 'overdue' : 'pending')
+        }`
+      );
+      console.log(
+        `  - 1 week social status: ${
+          hasWebinarPost('webinar-1week') ? 'posted' : (now > timings.oneWeek ? 'overdue' : 'pending')
+        }`
+      );
 
       return {
         webinarId: webinar.id,
@@ -211,13 +275,13 @@ exports.handler = async (event) => {
     const hasPost = (targetDate, purpose) => {
       const targetWeek = getWeekNumber(targetDate);
       const targetYear = targetDate.getFullYear();
-      
+
       return socialPosts.some(post => {
         const postDate = new Date(post[0] || post[9] || 0); // timestamp or publishedDate
         const postPurpose = post[18] || ''; // Column S (index 18)
         const postWeek = getWeekNumber(postDate);
         const postYear = postDate.getFullYear();
-        
+
         // Match purpose AND same week (allows posting Monday content on Tuesday, etc.)
         return postPurpose === purpose && postWeek === targetWeek && postYear === targetYear;
       });
@@ -247,7 +311,7 @@ exports.handler = async (event) => {
 
     const summary = {
       totalWebinarReminders: webinarReminders.reduce((sum, w) => {
-        return sum + 
+        return sum +
           (w.reminders.oneWeek.status === 'pending' || w.reminders.oneWeek.status === 'overdue' ? 1 : 0) +
           (w.reminders.oneDay.status === 'pending' || w.reminders.oneDay.status === 'overdue' ? 1 : 0) +
           (w.reminders.oneHour.status === 'pending' || w.reminders.oneHour.status === 'overdue' ? 1 : 0);
@@ -280,18 +344,35 @@ exports.handler = async (event) => {
     // Calculate total pending (emails + weekly social + webinar social)
     summary.totalPending = summary.overdueWebinarEmails + summary.missingSocialPosts.length + summary.overdueWebinarSocialPosts;
 
+    // Optional: Executive Assistant tasks
+    let executiveTasks;
+    let executiveTasksError;
+
+    if (includeExecutiveTasks) {
+      try {
+        executiveTasks = await fetchExecutiveTasks(sheets);
+      } catch (err) {
+        console.warn("[Reminders] Executive tasks fetch failed:", err.message);
+        executiveTasks = [];
+        executiveTasksError = err.message;
+      }
+    }
+
     const response = {
       success: true,
       webinarReminders,
       weeklyReminders,
       summary,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      ...(includeExecutiveTasks ? { executiveTasks, executiveTasksError } : {})
     };
 
-    // Cache the response
-    cache = response;
-    cacheTimestamp = Date.now();
-    console.log('[Reminders] Data cached for 5 minutes');
+    // Cache only the original payload (no executive tasks)
+    if (!includeExecutiveTasks) {
+      cache = response;
+      cacheTimestamp = Date.now();
+      console.log('[Reminders] Data cached for 5 minutes');
+    }
 
     return ok(headers, response);
 
@@ -300,4 +381,3 @@ exports.handler = async (event) => {
     return serverErr(headers, e.message);
   }
 };
-
