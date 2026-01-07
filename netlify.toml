@@ -15,3 +15,8 @@
 # Runs every 5 minutes
 [functions.secretaryRemindDue2]
   schedule = "*/5 * * * *"
+
+# Scheduled function to generate Executive Assistant focus tasks (hourly, DST-proof)
+[functions.secretaryLoop]
+  schedule = "0 * * * *"
+

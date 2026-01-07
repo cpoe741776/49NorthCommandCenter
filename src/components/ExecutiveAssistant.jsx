@@ -403,6 +403,15 @@ const ExecutiveAssistant = () => {
 
       {/* Task List */}
       <div className="mt-10 border-t pt-6">
+        <div className="bg-gray-50 border rounded p-3 mb-4">
+  <div className="font-semibold text-gray-900">
+    Hey Top, we need to work on these as well as your other reminders I have for you below.
+  </div>
+  <div className="text-sm text-gray-600 mt-1">
+    (These include your auto-generated focus tasks plus anything you added manually.)
+  </div>
+</div>
+
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-800">
             Executive Assistant Task List
