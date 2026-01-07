@@ -1,18 +1,21 @@
 // netlify/functions/secretaryRemindDue2.js
 // Scheduled every 5 minutes
-// Sends Pushover notifications for Tasks that are due or "due soon" based on *due date phases*.
+// Sends Pushover notifications for Tasks that are due or "due soon" based on priority windows.
 //
-// Due-soon policy (Boss policy):
-// - code-red:    within 72 hours (or overdue)
+// Due-soon policy (requested):
+// - code-red:    within 72 hours
 // - code-yellow: within 7 days
 // - code-green:  within 14 days
 // - code-white:  within 30 days
 //
-// Guarantees:
-// - NO CAP for Code Red notifications (within 72h / overdue)
-// - CAP for non-red notifications to prevent spam
-// - Phase is determined from dueAt even if the row's priority is wrong
-// - Throttle cadence (notifyEveryMins) is effectively enforced by phase so Red can’t be “stuck” at 480 mins
+// Eligibility:
+// - status === "open"
+// - dueAt is present AND dueAt <= now + window
+// - lastNotifiedAt is empty OR older than notifyEveryMins
+//
+// Sending policy:
+// - NO CAP on Code Red (send all eligible reds each run)
+// - Cap non-reds per run to prevent spam
 
 function nowIso() {
   return new Date().toISOString();
@@ -26,11 +29,26 @@ function safeStr(v) {
   return String(v ?? "").trim();
 }
 
+function normalizePriority(p) {
+  const s = safeStr(p).toLowerCase();
+  if (["code-red", "code-yellow", "code-green", "code-white"].includes(s)) return s;
+  return "code-yellow";
+}
+
+function priorityWindowMs(priority) {
+  const p = normalizePriority(priority);
+  if (p === "code-red") return 72 * 60 * 60 * 1000;         // 72 hours
+  if (p === "code-yellow") return 7 * 24 * 60 * 60 * 1000;  // 7 days
+  if (p === "code-green") return 14 * 24 * 60 * 60 * 1000;  // 14 days
+  if (p === "code-white") return 30 * 24 * 60 * 60 * 1000;  // 30 days
+  return 7 * 24 * 60 * 60 * 1000;
+}
+
 function parseIsoDate(s) {
   const v = safeStr(s);
   if (!v) return null;
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? null : d;
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function minsSince(iso) {
@@ -39,60 +57,9 @@ function minsSince(iso) {
   return Math.floor((Date.now() - d.getTime()) / (60 * 1000));
 }
 
-function buildBaseUrl(event) {
-  const site = process.env.URL || process.env.DEPLOY_PRIME_URL;
-  if (site) return site.replace(/\/$/, "");
-
-  const proto =
-    event?.headers?.["x-forwarded-proto"] ||
-    event?.headers?.["X-Forwarded-Proto"] ||
-    "https";
-  const host = event?.headers?.host || event?.headers?.Host;
-
-  return host ? `${proto}://${host}` : "https://49northcommandcenter.netlify.app";
-}
-
-// Convert 1-based column index to letters (A, B, ..., Z, AA, AB, ...)
-function colToLetter(n) {
-  let s = "";
-  let x = n;
-  while (x > 0) {
-    const m = (x - 1) % 26;
-    s = String.fromCharCode(65 + m) + s;
-    x = Math.floor((x - 1) / 26);
-  }
-  return s;
-}
-
-// Phase logic derived from due date proximity
-function phaseFromMsToDue(msToDue) {
-  const hour = 60 * 60 * 1000;
-  const day = 24 * hour;
-
-  if (msToDue <= 72 * hour) return "code-red";     // includes overdue (negative)
-  if (msToDue <= 7 * day) return "code-yellow";
-  if (msToDue <= 14 * day) return "code-green";
-  if (msToDue <= 30 * day) return "code-white";
-  return null; // not due soon enough to notify
-}
-
-function phaseNotifyEveryMins(phase) {
-  if (phase === "code-red") return 15;
-  if (phase === "code-yellow") return 60;
-  if (phase === "code-green") return 240;
-  if (phase === "code-white") return 480;
-  return 60;
-}
-
-function mapToPushoverPriority(phase) {
-  if (phase === "code-red") return 1;
-  if (phase === "code-white") return -1;
-  return 0;
-}
-
-function mapToPushoverSound(phase) {
-  if (phase === "code-red") return "siren";
-  return "pushover";
+function toInt(v, fallback) {
+  const n = parseInt(String(v ?? ""), 10);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 async function pushoverSend({ token, user, title, message, priority, sound }) {
@@ -111,6 +78,19 @@ async function pushoverSend({ token, user, title, message, priority, sound }) {
 
   const text = await res.text();
   return { ok: res.ok, status: res.status, text };
+}
+
+function mapToPushoverPriority(codePriority) {
+  const p = normalizePriority(codePriority);
+  if (p === "code-red") return 1;
+  if (p === "code-white") return -1;
+  return 0;
+}
+
+function mapToPushoverSound(codePriority) {
+  const p = normalizePriority(codePriority);
+  if (p === "code-red") return "siren";
+  return "pushover";
 }
 
 exports.handler = async (event) => {
@@ -156,21 +136,23 @@ exports.handler = async (event) => {
     const titleIdx = idx("title");
     const notesIdx = idx("notes");
     const dueAtIdx = idx("dueAt");
+    const priorityIdx = idx("priority");
     const statusIdx = idx("status");
     const lastNotifiedAtIdx = idx("lastNotifiedAt");
+    const notifyEveryMinsIdx = idx("notifyEveryMins");
 
     if (idIdx === -1) throw new Error("Tasks header missing required column: id");
     if (statusIdx === -1) throw new Error("Tasks header missing required column: status");
     if (dueAtIdx === -1) throw new Error("Tasks header missing required column: dueAt");
+    if (priorityIdx === -1) throw new Error("Tasks header missing required column: priority");
     if (lastNotifiedAtIdx === -1) throw new Error("Tasks header missing required column: lastNotifiedAt");
+    if (notifyEveryMinsIdx === -1) throw new Error("Tasks header missing required column: notifyEveryMins");
 
     const nowMs = Date.now();
-    const baseUrl = buildBaseUrl(event);
 
-    let scanned = 0;
-
-    // Candidate list = tasks due within 30 days (or overdue), phase computed from dueAt
+    // Build candidate list (eligible + not throttled)
     const candidates = [];
+    let scanned = 0;
 
     for (let i = 0; i < data.length; i++) {
       const r = data[i] || [];
@@ -183,55 +165,53 @@ exports.handler = async (event) => {
       const dueAt = parseIsoDate(dueAtRaw);
       if (!dueAt) continue;
 
-      const msToDue = dueAt.getTime() - nowMs;
-      const phase = phaseFromMsToDue(msToDue);
-      if (!phase) continue; // not within 30-day window
+      const pr = normalizePriority(r[priorityIdx]);
+      const windowMs = priorityWindowMs(pr);
 
-      scanned += 1;
+      // Eligible if within due-soon window (including overdue)
+      const dueSoonCutoff = nowMs + windowMs;
+      if (dueAt.getTime() > dueSoonCutoff) continue;
 
+      const notifyEvery = toInt(r[notifyEveryMinsIdx], 60);
       const lastNotifiedAt = safeStr(r[lastNotifiedAtIdx]);
       const minutesSinceLast = lastNotifiedAt ? minsSince(lastNotifiedAt) : Infinity;
 
-      // Effective cadence based on phase, so urgent tasks don’t get stuck
-      const effectiveEvery = phaseNotifyEveryMins(phase);
-
-      if (minutesSinceLast < effectiveEvery) continue;
+      scanned += 1;
+      if (minutesSinceLast < notifyEvery) continue;
 
       const taskId = safeStr(r[idIdx]);
       const title = titleIdx !== -1 ? safeStr(r[titleIdx]) : taskId;
       const notes = notesIdx !== -1 ? safeStr(r[notesIdx]) : "";
+      const msToDue = dueAt.getTime() - nowMs;
 
       candidates.push({
-        rowIndex: i, // 0-based within data
+        rowIndex: i,
         taskId,
         title,
         notes,
-        phase,
+        priority: pr,
         dueAtIso: dueAt.toISOString(),
         msToDue,
-        effectiveEvery,
       });
     }
 
-    // Sort within phase by soonest due
+    // Sort: soonest due first inside each bucket
     candidates.sort((a, b) => a.msToDue - b.msToDue);
 
-    // Split reds vs others
-    const reds = candidates.filter((c) => c.phase === "code-red");
-    const others = candidates.filter((c) => c.phase !== "code-red");
+    const reds = candidates.filter((c) => c.priority === "code-red");
+    const nonReds = candidates.filter((c) => c.priority !== "code-red");
 
-    // Cap ONLY non-red
-    const MAX_OTHER_SEND_PER_RUN = 5;
-    const toSend = [...reds, ...others.slice(0, MAX_OTHER_SEND_PER_RUN)];
+    // NO CAP on reds
+    const MAX_NON_RED_PER_RUN = 8; // adjust if you want more/less noise
+    const toSend = [...reds, ...nonReds.slice(0, MAX_NON_RED_PER_RUN)];
 
     let sent = 0;
     const updates = [];
 
     for (const c of toSend) {
-      const title =
-        c.phase === "code-red"
-          ? "🔥 Code Red: Due within 72 hours"
-          : "⏳ Task Due Soon";
+      const pushTitle = c.priority === "code-red"
+        ? "🔥 Code Red: Bid/Task Due Soon"
+        : "⏳ Task Due Soon";
 
       const dueText =
         c.msToDue < 0
@@ -241,8 +221,8 @@ exports.handler = async (event) => {
       const message = [
         `${c.title}`,
         "",
-        `${dueText}`,
-        `Phase: ${c.phase}`,
+        dueText,
+        `Priority: ${c.priority}`,
         c.notes ? "" : null,
         c.notes ? c.notes : null,
       ].filter(Boolean).join("\n");
@@ -251,10 +231,10 @@ exports.handler = async (event) => {
         const res = await pushoverSend({
           token: pushoverToken,
           user: pushoverUser,
-          title,
+          title: pushTitle,
           message,
-          priority: mapToPushoverPriority(c.phase),
-          sound: mapToPushoverSound(c.phase),
+          priority: mapToPushoverPriority(c.priority),
+          sound: mapToPushoverSound(c.priority),
         });
 
         if (!res.ok) {
@@ -262,9 +242,8 @@ exports.handler = async (event) => {
           continue;
         }
 
-        // Update lastNotifiedAt in sheet
-        const sheetRowNumber = c.rowIndex + 2; // header + 1-based
-        const lastNotifiedColLetter = colToLetter(lastNotifiedAtIdx + 1); // 1-based col
+        const sheetRowNumber = c.rowIndex + 2; // header + 1-based indexing
+        const lastNotifiedColLetter = String.fromCharCode(65 + lastNotifiedAtIdx); // assumes < 26 cols
 
         updates.push({
           range: `Tasks!${lastNotifiedColLetter}${sheetRowNumber}`,
@@ -289,7 +268,7 @@ exports.handler = async (event) => {
       scanned,
       eligible: candidates.length,
       reds: reds.length,
-      others: others.length,
+      nonReds: nonReds.length,
       sent,
       dryRun,
     });
@@ -303,10 +282,9 @@ exports.handler = async (event) => {
         scanned,
         eligible: candidates.length,
         reds: reds.length,
-        others: others.length,
+        nonReds: nonReds.length,
         sent,
         sentIds: toSend.map((x) => x.taskId),
-        baseUrl,
       }),
     };
   } catch (err) {
