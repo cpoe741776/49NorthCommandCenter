@@ -1,7 +1,7 @@
 // netlify/functions/createReminder.js
 const { google } = require('googleapis');
-const { getSecrets } = require('../../helpers/secretManager');
-const { auth } = require('../../helpers/googleAuth');
+const { getSecrets } = require('./_utils/secrets');
+const { auth } = require('./_utils/google');
 
 const TASKS_HEADERS = [
   'id',
