@@ -1,5 +1,8 @@
 // netlify/functions/_utils/bidRules.js
 // No external deps. Pure JS date parsing + rule evaluation.
+// Includes:
+//  - end-of-day dueAt for date-only inputs
+//  - short titles (details stay in notes)
 
 function safeStr(v) {
   return String(v ?? "").trim();
@@ -70,13 +73,45 @@ function normalizePriority(p) {
 }
 
 /**
+ * If the input looks like a date-only string (no time),
+ * return an ISO string at end-of-day UTC (23:59).
+ */
+function looksDateOnly(raw) {
+  const s = safeStr(raw);
+  if (!s) return false;
+
+  // ISO with time
+  if (/[T ]\d{1,2}:\d{2}/.test(s)) return false;
+  // Common time tokens
+  if (/\b(am|pm|utc|gmt)\b/i.test(s)) return false;
+
+  // MM/DD/YYYY or Month Day, Year or YYYY-MM-DD
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4}$/.test(s)) return true;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return true;
+  if (/^[A-Za-z]+\s+\d{1,2},\s*\d{4}$/.test(s)) return true;
+
+  // Otherwise: unknown; treat as date-only if it parses but didn't include time
+  return true;
+}
+
+function toEndOfDayUtcIso(dateValueRaw) {
+  const d = parseDate(dateValueRaw);
+  if (!d) return "";
+  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 0));
+  return end.toISOString();
+}
+
+/**
+ * Title trimming helper: keeps titles readable.
+ */
+function trimTitle(s, max = 110) {
+  const t = safeStr(s).replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  return t.slice(0, max - 1).trim() + "…";
+}
+
+/**
  * RULE A — Code Red Bid Detection
- * Columns:
- * - Recommendation (A)
- * - Score Details (B)
- * - Relevance (I)
- * - Due Date (M)
- * - Date Added (T)
  */
 function isCodeRedBid(bid) {
   return (
@@ -89,7 +124,7 @@ function isCodeRedBid(bid) {
 }
 
 /**
- * Build deterministic task ids:
+ * Deterministic task ids:
  * - bid-codered:<Source Email ID>
  * - bid-submitted:<Source Email ID>
  * - bid-opening:<Source Email ID>
@@ -99,7 +134,26 @@ function taskId(type, sourceEmailId) {
 }
 
 function safeAgency(bid) {
-  return safeStr(bid["Entity/Agency"]) || "Unknown Agency";
+  // Prefer Entity/Agency, but it can be messy
+  const entity = safeStr(bid["Entity/Agency"]);
+  if (entity) return entity;
+
+  // Fallback: Email Subject if available
+  const subj = safeStr(bid["Email Subject"]);
+  if (subj) return subj;
+
+  return "Unknown Agency";
+}
+
+function buildDueAtFromDueDate(dueDateRaw) {
+  const raw = safeStr(dueDateRaw);
+  if (!raw) return "";
+
+  // If it looks date-only, set end of day UTC; else use parsed ISO directly
+  if (looksDateOnly(raw)) return toEndOfDayUtcIso(raw);
+
+  const d = parseDate(raw);
+  return d ? d.toISOString() : "";
 }
 
 /**
@@ -115,34 +169,37 @@ function evaluateActiveBids(activeBids = [], existingTaskIdsSet) {
     const id = taskId("codered", sourceId);
     if (existingTaskIdsSet.has(id)) continue;
 
-    // Suppress if due date passed
+    // Suppress if due date passed (by day)
     if (daysUntil(bid["Due Date"]) < 0) continue;
 
     // Optional: suppress non-new statuses
     if (safeStr(bid.Status) && safeStr(bid.Status) !== "New") continue;
 
-    if (isCodeRedBid(bid)) {
-      const agency = safeAgency(bid);
-      const due = safeStr(bid["Due Date"]);
+    if (!isCodeRedBid(bid)) continue;
 
-      tasks.push({
-        id,
-        title: `🔥 Code Red Bid: ${agency}`,
-        priority: "code-red",
-        dueAt: due ? parseDate(due)?.toISOString?.() || "" : "",
-        rawText: `Code Red Bid: ${agency}`,
-        notes: [
-          `Agency: ${agency}`,
-          `Score: ${safeStr(bid["Score Details"])}`,
-          `Relevance: ${safeStr(bid.Relevance)}`,
-          `Due: ${due || "N/A"}`,
-          `Bid System: ${safeStr(bid["Bid System"])}`,
-          `Country: ${safeStr(bid.Country)}`
-        ].join("\n"),
-        createdBy: "ExecutiveAssistant",
-        tz: "UTC",
-      });
-    }
+    const agencyRaw = safeAgency(bid);
+    const agencyTitle = trimTitle(agencyRaw, 95); // shorter title
+    const dueRaw = safeStr(bid["Due Date"]);
+    const dueAt = buildDueAtFromDueDate(dueRaw);
+
+    tasks.push({
+      id,
+      title: `🔥 Code Red Bid: ${agencyTitle}`,
+      priority: "code-red",
+      dueAt,
+      rawText: `Code Red Bid: ${agencyTitle}`,
+      notes: [
+        `Agency: ${agencyRaw}`,
+        `Score: ${safeStr(bid["Score Details"])}`,
+        `Relevance: ${safeStr(bid.Relevance)}`,
+        `Due: ${dueRaw || "N/A"}`,
+        `Bid System: ${safeStr(bid["Bid System"]) || "Unknown"}`,
+        `Country: ${safeStr(bid.Country) || "Unknown"}`,
+        `URL: ${safeStr(bid.URL) || ""}`
+      ].join("\n"),
+      createdBy: "ExecutiveAssistant",
+      tz: "UTC",
+    });
   }
 
   return tasks;
@@ -150,7 +207,6 @@ function evaluateActiveBids(activeBids = [], existingTaskIdsSet) {
 
 /**
  * RULE B — Submission Confirmation (Code White)
- * Trigger: submitted row exists and we have not created bid-submitted:<id> before.
  */
 function evaluateSubmissionConfirmations(submittedBids = [], knownSubmissionSourceIdsSet, existingTaskIdsSet) {
   const tasks = [];
@@ -159,26 +215,27 @@ function evaluateSubmissionConfirmations(submittedBids = [], knownSubmissionSour
     const sourceId = safeStr(bid["Source Email ID"]);
     if (!sourceId) continue;
 
-    // If we already know this source was confirmed as submitted, skip
     if (knownSubmissionSourceIdsSet.has(sourceId)) continue;
 
     const id = taskId("submitted", sourceId);
     if (existingTaskIdsSet.has(id)) continue;
 
-    const agency = safeAgency(bid);
+    const agencyRaw = safeAgency(bid);
+    const agencyTitle = trimTitle(agencyRaw, 95);
 
     tasks.push({
       id,
-      title: `📤 Bid Submitted: ${agency}`,
+      title: `📤 Bid Submitted: ${agencyTitle}`,
       priority: "code-white",
-      dueAt: "", // not required
-      rawText: `Bid Submitted: ${agency}`,
+      dueAt: "",
+      rawText: `Bid Submitted: ${agencyTitle}`,
       notes: [
-        `Agency: ${agency}`,
+        `Agency: ${agencyRaw}`,
         `Submission Date: ${safeStr(bid["Submission Date"]) || "N/A"}`,
         `Opening Date: ${safeStr(bid["Formal_Bid_Opening_Date"]) || "N/A"}`,
-        `Bid System: ${safeStr(bid["Bid System"])}`,
-        `Country: ${safeStr(bid.Country)}`
+        `Bid System: ${safeStr(bid["Bid System"]) || "Unknown"}`,
+        `Country: ${safeStr(bid.Country) || "Unknown"}`,
+        `URL: ${safeStr(bid.URL) || ""}`
       ].join("\n"),
       createdBy: "ExecutiveAssistant",
       tz: "UTC",
@@ -190,10 +247,6 @@ function evaluateSubmissionConfirmations(submittedBids = [], knownSubmissionSour
 
 /**
  * RULE C — Bid Opening Pressure
- * Trigger: Formal_Bid_Opening_Date within 5 days (inclusive), not past.
- * Priority:
- * - <= 1 day: code-red
- * - <= 5 days: code-yellow
  */
 function evaluateBidOpenings(submittedBids = [], existingTaskIdsSet) {
   const tasks = [];
@@ -202,28 +255,34 @@ function evaluateBidOpenings(submittedBids = [], existingTaskIdsSet) {
     const sourceId = safeStr(bid["Source Email ID"]);
     if (!sourceId) continue;
 
-    const opening = bid["Formal_Bid_Opening_Date"];
-    const days = daysUntil(opening);
+    const openingRaw = safeStr(bid["Formal_Bid_Opening_Date"]);
+    if (!openingRaw) continue;
+
+    const days = daysUntil(openingRaw);
     if (!isFinite(days) || days > 5 || days < 0) continue;
 
     const id = taskId("opening", sourceId);
     if (existingTaskIdsSet.has(id)) continue;
 
     const priority = days <= 1 ? "code-red" : "code-yellow";
-    const agency = safeAgency(bid);
+    const agencyRaw = safeAgency(bid);
+    const agencyTitle = trimTitle(agencyRaw, 95);
+
+    const dueAt = looksDateOnly(openingRaw) ? toEndOfDayUtcIso(openingRaw) : (parseDate(openingRaw)?.toISOString?.() || "");
 
     tasks.push({
       id,
-      title: `📂 Bid Opening: ${agency}`,
+      title: `📂 Bid Opening: ${agencyTitle}`,
       priority: normalizePriority(priority),
-      dueAt: parseDate(opening)?.toISOString?.() || "",
-      rawText: `Bid Opening: ${agency}`,
+      dueAt,
+      rawText: `Bid Opening: ${agencyTitle}`,
       notes: [
-        `Agency: ${agency}`,
-        `Opening Date: ${safeStr(bid["Formal_Bid_Opening_Date"])}`,
+        `Agency: ${agencyRaw}`,
+        `Opening Date: ${openingRaw}`,
         `Submission Date: ${safeStr(bid["Submission Date"]) || "N/A"}`,
-        `Bid System: ${safeStr(bid["Bid System"])}`,
-        `Country: ${safeStr(bid.Country)}`
+        `Bid System: ${safeStr(bid["Bid System"]) || "Unknown"}`,
+        `Country: ${safeStr(bid.Country) || "Unknown"}`,
+        `URL: ${safeStr(bid.URL) || ""}`
       ].join("\n"),
       createdBy: "ExecutiveAssistant",
       tz: "UTC",
@@ -233,12 +292,6 @@ function evaluateBidOpenings(submittedBids = [], existingTaskIdsSet) {
   return tasks;
 }
 
-/**
- * Public API
- * NOTE: secretaryLoop passes:
- *  - existingTaskIds: array of task ids that already exist in Tasks tab
- *  - knownSubmissionSourceIds: array of Source Email IDs already confirmed submitted (from taskIndex)
- */
 export function evaluateBidRules({
   activeBids = [],
   submittedBids = [],
