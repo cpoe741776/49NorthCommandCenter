@@ -8,24 +8,14 @@ const initialState = {
   notes: "",
   priority: "code-green",
   contactEmail: "",
-  // UI uses local time via datetime-local. We'll convert to ISO on submit.
-  dueAtLocal: "" // e.g. "2026-01-07T15:00"
+  dueAtLocal: ""
 };
-
-function toIsoFromLocalDateTime(dueAtLocal) {
-  if (!dueAtLocal || !String(dueAtLocal).trim()) return "";
-  const d = new Date(dueAtLocal); // interpreted as local time
-  const ms = d.getTime();
-  if (!Number.isFinite(ms)) return "";
-  return d.toISOString();
-}
 
 function pad2(n) {
   return String(n).padStart(2, "0");
 }
 
 function toLocalDateTimeInputValue(dateObj) {
-  // Convert Date -> "YYYY-MM-DDTHH:mm" in local time for datetime-local input
   const yyyy = dateObj.getFullYear();
   const mm = pad2(dateObj.getMonth() + 1);
   const dd = pad2(dateObj.getDate());
@@ -38,21 +28,46 @@ function minNowLocal() {
   return toLocalDateTimeInputValue(new Date());
 }
 
-function todayAt(hour24, minute = 0) {
+function toIsoFromLocalDateTime(dueAtLocal) {
+  if (!dueAtLocal || !String(dueAtLocal).trim()) return "";
+  const d = new Date(dueAtLocal); // interpreted as local time
+  const ms = d.getTime();
+  if (!Number.isFinite(ms)) return "";
+  return d.toISOString();
+}
+
+function addMinutesFromNow(mins) {
   const d = new Date();
   d.setSeconds(0, 0);
-  d.setHours(hour24, minute, 0, 0);
-  // If that time already passed today, keep it today anyway (user intent),
-  // but min=now will prevent selecting in the past unless you clear min.
+  d.setMinutes(d.getMinutes() + mins);
   return d;
 }
 
-function tomorrowAt(hour24, minute = 0) {
+function addHoursFromNow(hours) {
   const d = new Date();
-  d.setDate(d.getDate() + 1);
   d.setSeconds(0, 0);
-  d.setHours(hour24, minute, 0, 0);
+  d.setHours(d.getHours() + hours);
   return d;
+}
+
+// Normalization: trim, collapse whitespace, normalize newlines
+function normalizeText(s) {
+  if (s == null) return "";
+  const str = String(s);
+
+  // Convert CRLF to LF, trim outer whitespace
+  const trimmed = str.replace(/\r\n/g, "\n").trim();
+
+  // Collapse runs of spaces/tabs; keep newlines but collapse multiple blank lines
+  const collapseSpaces = trimmed.replace(/[ \t]+/g, " ");
+  const collapseBlankLines = collapseSpaces.replace(/\n{3,}/g, "\n\n");
+
+  return collapseBlankLines;
+}
+
+function normalizeEmail(s) {
+  const e = normalizeText(s).toLowerCase();
+  return e;
 }
 
 const ExecutiveAssistant = () => {
@@ -61,12 +76,14 @@ const ExecutiveAssistant = () => {
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
+  const [quickHours, setQuickHours] = useState(2);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const setDueQuick = (dateObj) => {
+  const setDueToDate = (dateObj) => {
     setForm((prev) => ({
       ...prev,
       dueAtLocal: toLocalDateTimeInputValue(dateObj)
@@ -85,17 +102,24 @@ const ExecutiveAssistant = () => {
       setSuccessMsg("");
 
       const createdAt = new Date().toISOString();
+
+      // Normalize user inputs
+      const type = normalizeText(form.type) || "Personal";
+      const title = normalizeText(form.title);
+      const notes = normalizeText(form.notes);
+      const priority = normalizeText(form.priority) || "code-green";
+      const contactEmail = normalizeEmail(form.contactEmail);
+
+      // Local time (England for you) -> ISO
       const dueAtIso = toIsoFromLocalDateTime(form.dueAtLocal);
 
       const payload = {
-        type: form.type,
-        title: form.title,
-        notes: form.notes,
-        priority: form.priority,
-        contactEmail: form.contactEmail,
+        type,
+        title,
+        notes,
+        priority,
+        contactEmail,
         createdAt,
-        // If blank, backend defaults dueAt to createdAt (immediate).
-        // If set, backend will defer activation until this timestamp.
         dueAt: dueAtIso || ""
       };
 
@@ -193,37 +217,63 @@ const ExecutiveAssistant = () => {
             min={minNowLocal()}
           />
 
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-sm text-gray-700">Quick set:</span>
+
             <button
               type="button"
-              onClick={() => setDueQuick(todayAt(15, 0))}
+              onClick={() => setDueToDate(addMinutesFromNow(15))}
               className="px-3 py-1 rounded border hover:bg-gray-50"
-              title="Sets due time to today at 3:00 PM (local)"
+              title="Set due time to 15 minutes from now (local)"
             >
-              Today 3 PM
+              +15m
             </button>
 
             <button
               type="button"
-              onClick={() => setDueQuick(tomorrowAt(9, 0))}
+              onClick={() => setDueToDate(addMinutesFromNow(30))}
               className="px-3 py-1 rounded border hover:bg-gray-50"
-              title="Sets due time to tomorrow at 9:00 AM (local)"
+              title="Set due time to 30 minutes from now (local)"
             >
-              Tomorrow 9 AM
+              +30m
+            </button>
+
+            <span className="text-sm text-gray-700 ml-2">In</span>
+
+            <select
+              value={quickHours}
+              onChange={(e) => setQuickHours(parseInt(e.target.value, 10))}
+              className="p-2 border rounded"
+              title="Choose hours from now (local)"
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((h) => (
+                <option key={h} value={h}>
+                  {h} hour{h === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => setDueToDate(addHoursFromNow(quickHours))}
+              className="px-3 py-1 rounded border hover:bg-gray-50"
+              title="Set due time to selected hours from now (local)"
+            >
+              Set
             </button>
 
             <button
               type="button"
               onClick={clearDue}
-              className="px-3 py-1 rounded border hover:bg-gray-50"
-              title="Clears due time (starts immediately)"
+              className="px-3 py-1 rounded border hover:bg-gray-50 ml-auto"
+              title="Clear due time (starts immediately)"
             >
               Clear
             </button>
           </div>
 
           <div className="text-xs text-gray-600 mt-1">
-            Leave blank to start reminders immediately. Pick a date/time to defer activation.
+            Times are based on your local computer time (England). The system stores an ISO timestamp.
           </div>
         </div>
 
