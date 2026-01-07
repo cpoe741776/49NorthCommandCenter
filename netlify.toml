@@ -9,17 +9,14 @@
 # Scheduled function to auto-publish scheduled social media posts
 [functions.publishScheduledPosts]
   schedule = "0 * * * *"
+  timeout = 30
 
 # Scheduled function to send Secretary reminders
 [functions.secretaryRemindDue2]
   schedule = "*/5 * * * *"
+  timeout = 30
 
 # Scheduled function to generate Executive Assistant focus tasks
 [functions.secretaryLoop]
   schedule = "0 * * * *"
-  timeout = 30  # Add this line
-
-# Allow manual invocation with longer timeout
-[[functions]]
-  path = "netlify/functions/secretaryLoop.js"
   timeout = 30
