@@ -7,7 +7,7 @@ const { loadServiceAccount } = require('./_utils/google');
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY;
 const CRM_SHEET_ID = process.env.CRM_SHEET_ID;
-const WEBINAR_SHEET_ID = process.env.WEBINAR_SHEET_ID;
+// const WEBINAR_SHEET_ID = process.env.WEBINAR_SHEET_ID; // Not used in this function
 
 // In-memory cache (5 minute TTL)
 let cache = null;
@@ -79,7 +79,6 @@ exports.handler = async (event) => {
     const brevoData = await fetchBrevoContacts(limit, offset, filter, searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, searchCustomTag, segmentId);
     const brevoContacts = brevoData.contacts;
     const brevoTotal = brevoData.count; // Total count from Brevo API
-    const filteredTotal = brevoData.filteredCount || brevoTotal; // Count after Brevo-level filtering
 
     // Fetch metadata from Google Sheets
     const metadata = await fetchContactMetadata();
@@ -88,9 +87,16 @@ exports.handler = async (event) => {
 
     // Enrich Brevo contacts with CRM sheet data (notes, tasks, lead scoring)
     const enrichedContacts = brevoContacts.map(contact => {
-      const meta = metadata.find(m => m.email.toLowerCase() === contact.email.toLowerCase());
-      const contactNotes = notes.filter(n => n.email.toLowerCase() === contact.email.toLowerCase());
-      const contactTasks = followUps.filter(t => t.email.toLowerCase() === contact.email.toLowerCase() && t.status === 'Open');
+      // SAFETY: Ensure contact and contact.email exist
+      if (!contact || !contact.email) {
+        console.warn('[Contacts] Skipping contact with no email');
+        return null;
+      }
+
+      const contactEmail = (contact.email || '').toLowerCase();
+      const meta = metadata.find(m => (m.email || '').toLowerCase() === contactEmail);
+      const contactNotes = notes.filter(n => (n.email || '').toLowerCase() === contactEmail);
+      const contactTasks = followUps.filter(t => (t.email || '').toLowerCase() === contactEmail && t.status === 'Open');
 
       // Calculate lead status based on Brevo data (matching getWebinarAnalysis logic)
       let leadStatus = 'Cold';
@@ -131,25 +137,30 @@ exports.handler = async (event) => {
         pendingTasks: contactTasks.length,
         hasOpenTasks: contactTasks.length > 0
       };
-    });
+    }).filter(c => c !== null); // Remove any null entries
 
     // Apply filters
     let filtered = enrichedContacts;
     if (filter === 'hot-leads') {
-      filtered = enrichedContacts.filter(c => c.leadStatus === 'Hot Lead');
+      filtered = enrichedContacts.filter(c => c && c.leadStatus === 'Hot Lead');
+      console.log('[Contacts] Filtered to hot leads:', filtered.length, 'of', enrichedContacts.length);
     } else if (filter === 'webinar-attendees') {
-      filtered = enrichedContacts.filter(c => (c.webinarsAttendedCount || 0) > 0 || c.attendedWebinar === 'Yes');
+      filtered = enrichedContacts.filter(c => c && ((c.webinarsAttendedCount || 0) > 0 || c.attendedWebinar === 'Yes'));
+      console.log('[Contacts] Filtered to webinar attendees:', filtered.length, 'of', enrichedContacts.length);
     } else if (filter === 'cold-leads') {
-      filtered = enrichedContacts.filter(c => c.leadStatus === 'Cold');
+      filtered = enrichedContacts.filter(c => c && c.leadStatus === 'Cold');
+      console.log('[Contacts] Filtered to cold leads:', filtered.length, 'of', enrichedContacts.length);
     }
 
     // Apply search
     if (search) {
       const searchLower = search.toLowerCase();
       filtered = filtered.filter(c => 
-        (c.email || '').toLowerCase().includes(searchLower) ||
-        (c.name || '').toLowerCase().includes(searchLower) ||
-        (c.organization || '').toLowerCase().includes(searchLower)
+        c && (
+          (c.email || '').toLowerCase().includes(searchLower) ||
+          (c.name || '').toLowerCase().includes(searchLower) ||
+          (c.organization || '').toLowerCase().includes(searchLower)
+        )
       );
     }
 
@@ -190,7 +201,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ success: false, error: err.message })
+      body: JSON.stringify({ success: false, error: err.message, stack: err.stack })
     };
   }
 };
@@ -293,37 +304,40 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
     }
     
     // Map Brevo contacts to our format (using existing Brevo fields)
-    let contacts = allContacts.map(c => ({
-      email: c.email,
-      name: `${c.attributes?.FIRSTNAME || ''} ${c.attributes?.LASTNAME || ''}`.trim() || c.email,
-      firstName: c.attributes?.FIRSTNAME || '',
-      lastName: c.attributes?.LASTNAME || '',
-      organization: c.attributes?.ORGANIZATION_NAME || '',
-      jobTitle: c.attributes?.JOB_TITLE || '',
-      phone: c.attributes?.PHONE_MOBILE || c.attributes?.PHONE_OFFICE || c.attributes?.SMS || '',
-      phoneOffice: c.attributes?.PHONE_OFFICE || '',
-      phoneMobile: c.attributes?.PHONE_MOBILE || '',
-      city: c.attributes?.CITY || '',
-      state: c.attributes?.STATE_PROVINCE || '',
-      country: c.attributes?.COUNTRY_REGION || '',
-      organizationType: c.attributes?.ORGANIZATION_TYPE || '',
-      webinarId: c.attributes?.WEBINAR_ID || '',
-      webinarTopic: c.attributes?.WEBINAR_TOPIC || '',
-      webinarsAttendedCount: parseInt(c.attributes?.WEBINARS_ATTENDED_COUNT || '0', 10),
-      attendedWebinar: c.attributes?.ATTENDED_WEBINAR || 'No',
-      surveyContact: c.attributes?.WEB_CONTACT_REQ || 'No',
-      sourcedFrom: c.attributes?.SOURCED_FROM || '',
-      customTag: c.attributes?.CUSTOM_TAG || '',
-      linkedin: c.attributes?.LINKEDIN || '',
-      tags: c.attributes?.TAGS || [],
-      lists: c.listIds || [],
-      emailBlacklisted: c.emailBlacklisted || false,
-      smsBlacklisted: c.smsBlacklisted || false,
-      createdAt: c.createdAt,
-      modifiedAt: c.modifiedAt,
-      lastChanged: c.attributes?.LAST_CHANGED || c.modifiedAt,
-      attributes: c.attributes || {}
-    }));
+    // SAFETY: Filter out any contacts without email addresses
+    let contacts = allContacts
+      .filter(c => c && c.email)
+      .map(c => ({
+        email: c.email,
+        name: `${c.attributes?.FIRSTNAME || ''} ${c.attributes?.LASTNAME || ''}`.trim() || c.email,
+        firstName: c.attributes?.FIRSTNAME || '',
+        lastName: c.attributes?.LASTNAME || '',
+        organization: c.attributes?.ORGANIZATION_NAME || '',
+        jobTitle: c.attributes?.JOB_TITLE || '',
+        phone: c.attributes?.PHONE_MOBILE || c.attributes?.PHONE_OFFICE || c.attributes?.SMS || '',
+        phoneOffice: c.attributes?.PHONE_OFFICE || '',
+        phoneMobile: c.attributes?.PHONE_MOBILE || '',
+        city: c.attributes?.CITY || '',
+        state: c.attributes?.STATE_PROVINCE || '',
+        country: c.attributes?.COUNTRY_REGION || '',
+        organizationType: c.attributes?.ORGANIZATION_TYPE || '',
+        webinarId: c.attributes?.WEBINAR_ID || '',
+        webinarTopic: c.attributes?.WEBINAR_TOPIC || '',
+        webinarsAttendedCount: parseInt(c.attributes?.WEBINARS_ATTENDED_COUNT || '0', 10),
+        attendedWebinar: c.attributes?.ATTENDED_WEBINAR || 'No',
+        surveyContact: c.attributes?.WEB_CONTACT_REQ || 'No',
+        sourcedFrom: c.attributes?.SOURCED_FROM || '',
+        customTag: c.attributes?.CUSTOM_TAG || '',
+        linkedin: c.attributes?.LINKEDIN || '',
+        tags: c.attributes?.TAGS || [],
+        lists: c.listIds || [],
+        emailBlacklisted: c.emailBlacklisted || false,
+        smsBlacklisted: c.smsBlacklisted || false,
+        createdAt: c.createdAt,
+        modifiedAt: c.modifiedAt,
+        lastChanged: c.attributes?.LAST_CHANGED || c.modifiedAt,
+        attributes: c.attributes || {}
+      }));
     
     // Apply field-specific search filtering
     if (searchFirstName || searchLastName || searchEmail || searchOrganization || searchState || searchCountry || searchCustomTag) {
@@ -332,6 +346,7 @@ async function fetchBrevoContacts(limit, offset, filter = '', searchFirstName = 
       console.log('[Contacts] Search criteria:', { searchFirstName, searchLastName, searchEmail, searchOrganization, searchState, searchCountry, searchCustomTag });
       
       contacts = contacts.filter(c => {
+        if (!c) return false;
         let matches = true;
         
         if (searchFirstName) {
@@ -447,6 +462,8 @@ async function calculateGlobalStats() {
     let warmLeads = 0;
 
     contacts.forEach(c => {
+      if (!c || !c.attributes) return; // SAFETY: Skip invalid contacts
+
       const webinarCount = parseInt(c.attributes?.WEBINARS_ATTENDED_COUNT || '0', 10);
       const attendedWebinar = c.attributes?.ATTENDED_WEBINAR === 'Yes';
       
@@ -603,4 +620,3 @@ async function fetchFollowUpTasks() {
     return [];
   }
 }
-
