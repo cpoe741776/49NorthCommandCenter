@@ -1,10 +1,6 @@
 // netlify/functions/secretaryLoop.js
-// deploy-bump: 1767806060
-// Hourly "Executive Assistant focus tasks" generator (rules-based)
-// - Safe: avoids init-crash by requiring deps inside handler
-// - Upserts stable focus tasks (no duplicates): focus-bids, focus-social, focus-webinars
-// - Uses SECRETARY_TASKS_SHEET_ID from _utils/secrets
-// - Writes to Tasks tab with current header order
+// deploy-bump: 1767806061
+// DIAGNOSTIC VERSION - will log exactly where it fails
 
 function toBool(v) {
   return String(v || "").trim() === "1" || String(v || "").toLowerCase() === "true";
@@ -26,7 +22,6 @@ function safeJsonParse(s) {
 }
 
 function buildBaseUrl(event) {
-  // Prefer Netlify-provided URL when present
   const site = process.env.URL || process.env.DEPLOY_PRIME_URL;
   if (site) return site.replace(/\/$/, "");
 
@@ -63,7 +58,6 @@ function priorityToNotifyMins(priority) {
   return 60;
 }
 
-// Build a row using CURRENT Tasks header order
 function buildTaskRow({
   id,
   title,
@@ -77,25 +71,25 @@ function buildTaskRow({
   const notifyEveryMins = priorityToNotifyMins(p);
 
   return [
-    String(id),                 // id
-    createdAt,                  // createdAt
-    createdBy,                  // createdBy
-    `Focus Task: ${title}`,     // rawText
-    title,                      // title
-    "",                         // contactEmail
-    notes || "",                // notes
-    dueAt || "",                // dueAt
-    "UTC",                      // tz (store ISO; UI uses local rendering)
-    "",                         // recurrence
-    p,                          // priority
-    "open",                     // status
-    "",                         // lastNotifiedAt
-    String(notifyEveryMins),    // notifyEveryMins
+    String(id),
+    createdAt,
+    createdBy,
+    `Focus Task: ${title}`,
+    title,
+    "",
+    notes || "",
+    dueAt || "",
+    "UTC",
+    "",
+    p,
+    "open",
+    "",
+    String(notifyEveryMins),
   ];
 }
 
 exports.handler = async (event) => {
-  // IMPORTANT: put logs at the very top so if handler runs, we always see them
+  // STEP 1: Log entry
   console.log("SECRETARY_LOOP_START", nowIso(), {
     path: event?.path,
     qs: event?.queryStringParameters || {},
@@ -105,22 +99,66 @@ exports.handler = async (event) => {
     const qs = event?.queryStringParameters || {};
     const dryRun = toBool(qs.dryRun);
 
-    // Require risky modules INSIDE handler to avoid init-crash
-    const { google } = require("googleapis");
-    const { getSecret } = require("./_utils/secrets");
-    const { getGoogleAuth } = require("./_utils/google");
+    // STEP 2: Try requiring googleapis
+    console.log("SECRETARY_LOOP: Requiring googleapis...");
+    let google;
+    try {
+      const googleapis = require("googleapis");
+      google = googleapis.google;
+      console.log("SECRETARY_LOOP: googleapis loaded OK");
+    } catch (err) {
+      console.error("SECRETARY_LOOP: googleapis require FAILED", err.message);
+      throw new Error(`Failed to load googleapis: ${err.message}`);
+    }
 
+    // STEP 3: Try requiring secrets
+    console.log("SECRETARY_LOOP: Requiring secrets...");
+    let getSecret;
+    try {
+      const secrets = require("./_utils/secrets");
+      getSecret = secrets.getSecret;
+      console.log("SECRETARY_LOOP: secrets loaded OK");
+    } catch (err) {
+      console.error("SECRETARY_LOOP: secrets require FAILED", err.message);
+      throw new Error(`Failed to load secrets: ${err.message}`);
+    }
+
+    // STEP 4: Try requiring google auth
+    console.log("SECRETARY_LOOP: Requiring google auth...");
+    let getGoogleAuth;
+    try {
+      const googleUtils = require("./_utils/google");
+      getGoogleAuth = googleUtils.getGoogleAuth;
+      console.log("SECRETARY_LOOP: google auth loaded OK");
+    } catch (err) {
+      console.error("SECRETARY_LOOP: google auth require FAILED", err.message);
+      throw new Error(`Failed to load google auth: ${err.message}`);
+    }
+
+    // STEP 5: Get sheet ID
+    console.log("SECRETARY_LOOP: Getting sheet ID...");
     const sheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
     if (!sheetId) throw new Error("Missing SECRETARY_TASKS_SHEET_ID");
+    console.log("SECRETARY_LOOP: Sheet ID retrieved OK");
 
     const baseUrl = buildBaseUrl(event);
+    console.log("SECRETARY_LOOP: Base URL:", baseUrl);
 
-    // ---- Pull high-level counts from existing endpoints (rules input) ----
-    // Keep these tolerant: any failure should not crash the loop.
+    // STEP 6: Fetch data
+    console.log("SECRETARY_LOOP: Fetching data from endpoints...");
     const [bids, socials, webinars] = await Promise.all([
-      fetchJson(`${baseUrl}/.netlify/functions/getBids`),
-      fetchJson(`${baseUrl}/.netlify/functions/getSocialMediaContent?limit=0`),
-      fetchJson(`${baseUrl}/.netlify/functions/getWebinars`),
+      fetchJson(`${baseUrl}/.netlify/functions/getBids`).catch(e => {
+        console.error("SECRETARY_LOOP: getBids failed", e.message);
+        return { ok: false, json: null };
+      }),
+      fetchJson(`${baseUrl}/.netlify/functions/getSocialMediaContent?limit=0`).catch(e => {
+        console.error("SECRETARY_LOOP: getSocialMediaContent failed", e.message);
+        return { ok: false, json: null };
+      }),
+      fetchJson(`${baseUrl}/.netlify/functions/getWebinars`).catch(e => {
+        console.error("SECRETARY_LOOP: getWebinars failed", e.message);
+        return { ok: false, json: null };
+      }),
     ]);
 
     const bidSummary = bids?.json?.summary || {};
@@ -142,11 +180,10 @@ exports.handler = async (event) => {
       webinars: { ok: webinars.ok, status: webinars.status, upcomingWebinars },
     });
 
-    // ---- Rules: decide which focus tasks to generate ----
-    // Keep it simple and predictable.
+    // STEP 7: Generate focus tasks
+    console.log("SECRETARY_LOOP: Generating focus tasks...");
     const focusTasks = [];
 
-    // 1) Bids focus
     if (totalActiveBids > 0) {
       focusTasks.push({
         id: "focus-bids",
@@ -157,7 +194,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // 2) Social focus
     if (socialScheduled > 0 || socialDrafts > 0) {
       focusTasks.push({
         id: "focus-social",
@@ -168,7 +204,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // 3) Webinars focus
     if (upcomingWebinars > 0) {
       focusTasks.push({
         id: "focus-webinars",
@@ -179,7 +214,6 @@ exports.handler = async (event) => {
       });
     }
 
-    // If nothing triggered, still return ok (don’t error)
     if (!focusTasks.length) {
       console.log("SECRETARY_LOOP_NO_TASKS");
       return {
@@ -195,11 +229,17 @@ exports.handler = async (event) => {
       };
     }
 
-    // ---- Sheets: read existing Tasks, upsert by id ----
+    console.log("SECRETARY_LOOP: Generated", focusTasks.length, "tasks");
+
+    // STEP 8: Connect to Google Sheets
+    console.log("SECRETARY_LOOP: Connecting to Google Sheets...");
     const googleAuth = getGoogleAuth(["https://www.googleapis.com/auth/spreadsheets"]);
     const auth = await googleAuth.getClient();
     const sheets = google.sheets({ version: "v4", auth });
+    console.log("SECRETARY_LOOP: Google Sheets client created");
 
+    // STEP 9: Read existing tasks
+    console.log("SECRETARY_LOOP: Reading Tasks sheet...");
     const read = await sheets.spreadsheets.values.get({
       spreadsheetId: sheetId,
       range: "Tasks!A:Z",
@@ -215,12 +255,13 @@ exports.handler = async (event) => {
     if (idIdx === -1) throw new Error("Tasks header missing required column: id");
 
     const statusIdx = header.indexOf("status");
+    console.log("SECRETARY_LOOP: Read", data.length, "existing tasks");
 
-    // Helper: find row index in data array by task id
     const findRow = (taskId) =>
       data.findIndex((r) => String(r[idIdx] || "") === String(taskId));
 
-    // We will build batch updates for existing rows.
+    // STEP 10: Upsert tasks
+    console.log("SECRETARY_LOOP: Upserting tasks...");
     const batchUpdates = [];
     let upserted = 0;
 
@@ -228,7 +269,7 @@ exports.handler = async (event) => {
       const existingIdx = findRow(t.id);
 
       if (existingIdx === -1) {
-        // Append new row
+        console.log("SECRETARY_LOOP: Appending new task:", t.id);
         if (!dryRun) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: sheetId,
@@ -240,19 +281,18 @@ exports.handler = async (event) => {
         }
         upserted += 1;
       } else {
-        // Update existing row IN PLACE if it's still open (or status column missing)
         const row = data[existingIdx] || [];
         const existingStatus =
           statusIdx === -1 ? "open" : String(row[statusIdx] || "").toLowerCase();
 
-        // If it was closed, don’t resurrect it (prevents “zombie tasks”)
-        if (existingStatus === "closed") continue;
+        if (existingStatus === "closed") {
+          console.log("SECRETARY_LOOP: Skipping closed task:", t.id);
+          continue;
+        }
 
-        // Update: title, notes, dueAt, priority, status=open
-        // We’ll write the full row length to match header A..N shape using a map by header name.
+        console.log("SECRETARY_LOOP: Updating existing task:", t.id);
         const updated = new Array(header.length).fill("");
 
-        // start with existing values to avoid nuking unknown cols
         for (let i = 0; i < header.length; i++) updated[i] = row[i] ?? "";
 
         const set = (colName, val) => {
@@ -268,7 +308,7 @@ exports.handler = async (event) => {
         set("notifyEveryMins", String(priorityToNotifyMins(t.priority)));
         set("status", "open");
 
-        const sheetRowNumber = existingIdx + 2; // + header row + 1-based
+        const sheetRowNumber = existingIdx + 2;
         batchUpdates.push({
           range: `Tasks!A${sheetRowNumber}:${String.fromCharCode(64 + header.length)}${sheetRowNumber}`,
           values: [updated],
@@ -279,6 +319,7 @@ exports.handler = async (event) => {
     }
 
     if (!dryRun && batchUpdates.length) {
+      console.log("SECRETARY_LOOP: Executing batch update with", batchUpdates.length, "updates");
       await sheets.spreadsheets.values.batchUpdate({
         spreadsheetId: sheetId,
         requestBody: {
@@ -302,7 +343,6 @@ exports.handler = async (event) => {
       }),
     };
   } catch (err) {
-    // Always log the full stack so we never get “no logs” again (if handler runs)
     console.error("SECRETARY_LOOP_ERROR", err && err.stack ? err.stack : err);
     return {
       statusCode: 500,
