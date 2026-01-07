@@ -1,24 +1,7 @@
 // netlify/functions/createReminder.js
 const { google } = require("googleapis");
-const { getSecrets } = require("./_utils/secrets");
+const { getSecret } = require("./_utils/secrets");
 const { auth } = require("./_utils/google");
-
-const TASKS_HEADERS = [
-  "id",
-  "createdAt",
-  "createdBy",
-  "rawText",
-  "title",
-  "notes",
-  "dueAt",
-  "tz",
-  "recurrence",
-  "priority",
-  "status",
-  "lastNotifiedAt",
-  "notifyEveryMins",
-  "contactEmail" // keep only if your Tasks sheet has this column header
-];
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -26,8 +9,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const secrets = await getSecrets();
-    const sheetId = secrets.SECRETARY_TASKS_SHEET_ID;
+    const sheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
     if (!sheetId) throw new Error("Missing SECRETARY_TASKS_SHEET_ID");
 
     const body = JSON.parse(event.body || "{}");
@@ -39,11 +21,11 @@ exports.handler = async (event) => {
       priority = "code-green",
       createdAt = new Date().toISOString(),
       contactEmail = "",
-      dueAt // may be undefined/blank
+      dueAt
     } = body;
 
-    // Default: if dueAt isn't provided, start the loop immediately from createdAt.
-    // If dueAt is a future timestamp, the reminder loop won't start until then.
+    // If dueAt isn't provided, start immediately from createdAt.
+    // If dueAt is in the future, the loop won't start until then.
     const effectiveDueAt =
       dueAt && String(dueAt).trim() ? String(dueAt).trim() : createdAt;
 
@@ -61,21 +43,24 @@ exports.handler = async (event) => {
     const safeTitle = String(title || "").trim();
     const safeNotes = String(notes || "").trim();
 
+    // NOTE: Your Tasks sheet headers you showed end at notifyEveryMins (no contactEmail).
+    // If your sheet truly has no contactEmail column, remove the last element below.
+    // For now, we keep it because you’ve planned CRM-linked reminders.
     const row = [
-      Date.now().toString(), // id
-      createdAt,
-      "CommandApp",
+      Date.now().toString(),          // id
+      createdAt,                      // createdAt
+      "CommandApp",                   // createdBy
       `${safeType} Reminder: ${safeTitle}`, // rawText
-      safeTitle,
-      safeNotes,
-      effectiveDueAt, // dueAt (defaults to createdAt)
-      "UTC",
-      "", // recurrence (reserved)
-      p,
-      "open",
-      "", // lastNotifiedAt
-      notifyEveryMins,
-      safeType === "CRM" ? String(contactEmail || "").trim() : ""
+      safeTitle,                      // title
+      safeNotes,                      // notes
+      effectiveDueAt,                 // dueAt
+      "UTC",                          // tz
+      "",                             // recurrence
+      p,                              // priority
+      "open",                         // status
+      "",                             // lastNotifiedAt
+      notifyEveryMins,                // notifyEveryMins
+      safeType === "CRM" ? String(contactEmail || "").trim() : "" // contactEmail
     ];
 
     const authClient = await auth();
