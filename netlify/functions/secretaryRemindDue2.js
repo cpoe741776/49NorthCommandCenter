@@ -1,19 +1,18 @@
 // netlify/functions/secretaryRemindDue2.js
 // Scheduled every 5 minutes
-// Sends Pushover notifications for Tasks that are due or "due soon" based on priority windows.
+// Sends Pushover notifications for Tasks that are due or "due soon" based on *due date phases*.
 //
-// Due-soon policy (requested):
-// - code-red:   within 72 hours
+// Due-soon policy (Boss policy):
+// - code-red:    within 72 hours (or overdue)
 // - code-yellow: within 7 days
 // - code-green:  within 14 days
 // - code-white:  within 30 days
 //
-// Eligibility:
-// - status === "open"
-// - dueAt is present AND dueAt <= now + window
-// - lastNotifiedAt is empty OR older than notifyEveryMins
-//
-// Writes back lastNotifiedAt when a notification is sent.
+// Guarantees:
+// - NO CAP for Code Red notifications (within 72h / overdue)
+// - CAP for non-red notifications to prevent spam
+// - Phase is determined from dueAt even if the row's priority is wrong
+// - Throttle cadence (notifyEveryMins) is effectively enforced by phase so Red can’t be “stuck” at 480 mins
 
 function nowIso() {
   return new Date().toISOString();
@@ -27,40 +26,17 @@ function safeStr(v) {
   return String(v ?? "").trim();
 }
 
-function normalizePriority(p) {
-  const s = safeStr(p).toLowerCase();
-  if (["code-red", "code-yellow", "code-green", "code-white"].includes(s)) return s;
-  return "code-yellow";
-}
-
-function priorityWindowMs(priority) {
-  const p = normalizePriority(priority);
-
-  // Boss policy
-  if (p === "code-red") return 72 * 60 * 60 * 1000;        // 72 hours
-  if (p === "code-yellow") return 7 * 24 * 60 * 60 * 1000; // 7 days
-  if (p === "code-green") return 14 * 24 * 60 * 60 * 1000; // 14 days
-  if (p === "code-white") return 30 * 24 * 60 * 60 * 1000; // 30 days
-
-  return 7 * 24 * 60 * 60 * 1000;
-}
-
 function parseIsoDate(s) {
   const v = safeStr(s);
   if (!v) return null;
   const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d;
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function minsSince(iso) {
   const d = parseIsoDate(iso);
   if (!d) return Infinity;
   return Math.floor((Date.now() - d.getTime()) / (60 * 1000));
-}
-
-function toInt(v, fallback) {
-  const n = parseInt(String(v ?? ""), 10);
-  return Number.isFinite(n) ? n : fallback;
 }
 
 function buildBaseUrl(event) {
@@ -71,15 +47,55 @@ function buildBaseUrl(event) {
     event?.headers?.["x-forwarded-proto"] ||
     event?.headers?.["X-Forwarded-Proto"] ||
     "https";
-  const host =
-    event?.headers?.host ||
-    event?.headers?.Host;
+  const host = event?.headers?.host || event?.headers?.Host;
 
   return host ? `${proto}://${host}` : "https://49northcommandcenter.netlify.app";
 }
 
+// Convert 1-based column index to letters (A, B, ..., Z, AA, AB, ...)
+function colToLetter(n) {
+  let s = "";
+  let x = n;
+  while (x > 0) {
+    const m = (x - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    x = Math.floor((x - 1) / 26);
+  }
+  return s;
+}
+
+// Phase logic derived from due date proximity
+function phaseFromMsToDue(msToDue) {
+  const hour = 60 * 60 * 1000;
+  const day = 24 * hour;
+
+  if (msToDue <= 72 * hour) return "code-red";     // includes overdue (negative)
+  if (msToDue <= 7 * day) return "code-yellow";
+  if (msToDue <= 14 * day) return "code-green";
+  if (msToDue <= 30 * day) return "code-white";
+  return null; // not due soon enough to notify
+}
+
+function phaseNotifyEveryMins(phase) {
+  if (phase === "code-red") return 15;
+  if (phase === "code-yellow") return 60;
+  if (phase === "code-green") return 240;
+  if (phase === "code-white") return 480;
+  return 60;
+}
+
+function mapToPushoverPriority(phase) {
+  if (phase === "code-red") return 1;
+  if (phase === "code-white") return -1;
+  return 0;
+}
+
+function mapToPushoverSound(phase) {
+  if (phase === "code-red") return "siren";
+  return "pushover";
+}
+
 async function pushoverSend({ token, user, title, message, priority, sound }) {
-  // Node 18+ has fetch
   const res = await fetch("https://api.pushover.net/1/messages.json", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -88,8 +104,6 @@ async function pushoverSend({ token, user, title, message, priority, sound }) {
       user,
       title: title || "49N Executive Assistant",
       message: message || "",
-      // Pushover priority is -2..2; we map gently:
-      // code-red => 1, code-yellow => 0, code-green => 0, code-white => -1
       priority: String(priority ?? 0),
       sound: sound || "pushover",
     }).toString(),
@@ -97,20 +111,6 @@ async function pushoverSend({ token, user, title, message, priority, sound }) {
 
   const text = await res.text();
   return { ok: res.ok, status: res.status, text };
-}
-
-function mapToPushoverPriority(codePriority) {
-  const p = normalizePriority(codePriority);
-  if (p === "code-red") return 1;
-  if (p === "code-white") return -1;
-  return 0;
-}
-
-function mapToPushoverSound(codePriority) {
-  const p = normalizePriority(codePriority);
-  // You can change these later; keeping it simple + noticeable for red.
-  if (p === "code-red") return "siren";
-  return "pushover";
 }
 
 exports.handler = async (event) => {
@@ -156,24 +156,21 @@ exports.handler = async (event) => {
     const titleIdx = idx("title");
     const notesIdx = idx("notes");
     const dueAtIdx = idx("dueAt");
-    const priorityIdx = idx("priority");
     const statusIdx = idx("status");
     const lastNotifiedAtIdx = idx("lastNotifiedAt");
-    const notifyEveryMinsIdx = idx("notifyEveryMins");
 
     if (idIdx === -1) throw new Error("Tasks header missing required column: id");
     if (statusIdx === -1) throw new Error("Tasks header missing required column: status");
     if (dueAtIdx === -1) throw new Error("Tasks header missing required column: dueAt");
-    if (priorityIdx === -1) throw new Error("Tasks header missing required column: priority");
     if (lastNotifiedAtIdx === -1) throw new Error("Tasks header missing required column: lastNotifiedAt");
-    if (notifyEveryMinsIdx === -1) throw new Error("Tasks header missing required column: notifyEveryMins");
 
     const nowMs = Date.now();
     const baseUrl = buildBaseUrl(event);
 
-    // Build candidate list
-    const candidates = [];
     let scanned = 0;
+
+    // Candidate list = tasks due within 30 days (or overdue), phase computed from dueAt
+    const candidates = [];
 
     for (let i = 0; i < data.length; i++) {
       const r = data[i] || [];
@@ -181,73 +178,60 @@ exports.handler = async (event) => {
       if (status !== "open") continue;
 
       const dueAtRaw = safeStr(r[dueAtIdx]);
-      if (!dueAtRaw) continue; // due-soon logic requires dueAt
+      if (!dueAtRaw) continue;
 
       const dueAt = parseIsoDate(dueAtRaw);
       if (!dueAt) continue;
 
-      const pr = normalizePriority(r[priorityIdx]);
-      const windowMs = priorityWindowMs(pr);
-
-      // Eligible if due date is within window (including overdue)
-      const dueSoonCutoff = nowMs + windowMs;
-      if (dueAt.getTime() > dueSoonCutoff) continue;
-
-      // Throttle by notifyEveryMins and lastNotifiedAt
-      const notifyEvery = toInt(r[notifyEveryMinsIdx], 60);
-      const lastNotifiedAt = safeStr(r[lastNotifiedAtIdx]);
-      const minutesSinceLast = lastNotifiedAt ? minsSince(lastNotifiedAt) : Infinity;
+      const msToDue = dueAt.getTime() - nowMs;
+      const phase = phaseFromMsToDue(msToDue);
+      if (!phase) continue; // not within 30-day window
 
       scanned += 1;
 
-      if (minutesSinceLast < notifyEvery) continue;
+      const lastNotifiedAt = safeStr(r[lastNotifiedAtIdx]);
+      const minutesSinceLast = lastNotifiedAt ? minsSince(lastNotifiedAt) : Infinity;
+
+      // Effective cadence based on phase, so urgent tasks don’t get stuck
+      const effectiveEvery = phaseNotifyEveryMins(phase);
+
+      if (minutesSinceLast < effectiveEvery) continue;
 
       const taskId = safeStr(r[idIdx]);
       const title = titleIdx !== -1 ? safeStr(r[titleIdx]) : taskId;
       const notes = notesIdx !== -1 ? safeStr(r[notesIdx]) : "";
 
-      const msToDue = dueAt.getTime() - nowMs;
-
       candidates.push({
-        rowIndex: i, // 0-based within data (not counting header)
+        rowIndex: i, // 0-based within data
         taskId,
         title,
         notes,
-        priority: pr,
+        phase,
         dueAtIso: dueAt.toISOString(),
         msToDue,
-        notifyEvery,
+        effectiveEvery,
       });
     }
 
-    // Sort: Code Red first, then soonest due
-    const prRank = (p) => {
-      const x = normalizePriority(p);
-      if (x === "code-red") return 0;
-      if (x === "code-yellow") return 1;
-      if (x === "code-green") return 2;
-      if (x === "code-white") return 3;
-      return 9;
-    };
+    // Sort within phase by soonest due
+    candidates.sort((a, b) => a.msToDue - b.msToDue);
 
-    candidates.sort((a, b) => {
-      const ra = prRank(a.priority);
-      const rb = prRank(b.priority);
-      if (ra !== rb) return ra - rb;
-      return a.msToDue - b.msToDue;
-    });
+    // Split reds vs others
+    const reds = candidates.filter((c) => c.phase === "code-red");
+    const others = candidates.filter((c) => c.phase !== "code-red");
 
-    // Send limit per run (prevents spam)
-    const MAX_SEND_PER_RUN = 5;
-    const toSend = candidates.slice(0, MAX_SEND_PER_RUN);
+    // Cap ONLY non-red
+    const MAX_OTHER_SEND_PER_RUN = 5;
+    const toSend = [...reds, ...others.slice(0, MAX_OTHER_SEND_PER_RUN)];
 
     let sent = 0;
     const updates = [];
 
     for (const c of toSend) {
-      const title = c.priority === "code-red"
-        ? "🔥 Code Red: Due Soon"
-        : "⏳ Task Due Soon";
+      const title =
+        c.phase === "code-red"
+          ? "🔥 Code Red: Due within 72 hours"
+          : "⏳ Task Due Soon";
 
       const dueText =
         c.msToDue < 0
@@ -256,10 +240,10 @@ exports.handler = async (event) => {
 
       const message = [
         `${c.title}`,
-        ``,
+        "",
         `${dueText}`,
-        `Priority: ${c.priority}`,
-        c.notes ? `` : null,
+        `Phase: ${c.phase}`,
+        c.notes ? "" : null,
         c.notes ? c.notes : null,
       ].filter(Boolean).join("\n");
 
@@ -269,8 +253,8 @@ exports.handler = async (event) => {
           user: pushoverUser,
           title,
           message,
-          priority: mapToPushoverPriority(c.priority),
-          sound: mapToPushoverSound(c.priority),
+          priority: mapToPushoverPriority(c.phase),
+          sound: mapToPushoverSound(c.phase),
         });
 
         if (!res.ok) {
@@ -279,11 +263,11 @@ exports.handler = async (event) => {
         }
 
         // Update lastNotifiedAt in sheet
-        const sheetRowNumber = c.rowIndex + 2; // + header row, 1-based indexing
-        const lastNotifiedCol = String.fromCharCode(65 + lastNotifiedAtIdx); // A=65
+        const sheetRowNumber = c.rowIndex + 2; // header + 1-based
+        const lastNotifiedColLetter = colToLetter(lastNotifiedAtIdx + 1); // 1-based col
 
         updates.push({
-          range: `Tasks!${lastNotifiedCol}${sheetRowNumber}`,
+          range: `Tasks!${lastNotifiedColLetter}${sheetRowNumber}`,
           values: [[nowIso()]],
         });
       }
@@ -301,7 +285,14 @@ exports.handler = async (event) => {
       });
     }
 
-    console.log("SECRETARY_REMIND_DUE2_DONE", { scanned, sent, dryRun });
+    console.log("SECRETARY_REMIND_DUE2_DONE", {
+      scanned,
+      eligible: candidates.length,
+      reds: reds.length,
+      others: others.length,
+      sent,
+      dryRun,
+    });
 
     return {
       statusCode: 200,
@@ -311,6 +302,8 @@ exports.handler = async (event) => {
         dryRun,
         scanned,
         eligible: candidates.length,
+        reds: reds.length,
+        others: others.length,
         sent,
         sentIds: toSend.map((x) => x.taskId),
         baseUrl,

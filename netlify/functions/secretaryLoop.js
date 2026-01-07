@@ -1,5 +1,5 @@
 // netlify/functions/secretaryLoop.js
-// deploy-bump: 1767810001
+// deploy-bump: 1767810002
 // Hourly "Executive Assistant focus tasks" generator (rules-based)
 // - Generates stable focus tasks based on current workload
 // - Upserts by id (no duplicates): focus-bids, focus-social, focus-webinars
@@ -33,7 +33,11 @@ function addMinutesISO(mins) {
 }
 
 function safeJsonParse(s) {
-  try { return JSON.parse(s); } catch { return null; }
+  try {
+    return JSON.parse(s);
+  } catch {
+    return null;
+  }
 }
 
 function buildBaseUrl(event) {
@@ -44,9 +48,7 @@ function buildBaseUrl(event) {
     event?.headers?.["x-forwarded-proto"] ||
     event?.headers?.["X-Forwarded-Proto"] ||
     "https";
-  const host =
-    event?.headers?.host ||
-    event?.headers?.Host;
+  const host = event?.headers?.host || event?.headers?.Host;
 
   return host ? `${proto}://${host}` : "https://49northcommandcenter.netlify.app";
 }
@@ -58,6 +60,7 @@ async function fetchJson(url, opts) {
     fetchFn = fetch;
   } else {
     try {
+      // eslint-disable-next-line global-require
       const nodeFetch = require("node-fetch");
       fetchFn = nodeFetch;
     } catch {
@@ -150,8 +153,7 @@ exports.handler = async (event) => {
     path: event?.path,
     qs: event?.queryStringParameters || {},
   });
-  console.log("SECRETARY_LOOP_VERSION", "2026-01-07-bidRules-wireup-v1");
-
+  console.log("SECRETARY_LOOP_VERSION", "2026-01-07-bidRules-wireup-v1.1");
 
   try {
     const qs = event?.queryStringParameters || {};
@@ -204,7 +206,7 @@ exports.handler = async (event) => {
       webinars: { ok: webinarsData.ok, status: webinarsData.status, upcomingWebinars },
     });
 
-    // ---- Focus tasks (your existing logic) ----
+    // ---- Focus tasks ----
     const focusTasks = [];
 
     if (totalActiveBids > 0) {
@@ -285,7 +287,6 @@ exports.handler = async (event) => {
           getSheetRowsAsObjects({ sheets, spreadsheetId: bidsIntelSheetId, tabName: "Submitted" }),
         ]);
 
-        // evaluateBidRules must return array of {id, title, ...}
         bidTasks = evaluateBidRules({
           activeBids,
           submittedBids,
@@ -304,7 +305,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // ---- Combine all tasks to upsert ----
+    // ---- Combine all tasks to upsert (NO CAPS) ----
     const tasksToUpsert = [...focusTasks, ...bidTasks];
 
     if (!tasksToUpsert.length) {
@@ -328,7 +329,7 @@ exports.handler = async (event) => {
     let appended = 0;
     let updated = 0;
 
-    // Header length is 14 (A..N) so safe for A..Z conversion
+    // Handles A..Z safely for your current 14-column Tasks header
     const endColLetter = String.fromCharCode(64 + header.length);
 
     for (const t of tasksToUpsert) {
@@ -337,7 +338,6 @@ exports.handler = async (event) => {
       const existingIdx = findRow(t.id);
 
       if (existingIdx === -1) {
-        // Task doesn't exist - append new row
         if (!dryRun) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: secretarySheetId,
@@ -350,15 +350,12 @@ exports.handler = async (event) => {
         upserted += 1;
         appended += 1;
       } else {
-        // Task exists - update if still open
         const row = data[existingIdx] || [];
         const existingStatus =
           statusIdx === -1 ? "open" : String(row[statusIdx] || "").toLowerCase();
 
-        // Don't resurrect closed tasks
         if (existingStatus === "closed") continue;
 
-        // Build updated row preserving existing data
         const updatedRow = new Array(header.length).fill("");
         for (let i = 0; i < header.length; i++) updatedRow[i] = row[i] ?? "";
 
@@ -367,7 +364,6 @@ exports.handler = async (event) => {
           if (idx !== -1) updatedRow[idx] = val;
         };
 
-        // Update live fields
         set("title", t.title);
         set("rawText", t.rawText || `Focus Task: ${t.title}`);
         set("notes", t.notes || "");
