@@ -115,13 +115,24 @@ exports.handler = async (event) => {
     const currentYear = now.getFullYear();
     const currentWeek = getWeekNumber(now);
 
-    // Fetch webinars
-    const webinarRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: WEBINAR_SHEET_ID,
-      range: 'Webinars!A2:L'
-    });
+    // Fetch webinars (gracefully handle quota / 429)
+    let webinarRows = [];
+    try {
+      const webinarRes = await sheets.spreadsheets.values.get({
+        spreadsheetId: WEBINAR_SHEET_ID,
+        range: 'Webinars!A2:L'
+      });
+      webinarRows = webinarRes.data.values || [];
+    } catch (err) {
+      const status = err?.status || err?.code || err?.response?.status;
+      if (status === 429) {
+        console.error('[Reminders] Webinar sheet quota exceeded (429):', err.message);
+        webinarRows = [];
+      } else {
+        throw err;
+      }
+    }
 
-    const webinarRows = webinarRes.data.values || [];
     const upcomingWebinars = webinarRows
       .filter(r => {
         const webDate = new Date(r[2] + ' ' + (r[3] || '12:00'));
