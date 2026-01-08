@@ -1,8 +1,7 @@
 // netlify/functions/secretaryLoopManual.js
-// Manual trigger wrapper for secretaryLoop
-// Allows on-demand execution for testing/debugging
-// Usage:
-//   /.netlify/functions/secretaryLoopManual
-//   /.netlify/functions/secretaryLoopManual?dryRun=true
+// Manual HTTP wrapper around the scheduled secretaryLoop
+// so you can trigger a run on-demand via browser/curl.
 
-export { handler } from "./secretaryLoop.js";
+const { handler } = require("./secretaryLoop");
+
+exports.handler = handler;
