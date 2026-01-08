@@ -1,21 +1,16 @@
 // netlify/functions/secretaryRemindDue2.js
 // Scheduled every 5 minutes
-// Sends Pushover notifications for Tasks that are due or "due soon" based on priority windows.
+// Uses ramping based on time-to-due:
 //
-// Due-soon policy:
-// - code-red:    within 72 hours
-// - code-yellow: within 7 days
-// - code-green:  within 14 days
-// - code-white:  within 30 days
-//
-// Eligibility:
-// - status === "open"
-// - dueAt is present AND dueAt <= now + window
-// - lastNotifiedAt is empty OR older than notifyEveryMins
-//
-// Sending policy:
-// - NO CAP on Code Red (send all eligible reds each run)
-// - Cap non-reds per run to prevent spam
+// Phase Windows:
+//  > 30 days before due  -> "dormant"    (no reminders)
+//  30–14 days before     -> "white"      (weekly Monday 09:00)
+//  14–7 days before      -> "green"      (daily 12:00)
+//  7–3 days before       -> "yellow"     (09:00, 12:00, 15:00)
+//  3–0 days before       -> "red"        (every 2h 08:00–22:00)
+//  1–14 days after due   -> "overdue"    (daily 09:00)
+//  14–30 days after due  -> "wayOverdue" (every 3 days 09:00)
+//  30+ days after due    -> "expired"    (auto-archive)
 //
 // Quiet Hours (from ExecutiveAssistant_Settings tab):
 // - quietHoursEnabled (true/false)
@@ -39,37 +34,11 @@ function safeStr(v) {
   return String(v ?? "").trim();
 }
 
-function toInt(v, fallback) {
-  const n = parseInt(String(v ?? ""), 10);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function normalizePriority(p) {
-  const s = safeStr(p).toLowerCase();
-  if (["code-red", "code-yellow", "code-green", "code-white"].includes(s)) return s;
-  return "code-yellow";
-}
-
-function priorityWindowMs(priority) {
-  const p = normalizePriority(priority);
-  if (p === "code-red") return 72 * 60 * 60 * 1000;         // 72 hours
-  if (p === "code-yellow") return 7 * 24 * 60 * 60 * 1000;  // 7 days
-  if (p === "code-green") return 14 * 24 * 60 * 60 * 1000;  // 14 days
-  if (p === "code-white") return 30 * 24 * 60 * 60 * 1000;  // 30 days
-  return 7 * 24 * 60 * 60 * 1000;
-}
-
 function parseIsoDate(s) {
   const v = safeStr(s);
   if (!v) return null;
   const d = new Date(v);
   return Number.isFinite(d.getTime()) ? d : null;
-}
-
-function minsSince(iso) {
-  const d = parseIsoDate(iso);
-  if (!d) return Infinity;
-  return Math.floor((Date.now() - d.getTime()) / (60 * 1000));
 }
 
 function parseHHMM(s) {
@@ -163,17 +132,17 @@ async function pushoverSend({ token, user, title, message, priority, sound }) {
   return { ok: res.ok, status: res.status, text };
 }
 
-function mapToPushoverPriority(codePriority) {
-  const p = normalizePriority(codePriority);
-  if (p === "code-red") return 1;
-  if (p === "code-white") return -1;
+// Map ramp phase -> Pushover priority
+function mapPhaseToPushoverPriority(phase) {
+  if (phase === "red" || phase === "overdue" || phase === "wayOverdue") return 1;
+  if (phase === "white") return -1;
   return 0;
 }
 
-function mapToPushoverSound(codePriority, inQuiet, quietMode) {
+// Map ramp phase -> Pushover sound (respecting quiet mode)
+function mapPhaseToPushoverSound(phase, inQuiet, quietMode) {
   if (inQuiet && quietMode === "silent") return "none";
-  const p = normalizePriority(codePriority);
-  if (p === "code-red") return "siren";
+  if (phase === "red" || phase === "overdue" || phase === "wayOverdue") return "siren";
   return "pushover";
 }
 
@@ -188,6 +157,11 @@ exports.handler = async (event) => {
     const { google } = require("googleapis");
     const { getSecret } = require("./_utils/secrets");
     const { getGoogleAuth } = require("./_utils/google");
+    const {
+      computePhase,
+      computeNextRemindAt,
+      isExpired,
+    } = require("./_utils/ramping");
 
     const sheetId = await getSecret("SECRETARY_TASKS_SHEET_ID");
     if (!sheetId) throw new Error("Missing SECRETARY_TASKS_SHEET_ID");
@@ -236,23 +210,30 @@ exports.handler = async (event) => {
     const titleIdx = idx("title");
     const notesIdx = idx("notes");
     const dueAtIdx = idx("dueAt");
-    const priorityIdx = idx("priority");
     const statusIdx = idx("status");
     const lastNotifiedAtIdx = idx("lastNotifiedAt");
-    const notifyEveryMinsIdx = idx("notifyEveryMins");
+    const nextRemindAtIdx = idx("nextRemindAt"); // required for ramping
+    const dueStatusIdx = idx("dueStatus");       // optional, if present for UI
 
     if (idIdx === -1) throw new Error("Tasks header missing required column: id");
     if (statusIdx === -1) throw new Error("Tasks header missing required column: status");
     if (dueAtIdx === -1) throw new Error("Tasks header missing required column: dueAt");
-    if (priorityIdx === -1) throw new Error("Tasks header missing required column: priority");
     if (lastNotifiedAtIdx === -1) throw new Error("Tasks header missing required column: lastNotifiedAt");
-    if (notifyEveryMinsIdx === -1) throw new Error("Tasks header missing required column: notifyEveryMins");
+    if (nextRemindAtIdx === -1) throw new Error("Tasks header missing required column: nextRemindAt");
 
-    const nowMs = Date.now();
+    const now = new Date();
+    const nowMs = now.getTime();
 
-    // Build candidate list (eligible + not throttled)
+    const lastNotifiedColLetter = colToLetter(lastNotifiedAtIdx + 1);
+    const nextRemindColLetter = colToLetter(nextRemindAtIdx + 1);
+    const statusColLetter = colToLetter(statusIdx + 1);
+    const dueStatusColLetter = dueStatusIdx !== -1 ? colToLetter(dueStatusIdx + 1) : null;
+
     const candidates = [];
     let scanned = 0;
+
+    // We'll collect all sheets updates (status, dueStatus, nextRemindAt, lastNotifiedAt)
+    const updates = [];
 
     for (let i = 0; i < data.length; i++) {
       const r = data[i] || [];
@@ -265,19 +246,75 @@ exports.handler = async (event) => {
       const dueAt = parseIsoDate(dueAtRaw);
       if (!dueAt) continue;
 
-      const pr = normalizePriority(r[priorityIdx]);
-      const windowMs = priorityWindowMs(pr);
-
-      // Eligible if within due-soon window (including overdue)
-      const dueSoonCutoff = nowMs + windowMs;
-      if (dueAt.getTime() > dueSoonCutoff) continue;
-
-      const notifyEvery = toInt(r[notifyEveryMinsIdx], 60);
-      const lastNotifiedAt = safeStr(r[lastNotifiedAtIdx]);
-      const minutesSinceLast = lastNotifiedAt ? minsSince(lastNotifiedAt) : Infinity;
-
       scanned += 1;
-      if (minutesSinceLast < notifyEvery) continue;
+
+      // Phase based on time-to-due
+      const phase = computePhase(now, dueAt);
+
+      // Handle expired (30+ days late): archive/close
+      if (isExpired(now, dueAt) || phase === "expired") {
+        const sheetRowNumber = i + 2;
+        updates.push({
+          range: `Tasks!${statusColLetter}${sheetRowNumber}`,
+          values: [["archived"]],
+        });
+        if (dueStatusColLetter) {
+          updates.push({
+            range: `Tasks!${dueStatusColLetter}${sheetRowNumber}`,
+            values: [["expired"]],
+          });
+        }
+        continue;
+      }
+
+      // Optional: write overdue / wayOverdue / etc. label if column exists
+      if (dueStatusColLetter) {
+        let dueStatus = "";
+        if (phase === "overdue") dueStatus = "overdue";
+        else if (phase === "wayOverdue") dueStatus = "way-overdue";
+        else if (phase === "red") dueStatus = "imminent";
+        else if (phase === "yellow") dueStatus = "near";
+        else if (phase === "green") dueStatus = "upcoming";
+        else if (phase === "white") dueStatus = "scheduled";
+        else if (phase === "dormant") dueStatus = "future";
+
+        if (dueStatus) {
+          const sheetRowNumber = i + 2;
+          updates.push({
+            range: `Tasks!${dueStatusColLetter}${sheetRowNumber}`,
+            values: [[dueStatus]],
+          });
+        }
+      }
+
+      // Dormant: no reminders yet
+      if (phase === "dormant" || !phase) {
+        continue;
+      }
+
+      const nextRemindRaw = safeStr(r[nextRemindAtIdx]);
+      const nextRemindAt = parseIsoDate(nextRemindRaw);
+
+      const sheetRowNumber = i + 2;
+
+      // If we've just entered an active phase and have no nextRemindAt yet,
+      // schedule the first reminder according to the ramp rules, but do NOT send yet.
+      if (!nextRemindAt) {
+        const initialNext = computeNextRemindAt(phase, now);
+        const initialIso = initialNext ? initialNext.toISOString() : "";
+        if (initialIso) {
+          updates.push({
+            range: `Tasks!${nextRemindColLetter}${sheetRowNumber}`,
+            values: [[initialIso]],
+          });
+        }
+        continue;
+      }
+
+      // Not yet time to fire
+      if (nowMs < nextRemindAt.getTime()) {
+        continue;
+      }
 
       const taskId = safeStr(r[idIdx]);
       const title = titleIdx !== -1 ? safeStr(r[titleIdx]) : taskId;
@@ -289,19 +326,32 @@ exports.handler = async (event) => {
         taskId,
         title,
         notes,
-        priority: pr,
+        phase,
         dueAtIso: dueAt.toISOString(),
         msToDue,
       });
     }
 
-    // If suppress mode, bail early during quiet hours
+    // If suppress mode, bail early during quiet hours (no sends), but still apply housekeeping updates.
     if (inQuiet && quiet.mode === "suppress") {
       console.log("SECRETARY_REMIND_DUE2_QUIET_SUPPRESS", {
         scanned,
         eligible: candidates.length,
         quiet,
       });
+
+      if (!dryRun && updates.length) {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId: sheetId,
+          requestBody: {
+            valueInputOption: "RAW",
+            data: updates,
+          },
+        });
+      }
+
+      const redsCount = candidates.filter((c) => c.phase === "red").length;
+      const nonRedsCount = candidates.length - redsCount;
 
       return {
         statusCode: 200,
@@ -311,8 +361,8 @@ exports.handler = async (event) => {
           dryRun,
           scanned,
           eligible: candidates.length,
-          reds: candidates.filter((c) => c.priority === "code-red").length,
-          nonReds: candidates.filter((c) => c.priority !== "code-red").length,
+          reds: redsCount,
+          nonReds: nonRedsCount,
           sent: 0,
           suppressedByQuietHours: true,
           quiet,
@@ -323,20 +373,19 @@ exports.handler = async (event) => {
     // Sort: soonest due first
     candidates.sort((a, b) => a.msToDue - b.msToDue);
 
-    const reds = candidates.filter((c) => c.priority === "code-red");
-    const nonReds = candidates.filter((c) => c.priority !== "code-red");
+    const reds = candidates.filter((c) => c.phase === "red");
+    const nonReds = candidates.filter((c) => c.phase !== "red");
 
     // NO CAP on reds
     const MAX_NON_RED_PER_RUN = 8;
     const toSend = [...reds, ...nonReds.slice(0, MAX_NON_RED_PER_RUN)];
 
     let sent = 0;
-    const updates = [];
 
     for (const c of toSend) {
-      const pushTitle = c.priority === "code-red"
-        ? "🔥 Code Red: Bid/Task Due Soon"
-        : "⏳ Task Due Soon";
+      let pushTitle = "⏳ Task Due";
+      if (c.phase === "red") pushTitle = "🔥 RED: Task/Event Imminent";
+      else if (c.phase === "overdue" || c.phase === "wayOverdue") pushTitle = "⚠️ Overdue Task";
 
       const dueText =
         c.msToDue < 0
@@ -347,10 +396,12 @@ exports.handler = async (event) => {
         `${c.title}`,
         "",
         dueText,
-        `Priority: ${c.priority}`,
+        `Phase: ${c.phase}`,
         c.notes ? "" : null,
         c.notes ? c.notes : null,
-      ].filter(Boolean).join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       if (!dryRun) {
         const res = await pushoverSend({
@@ -358,22 +409,33 @@ exports.handler = async (event) => {
           user: pushoverUser,
           title: pushTitle,
           message,
-          priority: mapToPushoverPriority(c.priority),
-          sound: mapToPushoverSound(c.priority, inQuiet, quiet.mode),
+          priority: mapPhaseToPushoverPriority(c.phase),
+          sound: mapPhaseToPushoverSound(c.phase, inQuiet, quiet.mode),
         });
 
         if (!res.ok) {
-          console.warn("PUSHOVER_SEND_FAILED", { taskId: c.taskId, status: res.status, text: res.text });
+          console.warn("PUSHOVER_SEND_FAILED", {
+            taskId: c.taskId,
+            status: res.status,
+            text: res.text,
+          });
           continue;
         }
 
-        const sheetRowNumber = c.rowIndex + 2; // header + 1-based indexing
-        const lastNotifiedColLetter = colToLetter(lastNotifiedAtIdx + 1);
+        const sheetRowNumber = c.rowIndex + 2;
+        const newNext = computeNextRemindAt(c.phase, new Date());
+        const newNextIso = newNext ? newNext.toISOString() : "";
 
-        updates.push({
-          range: `Tasks!${lastNotifiedColLetter}${sheetRowNumber}`,
-          values: [[nowIso()]],
-        });
+        updates.push(
+          {
+            range: `Tasks!${lastNotifiedColLetter}${sheetRowNumber}`,
+            values: [[nowIso()]],
+          },
+          {
+            range: `Tasks!${nextRemindColLetter}${sheetRowNumber}`,
+            values: [[newNextIso]],
+          }
+        );
       }
 
       sent += 1;
@@ -389,11 +451,14 @@ exports.handler = async (event) => {
       });
     }
 
+    const redsCount = reds.length;
+    const nonRedsCount = nonReds.length;
+
     console.log("SECRETARY_REMIND_DUE2_DONE", {
       scanned,
       eligible: candidates.length,
-      reds: reds.length,
-      nonReds: nonReds.length,
+      reds: redsCount,
+      nonReds: nonRedsCount,
       sent,
       dryRun,
       quiet: { ...quiet, inQuiet },
@@ -407,15 +472,18 @@ exports.handler = async (event) => {
         dryRun,
         scanned,
         eligible: candidates.length,
-        reds: reds.length,
-        nonReds: nonReds.length,
+        reds: redsCount,
+        nonReds: nonRedsCount,
         sent,
         sentIds: toSend.map((x) => x.taskId),
         quiet: { ...quiet, inQuiet },
       }),
     };
   } catch (err) {
-    console.error("SECRETARY_REMIND_DUE2_ERROR", err && err.stack ? err.stack : err);
+    console.error(
+      "SECRETARY_REMIND_DUE2_ERROR",
+      err && err.stack ? err.stack : err
+    );
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
