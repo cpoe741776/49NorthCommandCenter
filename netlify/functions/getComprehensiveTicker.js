@@ -453,71 +453,58 @@ async function fetchSocialMediaData(auth) {
 
 async function fetchBidSystemsData(auth) {
   try {
-    console.log('[BidSystems] Using main sheet Active_Admin tab for bid systems data');
+    if (!CFG.BID_SYSTEMS_SHEET_ID) {
+      console.log('[BidSystems] BID_SYSTEMS_SHEET_ID not set, skipping');
+      return { activeBidSystemsCount: 0, recentBidSystemChanges: [] };
+    }
+
+    console.log('[BidSystems] Fetching from BidSystemsRegistry:', CFG.BID_SYSTEMS_SHEET_ID);
     const sheets = google.sheets({ version: 'v4', auth });
-    
-    // Use the main sheet's Active_Admin tab instead of separate sheet
+
     const res = await withTimeout(
       sheets.spreadsheets.values.get({
-        spreadsheetId: CFG.SHEET_ID, // Use main sheet
-        range: 'Active_Admin!A2:Z'
+        spreadsheetId: CFG.BID_SYSTEMS_SHEET_ID,
+        range: 'BidSystemsRegistry!A2:U'
       }),
-      'bidSystems',
+      'bidSystemsRegistry',
       CFG.GOOGLE_TIMEOUT_MS
     );
 
     const rows = res?.data?.values || [];
-    
-    if (rows.length === 0) {
-      console.log('[BidSystems] No data found in Active_Admin tab');
-      return {
-        activeBidSystemsCount: 0,
-        recentBidSystemChanges: []
-      };
-    }
-    
-    console.log('[BidSystems] Found data in Active_Admin tab, rows:', rows.length);
-    
+    if (!rows.length) return { activeBidSystemsCount: 0, recentBidSystemChanges: [] };
+
     const systems = rows.map(row => ({
-      recommendation: row[0] || '', // A = Recommendation
-      emailDateReceived: row[1] || '', // B = Email Date Received
-      emailFrom: row[2] || '', // C = Email From
-      emailSubject: row[3] || '', // D = Email Subject
-      emailBody: row[4] || '', // E = Email Body
-      bidSystem: row[5] || '', // F = Bid System
-      emailDomain: row[6] || '', // G = Email Domain
-      dateAdded: row[7] || '', // H = Date Added
-      sourceEmailId: row[8] || '', // I = Source Email ID
-      status: row[9] || '', // J = Status
-      name: row[5] || '', // Use Bid System as name
-      dateModified: row[7] || '' // Use Date Added as dateModified
+      systemId: row[0] || '',          // A System ID
+      name: (row[1] || '').trim(),     // B System Name
+      category: row[2] || '',          // C Category
+      status: (row[3] || '').trim(),   // D Status
+      websiteUrl: row[4] || '',        // E Website URL
+      loginUrl: row[5] || '',          // F Login URL
+      dateAdded: row[19] || '',        // T Date Added
+      lastUpdated: row[20] || ''       // U Last updated
     }));
 
-    // Active systems
-    const activeBidSystemsCount = systems.filter(s => 
-      s.status.toLowerCase() === 'active'
+    const activeBidSystemsCount = systems.filter(s =>
+      String(s.status).toLowerCase() === 'active'
     ).length;
 
-    // Recent changes (last 7 days)
     const recentBidSystemChanges = systems
-      .filter(s => isRecent(s.dateAdded) || isRecent(s.dateModified))
+      .filter(s => isRecent(s.dateAdded) || isRecent(s.lastUpdated))
       .map(s => ({
-        name: s.name,
-        action: isRecent(s.dateAdded) ? 'added' : 'modified'
-      }));
+        name: s.name || '(Unnamed System)',
+        action: isRecent(s.dateAdded) ? 'added' : 'modified',
+        date: isRecent(s.dateAdded) ? s.dateAdded : s.lastUpdated
+      }))
+      // optional: hide unnamed systems from ticker changes
+      .filter(x => x.name && x.name !== '(Unnamed System)');
 
-    return {
-      activeBidSystemsCount,
-      recentBidSystemChanges
-    };
+    return { activeBidSystemsCount, recentBidSystemChanges };
   } catch (err) {
     console.error('[BidSystems] Error:', err?.message);
-    return {
-      activeBidSystemsCount: 0,
-      recentBidSystemChanges: []
-    };
+    return { activeBidSystemsCount: 0, recentBidSystemChanges: [] };
   }
 }
+
 
 async function fetchNewsData() {
   try {
@@ -610,7 +597,8 @@ exports.handler = async (event, context) => {
     try {
       console.log('[ComprehensiveTicker] Attempting Google authentication...');
       auth = getGoogleAuth();
-      const client = await auth.getClient(); // Use getClient() instead of authorize()
+      await auth.getClient();
+ // Use getClient() instead of authorize()
       console.log('[ComprehensiveTicker] Google auth successful');
     } catch (err) {
       console.error('[ComprehensiveTicker] Google auth failure:', err?.message);

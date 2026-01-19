@@ -165,7 +165,11 @@ export function generateTickerItems(data) {
   // 8. RECENTLY ADDED/DELETED BID SYSTEMS
   if (data.recentBidSystemChanges && data.recentBidSystemChanges.length > 0) {
     data.recentBidSystemChanges.slice(0, 2).forEach(change => {
-      const action = change.action === 'added' ? '➕ Added' : '➖ Removed';
+      const action =
+  change.action === 'added' ? '➕ Added'
+  : change.action === 'removed' ? '➖ Removed'
+  : '✏️ Updated';
+
       items.push({
         message: `🏢 ${action}: ${change.name}`,
         priority: 'medium',
