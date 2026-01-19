@@ -4,6 +4,10 @@
 // - Disregarded: A..U (21 cols)
 // - Submitted:   A..V (22 cols; V = Submission Date)
 // - Provides back-compat aliases so UI renders consistently across tabs
+//
+// IMPORTANT CHANGE (Never break again):
+// - Bid "id" is now Source Email ID (stable), NOT sheet row number.
+// - Row number is still available as sheetRowNumber (debug only).
 
 const { google } = require('googleapis');
 const crypto = require('crypto');
@@ -24,7 +28,6 @@ function clearBidsCache() {
   cache = { ts: 0, etag: '', payload: null };
   console.log('[getBids] Cache cleared');
 }
-
 exports.clearBidsCache = clearBidsCache;
 
 exports.handler = async (event) => {
@@ -34,9 +37,7 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
   };
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
   }
@@ -65,27 +66,6 @@ exports.handler = async (event) => {
     const nonEmpty = (r) => r && r.length && r.some((c) => String(c || '').trim() !== '');
 
     // ---------- Active_Bids (A..U) ----------
-    // A Recommendation
-    // B Score Details
-    // C AI Reasoning
-    // D AI Email Summary
-    // E Email Date Received
-    // F Email From
-    // G Keywords Category
-    // H Keywords Found
-    // I Relevance
-    // J Email Subject
-    // K Email Body
-    // L URL
-    // M Due Date
-    // N Significant Snippet
-    // O Email Domain
-    // P Bid System
-    // Q Country
-    // R Entity/Agency
-    // S Status
-    // T Date Added
-    // U Source Email ID
     const activeResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Active_Bids!A2:U',
@@ -102,27 +82,6 @@ exports.handler = async (event) => {
     const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded'));
 
     // ---------- Submitted (A..U; U = Submission Date) ----------
-    // A Recommendation
-    // B Reasoning (non-AI)
-    // C Email Summary (non-AI)
-    // D Email Date Received
-    // E Email From
-    // F Keywords Category
-    // G Keywords Found
-    // H Relevance
-    // I Email Subject
-    // J Email Body
-    // K URL
-    // L Due Date
-    // M Significant Snippet
-    // N Email Domain
-    // O Bid System
-    // P Country
-    // Q Entity/Agency
-    // R Status
-    // S Date Added
-    // T Source Email ID
-    // U Submission Date
     const subResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Submitted!A2:U',
@@ -148,6 +107,7 @@ exports.handler = async (event) => {
         totalSubmitted: submittedBids.length,
       },
     };
+
     const etag = makeEtag(payload);
     cache = { ts: Date.now(), etag, payload };
 
@@ -162,20 +122,33 @@ exports.handler = async (event) => {
   }
 };
 
-
-
 // ----- helpers & mappers -----
 function vAt(row, i) {
   return row && row[i] != null ? row[i] : '';
 }
 
+function stableIdFromSourceEmailId(sourceEmailId, sheetRowNumber) {
+  const sid = String(sourceEmailId || '').trim();
+  if (sid) return sid;
+
+  // Fallback (should be rare): stable-ish ID based on row number, so UI still works.
+  // Better than breaking, but ideally Source Email ID is always populated.
+  return `ROW-${sheetRowNumber}`;
+}
+
 // Active/Disregarded row -> unified bid (A..U)
 function toBid(row, sheetRowNumber, fallbackStatus) {
+  const sourceEmailId = vAt(row, 20); // U
   return {
-    id: sheetRowNumber,
+    // ✅ stable ID used by UI / selection / status updates
+    id: stableIdFromSourceEmailId(sourceEmailId, sheetRowNumber),
+
+    // debug only (helps you diagnose row-level issues without using as identifier)
+    sheetRowNumber,
+
     recommendation: vAt(row, 0),      // A
     scoreDetails: vAt(row, 1),        // B
-    
+
     // Mapping is strictly alphabetical A=0, B=1, C=2, D=3, etc.
     aiReasoning: vAt(row, 2),         // C
     aiEmailSummary: vAt(row, 3),      // D
@@ -198,25 +171,26 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     entity: vAt(row, 17),             // R
     status: vAt(row, 18) || fallbackStatus, // S
     dateAdded: vAt(row, 19),          // T
-    sourceEmailId: vAt(row, 20),      // U
+    sourceEmailId: sourceEmailId,     // U
 
     // Back-compat aliases
-    aiSummary: vAt(row, 3),       
-    emailSummary: vAt(row, 3),    
-    subject: vAt(row, 9),         
-    from: vAt(row, 5),            
+    aiSummary: vAt(row, 3),
+    emailSummary: vAt(row, 3),
+    subject: vAt(row, 9),
+    from: vAt(row, 5),
   };
 }
 
-
 // Submitted row -> unified bid (A..U)
-// Submitted tab: A=Recommendation, B=Reasoning, C=Email Summary, D=Email Date Received, E=Email From,
-// F=Keywords Category, G=Keywords Found, H=Relevance, I=Email Subject, J=Email Body, K=URL,
-// L=Due Date, M=Significant Snippet, N=Email Domain, O=Bid System, P=Country, Q=Entity/Agency,
-// R=Status, S=Date Added, T=Source Email ID, U=Submission Date
 function toSubmittedBid(row, sheetRowNumber) {
+  const sourceEmailId = vAt(row, 19); // T
   return {
-    id: sheetRowNumber,
+    // ✅ stable ID used by UI / selection (even though submitted doesn’t move often)
+    id: stableIdFromSourceEmailId(sourceEmailId, sheetRowNumber),
+
+    // debug only
+    sheetRowNumber,
+
     recommendation: vAt(row, 0),        // A
     reasoning: vAt(row, 1),             // B - Reasoning (non-AI)
     emailSummary: vAt(row, 2),          // C - Email Summary (non-AI)
@@ -236,14 +210,14 @@ function toSubmittedBid(row, sheetRowNumber) {
     entity: vAt(row, 16),               // Q
     status: vAt(row, 17) || 'Submitted',// R
     dateAdded: vAt(row, 18),            // S
-    sourceEmailId: vAt(row, 19),        // T
+    sourceEmailId: sourceEmailId,       // T
     submissionDate: vAt(row, 20),       // U
 
     // Back-compat aliases so BidCard/Modal resolve gracefully
-    aiReasoning: vAt(row, 1),           // maps to reasoning
-    aiEmailSummary: vAt(row, 2),        // maps to emailSummary
-    aiSummary: vAt(row, 2),             // maps to emailSummary
-    subject: vAt(row, 8),               // maps to emailSubject
-    from: vAt(row, 4),                  // maps to emailFrom
+    aiReasoning: vAt(row, 1),
+    aiEmailSummary: vAt(row, 2),
+    aiSummary: vAt(row, 2),
+    subject: vAt(row, 8),
+    from: vAt(row, 4),
   };
 }

@@ -37,8 +37,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const [loadingDisregarded, setLoadingDisregarded] = useState(false);
 
   const [selectedBidForModal, setSelectedBidForModal] = useState(null);
-  const [pendingStatusChanges, setPendingStatusChanges] = useState(new Map()); // bidId -> newStatus
-  const [updatingBids, setUpdatingBids] = useState(new Set()); // bidIds currently updating
+  const [pendingStatusChanges, setPendingStatusChanges] = useState(new Map()); // sourceEmailId -> newStatus
+  const [updatingBids, setUpdatingBids] = useState(new Set()); // sourceEmailIds currently updating
   const [bulkOperationInProgress, setBulkOperationInProgress] = useState(false);
 
   const handleRefresh = useCallback(async () => {
@@ -59,72 +59,70 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
     onNavigate?.('bid-systems');
   }, [onNavigate]);
 
-  const handleStatusChange = useCallback(async (bidId, status) => {
+  // IMPORTANT CHANGE (Never break again):
+  // bid.id is now Source Email ID, not a row number.
+  const handleStatusChange = useCallback(async (sourceEmailId, status) => {
     try {
-      // Mark as updating
-      setUpdatingBids(prev => new Set(prev).add(bidId));
-      
-      // Optimistic update
-      setPendingStatusChanges(prev => new Map(prev).set(bidId, status));
-      
+      setUpdatingBids(prev => new Set(prev).add(sourceEmailId));
+      setPendingStatusChanges(prev => new Map(prev).set(sourceEmailId, status));
+
       const response = await fetch(
         '/.netlify/functions/updateBidStatus',
-        withAuthHeaders({ method: 'POST' }, { bidId, status })
+        withAuthHeaders({ method: 'POST' }, { sourceEmailId, status })
       );
-      
-      if (!response.ok) throw new Error('Failed to update bid status');
-      const result = await response.json();
-      
-      // Success - remove from pending and updating
+
+      const result = await response.json().catch(() => ({}));
+
+      // Treat backend-declared failure as failure even if HTTP 200
+      if (!response.ok || result.success === false) {
+        throw new Error(result.error || result.details || 'Failed to update bid status');
+      }
+
       setPendingStatusChanges(prev => {
         const newMap = new Map(prev);
-        newMap.delete(bidId);
+        newMap.delete(sourceEmailId);
         return newMap;
       });
       setUpdatingBids(prev => {
         const newSet = new Set(prev);
-        newSet.delete(bidId);
+        newSet.delete(sourceEmailId);
         return newSet;
       });
-      
-      // Show success message briefly
+
       const successMsg = document.createElement('div');
       successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse';
       successMsg.textContent = `✅ ${result.message || 'Status updated!'}`;
       document.body.appendChild(successMsg);
       setTimeout(() => successMsg.remove(), 3000);
-      
-      // Refresh after short delay to get fresh data
+
       setTimeout(() => onRefresh?.(), 1000);
-      
     } catch (err) {
       console.error('Error updating bid status:', err);
-      
-      // Rollback optimistic update on error
+
       setPendingStatusChanges(prev => {
         const newMap = new Map(prev);
-        newMap.delete(bidId);
+        newMap.delete(sourceEmailId);
         return newMap;
       });
       setUpdatingBids(prev => {
         const newSet = new Set(prev);
-        newSet.delete(bidId);
+        newSet.delete(sourceEmailId);
         return newSet;
       });
-      
-      alert('❌ Error: Failed to update bid status');
+
+      alert(`❌ Error: ${err.message || 'Failed to update bid status'}`);
     }
   }, [onRefresh]);
 
-  const handleToggleSelect = useCallback((bidId) => {
-    setSelectedBids((prev) => (prev.includes(bidId) ? prev.filter((id) => id !== bidId) : [...prev, bidId]));
+  const handleToggleSelect = useCallback((sourceEmailId) => {
+    setSelectedBids((prev) => (prev.includes(sourceEmailId) ? prev.filter((id) => id !== sourceEmailId) : [...prev, sourceEmailId]));
   }, []);
 
   const handleSelectAll = useCallback((bidList) => {
-    const bidIds = bidList.map((b) => b.id);
+    const ids = bidList.map((b) => b.id);
     setSelectedBids((prev) => {
-      const allSelected = bidIds.every((id) => prev.includes(id));
-      return allSelected ? prev.filter((id) => !bidIds.includes(id)) : [...new Set([...prev, ...bidIds])];
+      const allSelected = ids.every((id) => prev.includes(id));
+      return allSelected ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])];
     });
   }, []);
 
@@ -141,7 +139,6 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
     try {
       let dueDate = undefined;
       if (status === 'submitted') {
-        // If any selected bid has no due date, ask once for a common due date
         const allBids = [...bids, ...submittedBids];
         const selected = allBids.filter(b => selectedBids.includes(b.id));
         const needsDue = selected.some(b => !b?.dueDate || String(b.dueDate).trim() === '' || String(b.dueDate).toLowerCase() === 'not specified');
@@ -151,28 +148,29 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         }
       }
 
-      // Mark all as updating
       setUpdatingBids(prev => {
         const newSet = new Set(prev);
         selectedBids.forEach(id => newSet.add(id));
         return newSet;
       });
 
-      // Optimistic updates
       setPendingStatusChanges(prev => {
         const newMap = new Map(prev);
         selectedBids.forEach(id => newMap.set(id, status));
         return newMap;
       });
 
-      const res = await fetch('/.netlify/functions/updateBidStatus', withAuthHeaders({ method: 'POST' }, { bidIds: selectedBids, status, ...(dueDate ? { dueDate } : {}) }));
-      const data = await res.json();
-      
+      // IMPORTANT CHANGE: send sourceEmailIds, not bidIds
+      const res = await fetch(
+        '/.netlify/functions/updateBidStatus',
+        withAuthHeaders({ method: 'POST' }, { sourceEmailIds: selectedBids, status, ...(dueDate ? { dueDate } : {}) })
+      );
+
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) {
-        throw new Error(data.error || 'Bulk action failed');
+        throw new Error(data.error || data.details || 'Bulk action failed');
       }
 
-      // Success - clear pending changes
       setPendingStatusChanges(prev => {
         const newMap = new Map(prev);
         selectedBids.forEach(id => newMap.delete(id));
@@ -184,22 +182,17 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         return newSet;
       });
 
-      // Show success message
       const successMsg = document.createElement('div');
       successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-pulse';
-      successMsg.textContent = `✅ Updated ${data.ok || selectedBids.length}/${data.total || selectedBids.length} bids`;
+      successMsg.textContent = `✅ Updated ${data.ok || 0}/${data.total || selectedBids.length} bids`;
       document.body.appendChild(successMsg);
       setTimeout(() => successMsg.remove(), 3000);
 
       setSelectedBids([]);
-      
-      // Refresh after delay
       setTimeout(() => onRefresh?.(), 1000);
-      
     } catch (e) {
       console.error('Bulk action error:', e);
-      
-      // Rollback optimistic updates
+
       setPendingStatusChanges(prev => {
         const newMap = new Map(prev);
         selectedBids.forEach(id => newMap.delete(id));
@@ -210,8 +203,8 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
         selectedBids.forEach(id => newSet.delete(id));
         return newSet;
       });
-      
-      alert('❌ Error performing bulk action');
+
+      alert(`❌ Error performing bulk action: ${e.message || ''}`);
     } finally {
       setBulkOperationInProgress(false);
     }
@@ -237,15 +230,9 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const respondBids = useMemo(() => (
     bids
       .filter((b) => {
-        // Exclude if pending status change to something else
         const pendingStatus = pendingStatusChanges.get(b.id);
-        // Hide if moved to submitted, disregard, or system-admin
-        if (pendingStatus && ['submitted', 'disregard', 'system-admin'].includes(pendingStatus)) {
-          return false;
-        }
-        if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'respond') {
-          return false;
-        }
+        if (pendingStatus && ['submitted', 'disregard', 'system-admin'].includes(pendingStatus)) return false;
+        if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'respond') return false;
         return normalizeRecommendation(b.recommendation) === 'respond';
       })
       .sort((a, b) => parseDate(a.emailDateReceived) - parseDate(b.emailDateReceived))
@@ -254,15 +241,9 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
   const gatherInfoBids = useMemo(() => (
     bids
       .filter((b) => {
-        // Exclude if pending status change to something else
         const pendingStatus = pendingStatusChanges.get(b.id);
-        // Hide if moved to submitted, disregard, or system-admin
-        if (pendingStatus && ['submitted', 'disregard', 'system-admin'].includes(pendingStatus)) {
-          return false;
-        }
-        if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'gather more information') {
-          return false;
-        }
+        if (pendingStatus && ['submitted', 'disregard', 'system-admin'].includes(pendingStatus)) return false;
+        if (pendingStatus && normalizeRecommendation(pendingStatus) !== 'gather more information') return false;
         const s = normalizeRecommendation(b.recommendation);
         return s === 'gather more information' || s === 'gather info' || s === 'need info' || s === 'needs info' || s === 'research';
       })
@@ -287,7 +268,6 @@ const BidOperations = ({ bids = [], disregardedBids = [], submittedBids = [], lo
 
   return (
     <div className="space-y-6">
-      {/* Bulk Operation Progress Banner */}
       {bulkOperationInProgress && (
         <div className="bg-blue-600 text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 animate-pulse">
           <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
