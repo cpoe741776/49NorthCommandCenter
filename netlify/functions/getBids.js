@@ -1,13 +1,9 @@
 // netlify/functions/getBids.js
-// Header alignment audit + tiny resilience tweaks
+// Stable IDs + no-304 behavior + cache-bust support
 // - Active_Bids: A..U (21 cols)
 // - Disregarded: A..U (21 cols)
-// - Submitted:   A..V (22 cols; V = Submission Date)
-// - Provides back-compat aliases so UI renders consistently across tabs
-//
-// IMPORTANT CHANGE (Never break again):
-// - Bid "id" is now Source Email ID (stable), NOT sheet row number.
-// - Row number is still available as sheetRowNumber (debug only).
+// - Submitted:   A..U (21 cols; U = Submission Date)
+// - Uses Source Email ID (col U) as primary id to avoid row-number drift
 
 const { google } = require('googleapis');
 const crypto = require('crypto');
@@ -28,6 +24,7 @@ function clearBidsCache() {
   cache = { ts: 0, etag: '', payload: null };
   console.log('[getBids] Cache cleared');
 }
+
 exports.clearBidsCache = clearBidsCache;
 
 exports.handler = async (event) => {
@@ -35,25 +32,31 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, X-App-Token',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
+
+    // Kill browser/proxy caching (ETag revalidation causes your 304 issue)
+    'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
   };
 
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
+  }
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, headers, body: JSON.stringify({ success: false, error: 'Method not allowed' }) };
   }
 
   try {
-    const ifNoneMatch = event.headers?.['if-none-match'] || event.headers?.['If-None-Match'];
-    const forceNoCache = event.queryStringParameters?.nocache === '1';
+    const qs = event.queryStringParameters || {};
+    const noCache =
+      qs.nocache === '1' || qs.nocache === 'true' ||
+      qs.force === '1' || qs.force === 'true';
 
-
-    // Serve from cache if fresh and ETag matches
-if (!forceNoCache && cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
-  if (ifNoneMatch && ifNoneMatch === cache.etag) {
-    return { statusCode: 304, headers: { ...headers, ETag: cache.etag } };
-  }
-  return { statusCode: 200, headers: { ...headers, ETag: cache.etag }, body: JSON.stringify(cache.payload) };
-}
+    // Serve from memory cache if fresh AND caller did not bypass
+    if (!noCache && cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
+      // IMPORTANT: do NOT return 304. Always return body to keep fetch clients consistent.
+      return { statusCode: 200, headers: { ...headers, ETag: cache.etag }, body: JSON.stringify(cache.payload) };
+    }
 
     // Service account (use shared loader)
     const { loadServiceAccount } = require('./_utils/google');
@@ -83,7 +86,7 @@ if (!forceNoCache && cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
     const disRows = (disResp.data.values || []).filter(nonEmpty);
     const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded'));
 
-    // ---------- Submitted (A..U; U = Submission Date) ----------
+    // ---------- Submitted (A..U) ----------
     const subResp = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID,
       range: 'Submitted!A2:U',
@@ -108,6 +111,10 @@ if (!forceNoCache && cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
         totalDisregarded: disregardedBids.length,
         totalSubmitted: submittedBids.length,
       },
+      meta: {
+        noCache,
+        generatedAt: new Date().toISOString(),
+      },
     };
 
     const etag = makeEtag(payload);
@@ -129,43 +136,29 @@ function vAt(row, i) {
   return row && row[i] != null ? row[i] : '';
 }
 
-function stableIdFromSourceEmailId(sourceEmailId, sheetRowNumber) {
-  const sid = String(sourceEmailId || '').trim();
-  if (sid) return sid;
-
-  // Fallback (should be rare): stable-ish ID based on row number, so UI still works.
-  // Better than breaking, but ideally Source Email ID is always populated.
-  return `ROW-${sheetRowNumber}`;
-}
-
 // Active/Disregarded row -> unified bid (A..U)
 function toBid(row, sheetRowNumber, fallbackStatus) {
-  const sourceEmailId = vAt(row, 20); // U
+  const sourceEmailId = String(vAt(row, 20) || '').trim(); // U
   return {
-    // ✅ stable ID used by UI / selection / status updates
-    id: stableIdFromSourceEmailId(sourceEmailId, sheetRowNumber),
+    // IMPORTANT: stable ID for frontend selections/actions
+    id: sourceEmailId || String(sheetRowNumber),
 
-    // debug only (helps you diagnose row-level issues without using as identifier)
-    sheetRowNumber,
+    // Keep rowNumber for debugging only
+    rowNumber: sheetRowNumber,
 
     recommendation: vAt(row, 0),      // A
     scoreDetails: vAt(row, 1),        // B
-
-    // Mapping is strictly alphabetical A=0, B=1, C=2, D=3, etc.
     aiReasoning: vAt(row, 2),         // C
     aiEmailSummary: vAt(row, 3),      // D
-
     emailDateReceived: vAt(row, 4),   // E
     emailFrom: vAt(row, 5),           // F
     keywordsCategory: vAt(row, 6),    // G
     keywordsFound: vAt(row, 7),       // H
     relevance: vAt(row, 8),           // I
-
     emailSubject: vAt(row, 9),        // J
     emailBody: vAt(row, 10),          // K
     url: vAt(row, 11),                // L
     dueDate: vAt(row, 12),            // M
-
     significantSnippet: vAt(row, 13), // N
     emailDomain: vAt(row, 14),        // O
     bidSystem: vAt(row, 15),          // P
@@ -173,7 +166,7 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     entity: vAt(row, 17),             // R
     status: vAt(row, 18) || fallbackStatus, // S
     dateAdded: vAt(row, 19),          // T
-    sourceEmailId: sourceEmailId,     // U
+    sourceEmailId: vAt(row, 20),      // U
 
     // Back-compat aliases
     aiSummary: vAt(row, 3),
@@ -185,17 +178,14 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
 
 // Submitted row -> unified bid (A..U)
 function toSubmittedBid(row, sheetRowNumber) {
-  const sourceEmailId = vAt(row, 19); // T
+  const sourceEmailId = String(vAt(row, 19) || '').trim(); // Submitted uses T for sourceEmailId
   return {
-    // ✅ stable ID used by UI / selection (even though submitted doesn’t move often)
-    id: stableIdFromSourceEmailId(sourceEmailId, sheetRowNumber),
-
-    // debug only
-    sheetRowNumber,
+    id: sourceEmailId || String(sheetRowNumber),
+    rowNumber: sheetRowNumber,
 
     recommendation: vAt(row, 0),        // A
-    reasoning: vAt(row, 1),             // B - Reasoning (non-AI)
-    emailSummary: vAt(row, 2),          // C - Email Summary (non-AI)
+    reasoning: vAt(row, 1),             // B
+    emailSummary: vAt(row, 2),          // C
     emailDateReceived: vAt(row, 3),     // D
     emailFrom: vAt(row, 4),             // E
     keywordsCategory: vAt(row, 5),      // F
@@ -212,10 +202,10 @@ function toSubmittedBid(row, sheetRowNumber) {
     entity: vAt(row, 16),               // Q
     status: vAt(row, 17) || 'Submitted',// R
     dateAdded: vAt(row, 18),            // S
-    sourceEmailId: sourceEmailId,       // T
+    sourceEmailId: vAt(row, 19),        // T
     submissionDate: vAt(row, 20),       // U
 
-    // Back-compat aliases so BidCard/Modal resolve gracefully
+    // Back-compat aliases
     aiReasoning: vAt(row, 1),
     aiEmailSummary: vAt(row, 2),
     aiSummary: vAt(row, 2),
