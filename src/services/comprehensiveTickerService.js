@@ -170,6 +170,7 @@ export function generateTickerItems(data) {
   : change.action === 'removed' ? '➖ Removed'
   : '✏️ Updated';
 
+
       items.push({
         message: `🏢 ${action}: ${change.name}`,
         priority: 'medium',

@@ -172,18 +172,18 @@ const App = () => {
   }, [loadTickerFeed]);
 
   // Initial boot after auth
-  useEffect(() => {
+useEffect(() => {
   if (!user) return;
 
   loadBids({ force: true });
   loadSocialPosts();
-  loadTickerFeed();
   loadAdminEmails();
 
   return () => {
     try { bidsAbortRef.current?.abort(); } catch {}
   };
-}, [user, loadBids, loadSocialPosts, loadTickerFeed, loadAdminEmails]);
+}, [user, loadBids, loadSocialPosts, loadAdminEmails]);
+
 
 
   // Build ordered ticker items by priority
