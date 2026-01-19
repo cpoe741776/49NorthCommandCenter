@@ -44,14 +44,16 @@ exports.handler = async (event) => {
 
   try {
     const ifNoneMatch = event.headers?.['if-none-match'] || event.headers?.['If-None-Match'];
+    const forceNoCache = event.queryStringParameters?.nocache === '1';
+
 
     // Serve from cache if fresh and ETag matches
-    if (cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
-      if (ifNoneMatch && ifNoneMatch === cache.etag) {
-        return { statusCode: 304, headers: { ...headers, ETag: cache.etag } };
-      }
-      return { statusCode: 200, headers: { ...headers, ETag: cache.etag }, body: JSON.stringify(cache.payload) };
-    }
+if (!forceNoCache && cache.payload && Date.now() - cache.ts < CACHE_TTL_MS) {
+  if (ifNoneMatch && ifNoneMatch === cache.etag) {
+    return { statusCode: 304, headers: { ...headers, ETag: cache.etag } };
+  }
+  return { statusCode: 200, headers: { ...headers, ETag: cache.etag }, body: JSON.stringify(cache.payload) };
+}
 
     // Service account (use shared loader)
     const { loadServiceAccount } = require('./_utils/google');
