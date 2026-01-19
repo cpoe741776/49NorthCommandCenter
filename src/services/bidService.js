@@ -29,7 +29,7 @@ function normalizeBid(b = {}) {
     // Core fields
     id: String(b.id ?? b.rowId ?? ''),
     recommendation: String(b.recommendation ?? ''),
-    
+
     // Active_Bids fields (A-U)
     scoreDetails: b.scoreDetails ?? '',
     aiReasoning: String(b.aiReasoning ?? b.reasoning ?? ''),
@@ -51,19 +51,19 @@ function normalizeBid(b = {}) {
     status: String(b.status ?? ''),
     dateAdded: b.dateAdded ? String(b.dateAdded) : '',
     sourceEmailId: String(b.sourceEmailId ?? ''),
-    
+
     // Submitted-specific
     submissionDate: b.submissionDate ?? '',
     reasoning: String(b.reasoning ?? ''),
     emailSummary: String(b.emailSummary ?? ''),
-    
+
     // Back-compat
     subject: String(b.emailSubject ?? b.subject ?? b.title ?? ''),
     aiSummary: String(b.aiEmailSummary ?? b.emailSummary ?? b.aiSummary ?? ''),
-    
+
     // Computed
     daysUntilDue: safeNum(b.daysUntilDue, null),
-    
+
     // Debug
     _raw: b,
   };
@@ -101,32 +101,47 @@ function writeCache(key, payload) {
 
 /**
  * Fetches FAST dashboard data (KPI counts).
- * Accepts EITHER (bypassCache:boolean) OR ({ bypassCache?: boolean, signal?: AbortSignal }).
+ * Accepts EITHER (bypassCache:boolean) OR ({ bypassCache?: boolean, force?: boolean, signal?: AbortSignal }).
  * Returns: { success: boolean, summary: Object, fromCache?: boolean }
  */
 export async function fetchDashboardData(arg = false) {
   // normalize args
   const opts = typeof arg === 'object' ? arg : { bypassCache: !!arg };
-  const { bypassCache = false, signal } = opts;
+  const { bypassCache = false, force = false, signal } = opts;
+
+  // Force implies bypassCache
+  const effectiveBypass = force || bypassCache;
 
   let url = `${API_BASE_URL}/getDashboardData`;
-  if (bypassCache) url += `?t=${Date.now()}`;
+  if (effectiveBypass) url += `?noCache=1&_ts=${Date.now()}`;
 
-  const cache = readCache(DASH_CACHE_KEY);
+  const cache = (!effectiveBypass) ? readCache(DASH_CACHE_KEY) : null;
+
+  // IMPORTANT: when forcing, do NOT send If-None-Match (prevents 304)
   const headers = { 'Content-Type': 'application/json' };
-  if (cache?.etag && !bypassCache) headers['If-None-Match'] = cache.etag;
+  if (cache?.etag && !effectiveBypass) headers['If-None-Match'] = cache.etag;
 
   let resp;
   try {
-    resp = await fetch(url, { method: 'GET', headers, signal });
+    resp = await fetch(url, {
+      method: 'GET',
+      headers,
+      signal,
+      cache: effectiveBypass ? 'no-store' : 'default',
+    });
   } catch (error) {
     console.error('Network error fetching dashboard data:', error);
     if (cache?.data) return { success: true, summary: cache.data.summary || {}, fromCache: true };
     throw error;
   }
 
-  if (resp.status === 304 && cache?.data) {
-    return { success: true, summary: cache.data.summary || {}, fromCache: true };
+  // If we forced, 304 should never be considered valid
+  if (resp.status === 304) {
+    if (cache?.data && !effectiveBypass) {
+      return { success: true, summary: cache.data.summary || {}, fromCache: true };
+    }
+    // Force mode + 304 = treat as empty safe response so UI can't hold stale state
+    return { success: true, summary: {}, fromCache: false };
   }
 
   if (!resp.ok) {
@@ -138,7 +153,10 @@ export async function fetchDashboardData(arg = false) {
   const json = await resp.json().catch(() => ({}));
   const summary = json?.summary && typeof json.summary === 'object' ? json.summary : json || {};
 
-  writeCache(DASH_CACHE_KEY, { etag, ts: Date.now(), data: { summary } });
+  if (!effectiveBypass) {
+    writeCache(DASH_CACHE_KEY, { etag, ts: Date.now(), data: { summary } });
+  }
+
   return { success: true, summary, fromCache: false };
 }
 
@@ -151,30 +169,68 @@ export async function fetchDashboardData(arg = false) {
  *  - since/until: ISO dates
  *  - limit/page: pagination hints
  *  - useCache: boolean (default true)
+ *  - force: boolean (default false) -> bypass ALL caches and forbid 304 usage
  * Returns: { success, activeBids, submittedBids, disregardedBids, fromCache? }
  */
 export async function fetchBids(opts = {}) {
-  const { signal, status, q, since, until, limit, page, useCache = true } = opts;
+  const {
+    signal,
+    status,
+    q,
+    since,
+    until,
+    limit,
+    page,
+    useCache = true,
+    force = false,
+  } = opts;
 
-  const cache = useCache ? readCache(BIDS_CACHE_KEY) : null;
+  // Force means: no localStorage cache + no If-None-Match + no-store + cache-buster
+  const effectiveUseCache = !!useCache && !force;
+
+  const cache = effectiveUseCache ? readCache(BIDS_CACHE_KEY) : null;
+
   const headers = { 'Content-Type': 'application/json' };
-  if (cache?.etag && !status && !q && !since && !until && !page) {
-    headers['If-None-Match'] = cache.etag; // only for default (unfiltered) pulls
+
+  // Only send If-None-Match for default (unfiltered) pulls AND not force
+  const isDefaultPull = !status && !q && !since && !until && !page;
+  if (cache?.etag && isDefaultPull && !force) {
+    headers['If-None-Match'] = cache.etag;
   }
 
-  const url = `${API_BASE_URL}/getBids${qs({ status, q, since, until, limit, page })}`;
+  const baseParams = { status, q, since, until, limit, page };
+  const extraParams = force ? { noCache: 1, _ts: Date.now() } : {};
+  const url = `${API_BASE_URL}/getBids${qs({ ...baseParams, ...extraParams })}`;
 
   let resp;
   try {
-    resp = await fetch(url, { method: 'GET', headers, signal });
+    resp = await fetch(url, {
+      method: 'GET',
+      headers,
+      signal,
+      cache: force ? 'no-store' : 'default',
+    });
   } catch (error) {
     console.error('Network error fetching bids:', error);
     if (cache?.data) return { success: true, ...normalizeSets(cache.data), fromCache: true };
     throw error;
   }
 
-  if (resp.status === 304 && cache?.data) {
-    return { success: true, ...normalizeSets(cache.data), fromCache: true };
+  // 304 handling:
+  // - if force: NEVER use cache, return empty safe payload
+  // - else: use localStorage cache if present
+  if (resp.status === 304) {
+    if (!force && cache?.data) {
+      return { success: true, ...normalizeSets(cache.data), fromCache: true };
+    }
+    return {
+      success: true,
+      activeBids: [],
+      submittedBids: [],
+      disregardedBids: [],
+      fromCache: false,
+      meta: { forced304: true },
+    };
   }
 
   if (!resp.ok) {
@@ -187,16 +243,18 @@ export async function fetchBids(opts = {}) {
   if (!json?.success) throw new Error(json?.error || 'Failed to fetch bids');
 
   const sets = normalizeSets(json);
-  if (useCache && !status && !q && !since && !until && !page) {
+
+  // Only write local cache for default unfiltered pull when NOT forcing
+  if (effectiveUseCache && isDefaultPull) {
     writeCache(BIDS_CACHE_KEY, { etag, ts: Date.now(), data: json });
   }
 
-  return { success: true, ...sets, fromCache: false };
+  return { success: true, ...sets, fromCache: false, meta: json?.meta || undefined };
 }
 
 /** Manual refresh for convenience */
 export async function refreshBids() {
-  return fetchBids({ useCache: false });
+  return fetchBids({ useCache: false, force: true });
 }
 
 /* ===== Mutations you can wire on the server (optional, for Upload flows) ===== */

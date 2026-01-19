@@ -49,6 +49,8 @@ const App = () => {
   const [error, setError] = useState(null);
   const [tickerItems, setTickerItems] = useState([]);
   const tickerRef = useRef(null);
+  const bidsAbortRef = useRef(null);
+
 
   // Inject ticker CSS once
   useEffect(() => {
@@ -97,46 +99,55 @@ const App = () => {
     }
   }, []);
 
-  const loadBids = useCallback(async () => {
-    const aborter = new AbortController();
-    let mounted = true;
-    setLoading(true);
-    setError(null);
+  const loadBids = useCallback(async (options = {}) => {
+  // Abort any in-flight load
+  try { bidsAbortRef.current?.abort(); } catch {}
+  const aborter = new AbortController();
+  bidsAbortRef.current = aborter;
 
-    try {
-      // FAST summary for dashboard
-      const dashboardData = await fetchDashboardData({ signal: aborter.signal }).catch(e => {
-        console.warn('fetchDashboardData failed:', e);
-        return {};
-      });
-      if (mounted) setSummary(dashboardData?.summary || {});
+  const { force = false } = options;
 
-      // FULL bid arrays
-      const fullBidsData = await fetchBids({ signal: aborter.signal });
-      if (!fullBidsData?.success) throw new Error(fullBidsData?.error || 'Failed to fetch bids');
+  // Hard reset state immediately when forcing (prevents ghost UI)
+  if (force) {
+    setBids([]);
+    setDisregardedBids([]);
+    setSubmittedBids([]);
+  }
 
-      if (mounted) {
-        setBids(fullBidsData.activeBids || []);
-        setDisregardedBids(fullBidsData.disregardedBids || []);
-        setSubmittedBids(fullBidsData.submittedBids || []);
-      }
+  setLoading(true);
+  setError(null);
 
-      // Generate ticker from bids - REMOVED (now handled by comprehensive ticker)
-      // The comprehensive ticker will handle all data aggregation
+  try {
+    // FAST summary for dashboard
+    const dashboardData = await fetchDashboardData({ signal: aborter.signal, force }).catch(e => {
+      console.warn('fetchDashboardData failed:', e);
+      return {};
+    });
+    setSummary(dashboardData?.summary || {});
 
-      await loadTickerFeed();
-    } catch (err) {
-      console.error('Error loading bids:', err);
-      if (mounted) setError(err?.message || 'Unknown error');
-    } finally {
-      if (mounted) setLoading(false);
+    // FULL bid arrays
+    const fullBidsData = await fetchBids({ signal: aborter.signal, force });
+    if (!fullBidsData?.success) throw new Error(fullBidsData?.error || 'Failed to fetch bids');
+
+    // CRITICAL: Always REPLACE state (never merge)
+    setBids(Array.isArray(fullBidsData.activeBids) ? fullBidsData.activeBids : []);
+    setDisregardedBids(Array.isArray(fullBidsData.disregardedBids) ? fullBidsData.disregardedBids : []);
+    setSubmittedBids(Array.isArray(fullBidsData.submittedBids) ? fullBidsData.submittedBids : []);
+
+    await loadTickerFeed();
+  } catch (err) {
+    // Ignore abort noise
+    if (String(err?.name) === 'AbortError') return;
+    console.error('Error loading bids:', err);
+    setError(err?.message || 'Unknown error');
+  } finally {
+    // Only clear loading if this is the latest request
+    if (bidsAbortRef.current === aborter) {
+      setLoading(false);
     }
+  }
+}, [loadTickerFeed]);
 
-    return () => {
-      mounted = false;
-      aborter.abort();
-    };
-  }, [loadTickerFeed]);
 
   const loadSocialPosts = useCallback(async () => {
     try {
@@ -162,18 +173,18 @@ const App = () => {
 
   // Initial boot after auth
   useEffect(() => {
-    if (!user) return;
-    let cleanupFns = [];
-    // Allow loaders to provide abort/cleanup
-    const bidCleanup = loadBids();
-    if (typeof bidCleanup === 'function') cleanupFns.push(bidCleanup);
-    loadSocialPosts();
-    loadTickerFeed();
-    loadAdminEmails();
-    return () => {
-      cleanupFns.forEach(fn => { try { fn(); } catch {} });
-    };
-  }, [user, loadBids, loadSocialPosts, loadTickerFeed, loadAdminEmails]);
+  if (!user) return;
+
+  loadBids({ force: true });
+  loadSocialPosts();
+  loadTickerFeed();
+  loadAdminEmails();
+
+  return () => {
+    try { bidsAbortRef.current?.abort(); } catch {}
+  };
+}, [user, loadBids, loadSocialPosts, loadTickerFeed, loadAdminEmails]);
+
 
   // Build ordered ticker items by priority
   const displayItems = useMemo(() => {
