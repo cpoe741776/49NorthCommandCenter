@@ -70,6 +70,24 @@ function checkAuth(event) {
   return provided === APP_TOKEN;
 }
 
+/**
+ * fetch() with an explicit timeout. Throws on timeout or network error.
+ * Default 10s — override per call.
+ */
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 10000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...opts, signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === 'AbortError') throw new Error(`Request timed out after ${timeoutMs}ms: ${url}`);
+    throw err;
+  }
+}
+
 module.exports = {
   corsHeaders,
   methodGuard,
@@ -79,4 +97,5 @@ module.exports = {
   unauth,
   serverErr,
   checkAuth,
+  fetchWithTimeout,
 };

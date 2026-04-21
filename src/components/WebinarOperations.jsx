@@ -18,6 +18,8 @@ const WebinarOperations = () => {
   const [surveyFilterContactOnly, setSurveyFilterContactOnly] = useState(false);
   const [reminders, setReminders] = useState(null);
   const [creatingReminder, setCreatingReminder] = useState(null);
+  const [automationRunning, setAutomationRunning] = useState(false);
+  const [automationResult, setAutomationResult] = useState(null);
 
   const loadWebinarData = useCallback(async () => {
     try {
@@ -48,6 +50,24 @@ const WebinarOperations = () => {
     loadWebinarData();
     loadReminders();
   }, [loadWebinarData, loadReminders]);
+
+  const handleRunAutomation = async (webinarId, dryRun = false) => {
+    setAutomationRunning(true);
+    setAutomationResult(null);
+    try {
+      const res = await fetch('/.netlify/functions/postWebinarAutomation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webinarId, dryRun }),
+      });
+      const data = await res.json();
+      setAutomationResult(data);
+    } catch (err) {
+      setAutomationResult({ success: false, error: err.message });
+    } finally {
+      setAutomationRunning(false);
+    }
+  };
 
   const handleCreateReminder = async (webinarId, timing) => {
     setCreatingReminder(`${webinarId}-${timing}`);
@@ -1266,6 +1286,93 @@ const WebinarOperations = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Post-Webinar Automation */}
+              {selectedWebinar.status === 'Completed' && (
+                <div className="border border-green-200 rounded-lg p-4 bg-green-50">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Bell size={18} className="text-green-600" />
+                        Post-Webinar Automation
+                      </h3>
+                      <p className="text-xs text-gray-600 mt-1">
+                        Tags attendees in Brevo, creates follow-up tasks for contact requests, and drafts a thank-you email campaign.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0 ml-4">
+                      <button
+                        onClick={() => { setAutomationResult(null); handleRunAutomation(selectedWebinar.id, true); }}
+                        disabled={automationRunning}
+                        className="px-3 py-1.5 text-xs border border-green-400 text-green-700 rounded hover:bg-green-100 disabled:opacity-50"
+                      >
+                        {automationRunning ? 'Running...' : 'Preview (Dry Run)'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Run post-webinar automation for "${selectedWebinar.title}"?\n\nThis will:\n• Tag attendees in Brevo\n• Create follow-up tasks for contact requests\n• Create a thank-you email campaign DRAFT (not sent automatically)`)) {
+                            setAutomationResult(null);
+                            handleRunAutomation(selectedWebinar.id, false);
+                          }
+                        }}
+                        disabled={automationRunning}
+                        className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                      >
+                        {automationRunning ? 'Running...' : 'Run Automation'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {automationRunning && (
+                    <div className="flex items-center gap-2 text-sm text-green-700 mt-2">
+                      <RefreshCw size={14} className="animate-spin" />
+                      Processing attendees, updating Brevo, creating tasks…
+                    </div>
+                  )}
+
+                  {automationResult && (
+                    <div className={`mt-3 rounded p-3 text-sm ${automationResult.success ? 'bg-white border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                      {automationResult.success ? (
+                        <>
+                          {automationResult.dryRun && (
+                            <p className="font-semibold text-orange-600 mb-2">DRY RUN — no changes made</p>
+                          )}
+                          <div className="grid grid-cols-3 gap-3 mb-3">
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-green-700">{automationResult.stats?.attended ?? 0}</p>
+                              <p className="text-xs text-gray-600">Attended</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-orange-600">{automationResult.stats?.noShows ?? 0}</p>
+                              <p className="text-xs text-gray-600">No-shows</p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-2xl font-bold text-blue-700">{automationResult.stats?.requestedContact ?? 0}</p>
+                              <p className="text-xs text-gray-600">Contact Requests</p>
+                            </div>
+                          </div>
+                          {automationResult.followUpTasksCreated?.length > 0 && (
+                            <p className="text-xs text-gray-700">✅ {automationResult.followUpTasksCreated.length} follow-up task{automationResult.followUpTasksCreated.length > 1 ? 's' : ''} created in CRM</p>
+                          )}
+                          {automationResult.emailCampaignDraft?.campaignId && (
+                            <p className="text-xs text-gray-700 mt-1">
+                              ✅ Email campaign draft created —{' '}
+                              <a href={automationResult.emailCampaignDraft.dashboardLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+                                Review in Brevo
+                              </a>
+                            </p>
+                          )}
+                          {automationResult.brevoUpdates?.failed?.length > 0 && (
+                            <p className="text-xs text-orange-600 mt-1">⚠️ {automationResult.brevoUpdates.failed.length} Brevo update(s) failed — check logs</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-red-700">Error: {automationResult.error}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {selectedWebinar.status === 'Completed' &&
                 (() => {
