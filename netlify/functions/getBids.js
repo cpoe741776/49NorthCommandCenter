@@ -84,7 +84,7 @@ exports.handler = async (event) => {
       range: 'Disregarded!A2:U',
     });
     const disRows = (disResp.data.values || []).filter(nonEmpty);
-    const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded'));
+    const disregardedBids = disRows.map((row, i) => toBid(row, i + 2, 'Disregarded', false));
 
     // ---------- Submitted (A..U) ----------
     const subResp = await sheets.spreadsheets.values.get({
@@ -136,8 +136,15 @@ function vAt(row, i) {
   return row && row[i] != null ? row[i] : '';
 }
 
+const BODY_MAX_CHARS = 3000;
+function truncateBody(s) {
+  if (!s) return '';
+  return s.length <= BODY_MAX_CHARS ? s : s.slice(0, BODY_MAX_CHARS) + '…';
+}
+
 // Active/Disregarded row -> unified bid (A..U)
-function toBid(row, sheetRowNumber, fallbackStatus) {
+// includeBody=false strips emailBody (used for Disregarded to keep payload small)
+function toBid(row, sheetRowNumber, fallbackStatus, includeBody = true) {
   const sourceEmailId = String(vAt(row, 20) || '').trim(); // U
   return {
     // IMPORTANT: stable ID for frontend selections/actions
@@ -156,7 +163,7 @@ function toBid(row, sheetRowNumber, fallbackStatus) {
     keywordsFound: vAt(row, 7),       // H
     relevance: vAt(row, 8),           // I
     emailSubject: vAt(row, 9),        // J
-    emailBody: vAt(row, 10),          // K
+    emailBody: includeBody ? truncateBody(vAt(row, 10)) : '', // K
     url: vAt(row, 11),                // L
     dueDate: vAt(row, 12),            // M
     significantSnippet: vAt(row, 13), // N
@@ -192,7 +199,7 @@ function toSubmittedBid(row, sheetRowNumber) {
     keywordsFound: vAt(row, 6),         // G
     relevance: vAt(row, 7),             // H
     emailSubject: vAt(row, 8),          // I
-    emailBody: vAt(row, 9),             // J
+    emailBody: truncateBody(vAt(row, 9)), // J
     url: vAt(row, 10),                  // K
     dueDate: vAt(row, 11),              // L
     significantSnippet: vAt(row, 12),   // M
