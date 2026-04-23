@@ -1290,7 +1290,7 @@ const WebinarOperations = () => {
               {/* Post-Webinar Automation */}
               {selectedWebinar.status === 'Completed' && (
                 <div className="border border-green-200 rounded-lg p-4 bg-green-50">
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
                     <div>
                       <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                         <Bell size={18} className="text-green-600" />
@@ -1300,7 +1300,7 @@ const WebinarOperations = () => {
                         Tags attendees in Brevo, creates follow-up tasks for contact requests, and drafts a thank-you email campaign.
                       </p>
                     </div>
-                    <div className="flex gap-2 shrink-0 ml-4">
+                    <div className="flex gap-2 flex-wrap shrink-0">
                       <button
                         onClick={() => { setAutomationResult(null); handleRunAutomation(selectedWebinar.id, true); }}
                         disabled={automationRunning}

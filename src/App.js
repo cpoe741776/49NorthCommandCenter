@@ -38,7 +38,9 @@ const navItems = [
 
 const App = () => {
   const { user, loading: authLoading, login, logout } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   const [bids, setBids] = useState([]);
@@ -318,7 +320,7 @@ useEffect(() => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
       {/* Sidebar */}
       <div className={`bg-brand-blue text-white transition-all duration-300 relative flex flex-col h-screen pb-16 ${sidebarOpen ? 'w-64' : 'w-20'}`}>
         {/* Logo */}
@@ -386,8 +388,8 @@ useEffect(() => {
       </div>
 
       {/* Main */}
-      <div className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-8 pb-20">
+      <div className="flex-1 overflow-auto min-w-0">
+        <div className="max-w-7xl mx-auto p-3 pb-20 sm:p-6 sm:pb-20 lg:p-8 lg:pb-20">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 flex items-center justify-between">
               <div>⚠️ Error loading data: {error}</div>
