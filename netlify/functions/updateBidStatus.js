@@ -199,6 +199,86 @@ exports.handler = async (event) => {
 
     // Batch mode
     if (Array.isArray(bidIds) && bidIds.length > 0) {
+      // Disregarding a batch used to call processSingle once per id.  Each call
+      // re-read the entire Source Email ID column, which quickly exhausted the
+      // Sheets read quota and left the UI looking as though records had moved
+      // when they had not.  Load Active_Bids once, resolve all selected ids in
+      // memory, append the archive rows in one request, then delete the source
+      // rows from bottom to top so row numbers cannot shift underneath us.
+      if (status === 'disregard') {
+        const activeResp = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: 'Active_Bids!A2:U',
+        });
+        const activeRows = activeResp.data.values || [];
+        const rowsById = new Map();
+
+        activeRows.forEach((row, index) => {
+          const sourceEmailId = String(row[20] || '').trim(); // U = Source Email ID
+          if (sourceEmailId) rowsById.set(sourceEmailId, { rowIndex: index + 2, row });
+        });
+
+        const resolved = [];
+        const results = [];
+        const seenIds = new Set();
+
+        for (const bidId of bidIds) {
+          const id = String(bidId || '').trim();
+          const match = rowsById.get(id);
+          if (!match) {
+            results.push({ bidId, ok: false, error: `Bid not found in Active_Bids (id: ${bidId})` });
+          } else if (seenIds.has(id)) {
+            results.push({ bidId, ok: false, error: 'Duplicate bid id in batch' });
+          } else {
+            seenIds.add(id);
+            resolved.push({ bidId, ...match });
+          }
+        }
+
+        if (resolved.length > 0) {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: 'Disregarded!A:U',
+            valueInputOption: 'USER_ENTERED',
+            requestBody: { values: resolved.map(({ row }) => row) },
+          });
+
+          const activeSheetId = await getSheetId(sheets, SHEET_ID, 'Active_Bids');
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: SHEET_ID,
+            requestBody: {
+              requests: resolved
+                .sort((a, b) => b.rowIndex - a.rowIndex)
+                .map(({ rowIndex }) => ({
+                  deleteDimension: {
+                    range: {
+                      sheetId: activeSheetId,
+                      dimension: 'ROWS',
+                      startIndex: rowIndex - 1,
+                      endIndex: rowIndex,
+                    },
+                  },
+                })),
+            },
+          });
+
+          results.push(...resolved.map(({ bidId }) => ({ bidId, ok: true, message: 'Bid moved to Disregarded' })));
+          try {
+            const { clearBidsCache } = require('./getBids');
+            if (clearBidsCache) clearBidsCache();
+          } catch (e) {
+            console.warn('[UpdateBidStatus] Could not clear cache after disregard batch:', e.message);
+          }
+        }
+
+        return { statusCode: 200, headers, body: JSON.stringify({
+          success: true,
+          ok: results.filter(r => r.ok).length,
+          total: results.length,
+          results,
+        }) };
+      }
+
       const results = [];
       for (const id of bidIds) {
         try {
