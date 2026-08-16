@@ -39,11 +39,15 @@ exports.handler = async (event, context) => {
   if (!auth.ok) return { ...auth.response, headers: { ...headers, ...(auth.response.headers || {}) } };
 
   const readEvent = { ...event, httpMethod: 'GET', queryStringParameters: {} };
+  const remindersEvent = {
+    ...readEvent,
+    queryStringParameters: { includeExecutiveTasks: '1' },
+  };
 
   const settled = await Promise.allSettled([
     getDashboardData.handler(readEvent, context),
     getBids.handler(readEvent, context),
-    getReminders.handler(readEvent, context),
+    getReminders.handler(remindersEvent, context),
     getSystemAdminEmails.handler(readEvent, context),
   ]);
 
@@ -76,15 +80,10 @@ exports.handler = async (event, context) => {
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
     .slice(0, 10);
 
-  const reminders = Array.isArray(reminderPayload.reminders)
-    ? reminderPayload.reminders
-    : Array.isArray(reminderPayload.tasks)
-      ? reminderPayload.tasks
-      : Array.isArray(reminderPayload)
-        ? reminderPayload
-        : [];
-
-  const openReminders = reminders.filter((r) => String(r.status || 'open').toLowerCase() === 'open');
+  const executiveTasks = Array.isArray(reminderPayload.executiveTasks)
+    ? reminderPayload.executiveTasks
+    : [];
+  const openTasks = executiveTasks.filter((r) => String(r.status || 'open').toLowerCase() === 'open');
   const adminEmails = Array.isArray(adminPayload.emails) ? adminPayload.emails : [];
 
   const failures = [];
@@ -111,9 +110,15 @@ exports.handler = async (event, context) => {
         dueSoon,
       },
       reminders: {
-        total: reminders.length,
-        open: openReminders.length,
-        items: openReminders.slice(0, 10),
+        operationalSummary: reminderPayload.summary || {},
+        weekly: reminderPayload.weeklyReminders || {},
+        webinar: Array.isArray(reminderPayload.webinarReminders) ? reminderPayload.webinarReminders : [],
+        executiveTasks: {
+          total: executiveTasks.length,
+          open: openTasks.length,
+          items: openTasks.slice(0, 10),
+        },
+        executiveTasksError: reminderPayload.executiveTasksError || null,
       },
       systemAdmin: {
         total: adminEmails.length,
